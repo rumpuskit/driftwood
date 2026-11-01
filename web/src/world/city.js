@@ -2,7 +2,7 @@
 // Aynı parçalar (pencere, balkon, çatı...) tek bir InstancedMesh ile çizilir; telefonda da akıcı kalsın diye.
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { FLAT_Y, FLOOR_H, playgroundItems, unitLayout } from "./layout.js";
+import { FLAT_Y, FLOOR_H, playgroundItems, rihtimNoktalari, unitLayout } from "./layout.js";
 import * as P from "./palette.js";
 import * as T from "./textures.js";
 
@@ -375,7 +375,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       for (let r = 1; r < Math.floor(dh / 0.45); r++) B.trims.add(local(b, lx, 0.1 + r * 0.45, b.d / 2 + 0.1), b.rot, s.set(dw, 0.04, 0.03), "#3f4a57");
       B.rails.add(local(b, lx, 0.1 + dh, b.d / 2 + 0.12), b.rot, s.set(dw + 0.5, 0.18, 0.18));
     }
-    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.6, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
+    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.6, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), x: b.w / 2 - 1.6, y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
     B.slabs.add(local(b, b.w / 2 - 1.6, 2.6, b.d / 2 + 0.5), b.rot, s.set(1.8, 0.1, 1.0));
     if (tall) {
       const ly = h - 1.35;
@@ -427,7 +427,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       B.signs.add(local(b, lx, 0.15, b.d / 2 + 0.04), b.rot, s.set(4.2, 3.6, 0.08), st.garage);
       for (let r = 1; r < 6; r++) B.trims.add(local(b, lx, 0.15 + r * 0.6, b.d / 2 + 0.09), b.rot, s.set(4.2, 0.05, 0.04), "#f2f2ef");
     }
-    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.4, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
+    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.4, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), x: b.w / 2 - 1.4, y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
     B.signs.add(local(b, 0, 4.4, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 9), 0.9, 0.12), st.garage);
   } else if (!st.glass) {
     const dw = b.w > 20 ? 2.6 : 1.6;
@@ -448,8 +448,16 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
         addWindow(b, lx, f * FLOOR_H + 0.95, -1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c + 7));
       }
       if (st.balconies && f > 0) {
-        B.slabs.add(local(b, lx, f * FLOOR_H - 0.05, b.d / 2 + 0.6), b.rot, s.set(bay - 0.6, 0.15, 1.2));
-        B.rails.add(local(b, lx, f * FLOOR_H + 0.95, b.d / 2 + 1.17), b.rot, s.set(bay - 0.6, 0.05, 0.05));
+        // Balkon: döşeme, önde ve yanlarda küpeşte ile parmaklık paneli (konut balkonuyla aynı); tek küpeşte
+        // dikmesiz kalınca pencerelerin önünde havada bir çizgi gibi görünüyordu.
+        const ly = f * FLOOR_H, bw = bay - 0.6;
+        B.slabs.add(local(b, lx, ly - 0.05, b.d / 2 + 0.6), b.rot, s.set(bw, 0.15, 1.2));
+        B.rails.add(local(b, lx, ly + 1.0, b.d / 2 + 1.17), b.rot, s.set(bw + 0.02, 0.05, 0.06));
+        B.railPanels.add(local(b, lx, ly + 0.55, b.d / 2 + 1.17), b.rot, s.set(bw, 0.9, 1));
+        for (const e of [-bw / 2, bw / 2]) {
+          B.rails.add(local(b, lx + e, ly + 1.0, b.d / 2 + 0.6), b.rot, s.set(0.05, 0.05, 1.15));
+          B.railPanels.add(local(b, lx + e, ly + 0.55, b.d / 2 + 0.6), b.rot + Math.PI / 2, s.set(1.12, 0.9, 1));
+        }
       }
     }
   }
@@ -524,9 +532,11 @@ function drawHouse(K, b, floors, full, addWindow) {
   const seed = b.pathSeed ?? 1;
   const sh = SHUTTERS[seed % SHUTTERS.length];
   const tip = b.house;
+  // Pencerenin dairesi iç planla aynı (unitLayout); çekirdeğin penceresi merdiven boşluğunu aydınlatır.
+  const plan = unitLayout(b);
   const unit = (f, lx) => {
-    const col = b.perFloor === 1 ? 0 : b.perFloor === 2 ? (lx < 0 ? 0 : 1) : Math.min(2, Math.floor((lx + b.w / 2) / (b.w / 3)));
-    const k = f * b.perFloor + col;
+    const u = plan.units.find((q) => lx >= q.x0 - 0.01 && lx <= q.x1 + 0.01);
+    const k = u ? f * b.perFloor + u.col : Infinity;
     return k < b.daireler ? { slot: b.slot0 + k } : { workplace: "merdiven", seed: f };
   };
   const win = (lx, ly, side, w, hh, owner, shutters = b.shutters) => {
@@ -541,7 +551,7 @@ function drawHouse(K, b, floors, full, addWindow) {
   };
   // Köşe pervazları (beyaz) ve ön kapı.
   for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B.trims.add(local(b, lx * (b.w / 2 + 0.02), -0.2, lz * (b.d / 2 + 0.02)), b.rot, s.set(0.22, h + 0.2, 0.22), "#f7f5f0");
-  const door = (lx, w = 1.0) => ({ idx: B.doors.add(local(b, lx, 0.55, b.d / 2 + 0.02), b.rot, s.set(w, 2.2, 0.1), ["#2f4256", "#5a2a24", "#2e2e2e", "#3e5a44", "#f4f1ea"][(seed >> 3) % 5]), y: 0.55, z: b.d / 2 + 0.02, w, h: 2.2 });
+  const door = (lx, w = 1.0) => ({ idx: B.doors.add(local(b, lx, 0.55, b.d / 2 + 0.02), b.rot, s.set(w, 2.2, 0.1), ["#2f4256", "#5a2a24", "#2e2e2e", "#3e5a44", "#f4f1ea"][(seed >> 3) % 5]), x: lx, y: 0.55, z: b.d / 2 + 0.02, w, h: 2.2 });
   // Basamak ve ön veranda zemini.
   const porchDeck = (lx, w, d, y = 0.5) => {
     B.slabs.add(local(b, lx, y - 0.1, b.d / 2 + d / 2), b.rot, s.set(w, 0.12, d), "#cfc6b8");
@@ -586,15 +596,16 @@ function drawHouse(K, b, floors, full, addWindow) {
   }
 
   if (tip === "twofamily") {
-    // İki aileli ev: alınlık sokağa bakar; zemin ve üst kat birer daire, iki katlı ön veranda.
+    // İki aileli ev: alınlık sokağa bakar; zemin ve üst kat birer daire, iki katlı ön veranda. Merdiven sol yan
+    // duvar boyunca (unitLayout çekirdeği): önde merdiven kapısı, yanında zemin kat dairesinin kapısı.
     for (let f = 0; f < floors; f++) {
-      win(1.9, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, 0));
-      if (f > 0) win(-2.0, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, 0));
-      for (const lx of [-2.2, 2.2]) addWindow(b, lx, f * FLOOR_H + 0.95, -1, 1.0, 1.3, unit(f, 0));
+      win(1.9, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, 1.9));
+      if (f > 0) win(-0.9, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, -0.9));
+      for (const lx of [-0.6, 2.4]) addWindow(b, lx, f * FLOOR_H + 0.95, -1, 1.0, 1.3, unit(f, lx));
       sideWins(f, f * FLOOR_H + 0.95, [-3.5, 0, 3.5]);
     }
-    b.door = door(-2.0);
-    B.doors.add(local(b, -0.9, 0.55, b.d / 2 + 0.02), b.rot, s.set(0.9, 2.2, 0.1), "#6b4a35"); // üst kat merdiven kapısı
+    b.door = door(-0.9);
+    B.doors.add(local(b, plan.core[0] + 1.2, 0.55, b.d / 2 + 0.02), b.rot, s.set(0.9, 2.2, 0.1), "#6b4a35"); // üst kat merdiven kapısı
     porchDeck(0, b.w + 0.2, 2.4);
     B.slabs.add(local(b, 0, FLOOR_H + 0.4, b.d / 2 + 1.2), b.rot, s.set(b.w + 0.2, 0.15, 2.4), "#cfc6b8");
     posts(-b.w / 2 + 0.2, b.w / 2 - 0.2, b.d / 2 + 2.25, 0.5, 2 * FLOOR_H - 0.4, 4);
@@ -738,7 +749,8 @@ export function buildCity(world) {
       for (const b of open) {
         if (!b?.door || this._hidden === b) continue;
         const a = 1.25, d = b.door;
-        const lx = -d.w / 2 + (d.w / 2) * Math.cos(a), lz = d.z + (d.w / 2) * Math.sin(a);
+        // Menteşe kapının sol kenarında; kapı ortada değilse (d.x) kanat yerinde açılır, ortaya kaymaz.
+        const lx = (d.x ?? 0) - d.w / 2 + (d.w / 2) * Math.cos(a), lz = d.z + (d.w / 2) * Math.sin(a);
         const c = Math.cos(b.rot), sn = Math.sin(b.rot);
         pp.set(b.x + lx * c + lz * sn, FLAT_Y + d.y, b.z - lx * sn + lz * c);
         qq.setFromAxisAngle(UP, b.rot - a);
@@ -1146,21 +1158,14 @@ function buildFeatures(world) {
         break;
       }
       case "rihtim": {
-        // Rıhtım duvarı: kıyı çizgisi boyunca granit bloklar (sudan rıhtım üstüne), üstte açık renk başlık taşı.
+        // Rıhtım duvarı: kıyı çizgisi boyunca granit gövde (sudan rıhtım üstüne), üstte açık renk başlık taşı, kara
+        // tarafında granit kaplama şeridi (duvardan 0,65–5,05 m): duvarın dibindeki arazi inişini örter (arazi ağı
+        // rıhtımda 4 m; iniş bir hücreden geniş olamaz). Üçü de kıyı boyunca tek parça süpürülür: kutu parçaları
+        // eklerde dikiş, kıvrımlarda diş, köşelerde sivri uç bırakıyordu.
         const granite = std("#8f8a82", { roughness: 0.9 }), cap = std("#bdb7ad", { roughness: 0.8 }), coping = std("#a59f95", { roughness: 0.9 });
-        const pts = f.pts;
-        for (let i = 1; i < pts.length; i++) {
-          const a = pts[i - 1], b2 = pts[i];
-          if (!a || !b2) continue;
-          const len = Math.hypot(b2[0] - a[0], b2[1] - a[1]);
-          if (len > 12) continue;
-          const rot = Math.atan2(b2[0] - a[0], b2[1] - a[1]), mx = (a[0] + b2[0]) / 2, mz = (a[1] + b2[1]) / 2;
-          add(new THREE.BoxGeometry(1.0, FLAT_Y + 3.2, len + 0.3), granite, mx, (FLAT_Y + 3.2) / 2 - 3.05, mz, rot, false);
-          add(new THREE.BoxGeometry(1.3, 0.25, len + 0.3), cap, mx, FLAT_Y + 0.25, mz, rot, false);
-        }
-        // Kara tarafında granit kaplama şeridi (duvardan 0,65–5,05 m): duvarın dibindeki arazi inişini örter (arazi
-        // ağı rıhtımda 4 m; iniş bir hücreden geniş olamaz).
-        // Kesintisiz şerit (köşelerde ortalama normal): kutu parçaları kıvrımlarda dişli görünüyordu. Kara -z yönünde.
+        for (const m of [granite, cap, coping]) m.side = THREE.DoubleSide;
+        const kesik = (f.kesik ?? []).filter((k) => world.piers.includes(k.pier));
+        const pts = rihtimNoktalari(f.pts, kesik);
         const runs = [];
         let run = [];
         for (let i = 0; i < pts.length; i++) {
@@ -1169,25 +1174,73 @@ function buildFeatures(world) {
           else run.push(pt);
         }
         if (run.length > 1) runs.push(run);
+        const dir = (a, b2) => { const L = Math.hypot(b2[0] - a[0], b2[1] - a[1]) || 1; return [(b2[0] - a[0]) / L, (b2[1] - a[1]) / L]; };
         for (const r of runs) {
-          const P = [], I = [], yTop = FLAT_Y + 0.07, yBot = FLAT_Y - 0.3;
-          for (let i = 0; i < r.length; i++) {
-            const a = r[Math.max(0, i - 3)], b2 = r[Math.min(r.length - 1, i + 3)]; // ±3 nokta: kenar duvarın kırıklarını izleyip dalgalanmasın
-            const L = Math.hypot(b2[0] - a[0], b2[1] - a[1]), nx = (b2[1] - a[1]) / L, nz = -(b2[0] - a[0]) / L;
-            const [x, z] = r[i];
-            P.push(x + nx * 0.65, yTop, z + nz * 0.65, x + nx * 5.05, yTop, z + nz * 5.05, x + nx * 5.05, yBot, z + nz * 5.05);
-            if (i) {
-              const o = (i - 1) * 3, n = i * 3;
-              I.push(o, n, o + 1, o + 1, n, n + 1); // üst yüz
-              I.push(o + 1, n + 1, o + 2, o + 2, n + 1, n + 2); // kara yönündeki yan yüz
+          // Kara yönü (n): ±3 noktalık pencere (kıyının kırıklarını izleyip dalgalanmasın); pencere köşeyi (yön 30°'den
+          // fazla döner: dolgu kenarı) aşmaz, köşe noktasında iki kenarın açıortayı (gönye; genişlik 1/cos ile korunur).
+          // İskele kesiğinin ucunda n = -z: duvar iskelenin kenarına paralel biter.
+          const corner = r.map((_, i) => {
+            if (i === 0 || i === r.length - 1) return false;
+            const u = dir(r[i - 1], r[i]), v = dir(r[i], r[i + 1]);
+            return u[0] * v[0] + u[1] * v[1] < Math.cos(Math.PI / 6);
+          });
+          const N = r.map((pt, i) => {
+            if (pt[2]) return [0, -1];
+            if (corner[i]) {
+              const p = dir(r[Math.max(0, i - 3)], r[i]), q = dir(r[i], r[Math.min(r.length - 1, i + 3)]);
+              const n1 = [p[1], -p[0]], n2 = [q[1], -q[0]], m = [n1[0] + n2[0], n1[1] + n2[1]], L = Math.hypot(m[0], m[1]) || 1;
+              const c = Math.max(0.5, (m[0] * n1[0] + m[1] * n1[1]) / L);
+              return [m[0] / L / c, m[1] / L / c];
             }
-          }
+            let a = i, b2 = i;
+            while (a > Math.max(0, i - 3) && (a === i || !corner[a])) a--;
+            while (b2 < Math.min(r.length - 1, i + 3) && (b2 === i || !corner[b2])) b2++;
+            const d = dir(r[a], r[b2]);
+            return [d[1], -d[0]];
+          });
+          // Kesit kıyı boyunca süpürülür: prof [[o, y]] (o: kara yönünde uzaklık); her kesit kenarı ayrı yüz şeridi
+          // (kenarlar keskin, kıyı boyunca yumuşak); kapalı kesitte iki uca kapak.
+          // ids: kullanılan noktalar (geniş kesitte köşeye kesitten yakın noktalar atlanır: iç kenar geri katlanmasın).
+          const sweep = (prof, mat, closed, ids = r.map((_, i) => i)) => {
+            const P = [], I = [];
+            for (let e = 0; e < (closed ? prof.length : prof.length - 1); e++) {
+              const [o0, y0] = prof[e], [o1, y1] = prof[(e + 1) % prof.length], base = P.length / 3;
+              ids.forEach((i, k) => {
+                const [x, z] = r[i], [nx, nz] = N[i];
+                P.push(x + nx * o0, y0, z + nz * o0, x + nx * o1, y1, z + nz * o1);
+                if (k) { const a = base + (k - 1) * 2, b2 = base + k * 2; I.push(a, b2, a + 1, a + 1, b2, b2 + 1); }
+              });
+            }
+            if (closed) for (const i of [ids[0], ids.at(-1)]) {
+              const base = P.length / 3;
+              for (const [o, y] of prof) P.push(r[i][0] + N[i][0] * o, y, r[i][1] + N[i][1] * o);
+              for (let k = 1; k < prof.length - 1; k++) I.push(base, base + k, base + k + 1);
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+            geo.setIndex(I);
+            geo.computeVertexNormals();
+            add(geo, mat, 0, 0, 0, 0, false);
+          };
+          sweep([[-0.5, -3.05], [-0.5, FLAT_Y + 0.15], [0.5, FLAT_Y + 0.15], [0.5, -3.05]], granite, true);
+          sweep([[-0.65, FLAT_Y + 0.125], [-0.65, FLAT_Y + 0.375], [0.65, FLAT_Y + 0.375], [0.65, FLAT_Y + 0.125]], cap, true);
+          const near = (i) => !corner[i] && r.some((q, j) => corner[j] && Math.hypot(q[0] - r[i][0], q[1] - r[i][1]) < 5.2);
+          sweep([[0.65, FLAT_Y + 0.07], [5.05, FLAT_Y + 0.07], [5.05, FLAT_Y - 0.3]], coping, false, r.map((_, i) => i).filter((i) => !near(i)));
+        }
+        // İskele kesiklerinde güvertenin altında dayanak: denize bakan yüzü duvarla aynı hizada, kara ucu iskelenin
+        // kara ucunda; üstü kirişlerin altında (layout.js kesik.dayanak.top).
+        for (const k of kesik) {
+          if (!k.dayanak) continue;
+          const { z0, top } = k.dayanak, y0 = -3.05;
+          const c = [[k.xa, k.za + 0.5], [k.xb, k.zb + 0.5], [k.xb, z0], [k.xa, z0]];
+          const P = [];
+          for (const y of [y0, top]) for (const [x, z] of c) P.push(x, y, z);
           const geo = new THREE.BufferGeometry();
           geo.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
-          geo.setIndex(I);
-          geo.computeVertexNormals();
-          const m = add(geo, coping, 0, 0, 0, 0, false);
-          m.material.side = THREE.DoubleSide;
+          geo.setIndex([4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7]);
+          const flat = geo.toNonIndexed();
+          flat.computeVertexNormals();
+          add(flat, granite, 0, 0, 0, 0, false);
         }
         break;
       }

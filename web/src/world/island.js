@@ -68,7 +68,10 @@ function quiet(x, z) {
 const landCache = new Map();
 /** Kara içi uzaklık (metre, yaklaşık): + karada, kıyıda 0, − denizde. */
 export function land(x, z) {
-  const key = Math.round(x) * 100003 + Math.round(z);
+  // Anahtar 1/16 m çözünürlükte: tam metreye yuvarlanınca hücredeki ilk sorgunun değeri bütün hücreye dönüyordu
+  // (kıyı çizgisi 1 m'lik basamaklar yapıyor, rıhtım duvarı 5 m'de bir ileri geri kırılıyordu; sonuç sorgu
+  // sırasına bağlıydı).
+  const key = Math.round(x * 16) * 1048576 + Math.round(z * 16);
   let d = landCache.get(key);
   if (d !== undefined) return d;
   d = -ellipseSd(x, z, BODY);

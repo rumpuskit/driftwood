@@ -309,9 +309,10 @@ export function buildWorkInterior(b0, f, add0, spot0) {
       // Belediye garajı: çöp kamyonu bölmesi (yağ lekesi, bakım kanalı), tezgâh ve aletler, lastik yığını.
       add(1.2, 0.02, b.d - 4, -1.5, 0.07, 0.5, "#3a3d42", 0, { shadow: false });
       add(2.4, 0.02, 1.6, 2.5, 0.07, 1.5, "#4a4a4a", 0, { shadow: false });
-      counter(hw - 1.2, -hd + 2.5, 3, "#6b6f74", "#8a6a52");
-      for (let k = 0; k < 6; k++) add(0.06, 0.4, 0.06, hw - 2.4 + k * 0.4, 1.4, -hd + 0.2, "#c9ced4");
-      add(3, 1.2, 0.05, hw - 1.5, 1.3, -hd + 0.18, "#c9b79c");
+      // Tezgâh arka duvarda, alet panosunun altında (yan duvarın iç yüzünden 0,25 m içeride).
+      counter(hw - 1.75, -hd + 0.6, 3, "#6b6f74", "#8a6a52");
+      for (let k = 0; k < 6; k++) add(0.06, 0.4, 0.06, hw - 2.75 + k * 0.4, 1.4, -hd + 0.2, "#c9ced4");
+      add(3, 1.2, 0.05, hw - 1.75, 1.3, -hd + 0.18, "#c9b79c");
       for (let k = 0; k < 4; k++) add(0.7, 0.25, 0.7, -hw + 0.8, 0.06 + k * 0.25, hd - 1.2, "#1d1d22", 0, { geo: new THREE.CylinderGeometry(0.35, 0.35, 0.25, 12).translate(0, 0.125, 0) });
       // İki direkli araç lifti ve kırmızı takım dolabı.
       for (const dx of [-1.6, 1.6]) {
@@ -320,7 +321,7 @@ export function buildWorkInterior(b0, f, add0, spot0) {
       }
       add(1.4, 1.0, 0.6, -hw + 1, 0.06, -hd + 0.5, "#b8231f");
       for (let r = 0; r < 4; r++) add(1.3, 0.02, 0.02, -hw + 1, 0.3 + r * 0.2, -hd + 0.82, "#c9ced4", 0, { shadow: false });
-      S(hw - 1.2, -hd + 3.3, Math.PI, "counter");
+      S(hw - 1.75, -hd + 1.4, Math.PI, "counter");
       break;
     }
     case "kulube": {
@@ -349,7 +350,7 @@ export function buildWorkInterior(b0, f, add0, spot0) {
         const stalls = Math.max(2, Math.floor(b.w / 3));
         for (let k = 0; k <= stalls; k++) {
           const x = -hw + 0.3 + k * ((b.w - 0.6) / stalls);
-          add(0.1, 1.2, 3.2, x, 0.06, -hd + 1.8, "#8a6a4a");
+          add(0.1, 1.2, 2.9, x, 0.06, -hd + 1.6, "#8a6a4a"); // yemliğin önünde biter
         }
         add(b.w - 0.6, 0.5, 0.4, 0, 0.06, -hd + 3.3, "#6b4a35");
         for (let k = 0; k < stalls; k++) add(1.6, 0.25, 1.4, -hw + 0.3 + (k + 0.5) * ((b.w - 0.6) / stalls), 0.06, -hd + 1.3, "#d9b866", 0, { shadow: false });
@@ -420,7 +421,7 @@ export function buildWorkInterior(b0, f, add0, spot0) {
         S(-hw + 1.5, hd - 2, 0, "counter");
       } else {
         for (let k = 0; k < 3; k++) desk(-hw + 2 + k * 2.6, -1);
-        shelf(hw - 1.5, -hd + 0.4, 3);
+        shelf(hw - 1.6, -hd + 0.4, 3);
         S(-hw + 2, -0.45, Math.PI, "desk");
       }
       break;

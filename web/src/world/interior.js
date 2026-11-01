@@ -40,6 +40,53 @@ const PLANS = [
   [["salon", 3.9], ["calisma", 2.6], ["banyo", 1.9], ["yatak", 3.4]],
 ];
 
+// Eşyaların ölçüldüğü duvar iç yüzü payı: dış duvar 0,25, ara duvarlar 0,12 kalın (ikisini de karşılar).
+const IN = 0.13;
+// Odaların en küçük iç derinliği (eşyalar sığsın: kanepe + lambader, tezgâh + buzdolabı, klozet + duş, yatak +
+// gardırop, masa + şövale).
+const MIN = { salon: 3.0, acik: 5.2, mutfak: 2.5, banyo: 1.9, yatak: 3.1, calisma: 2.3 };
+
+/**
+ * Odaları önden (zf) arkaya (zb) dizer: [tür, pay] listesinden derinlikler (aralarda 0,12 m duvar), en küçük
+ * derinliklerin altına inilmez (fazlası olan odalardan alınır). Sığmazsa null (force: yine de oransal böler).
+ * Her oda: line (önündeki duvarın ekseni), top/bot (döşeme sınırları), z1/z0 (eşyalar için iç yüzler).
+ */
+function fitRooms(tpl, zf, zb, force = false) {
+  const n = tpl.length, avail = zf - zb - 0.12 * (n - 1);
+  const total = tpl.reduce((t, [, l]) => t + l, 0);
+  const d = tpl.map(([, l]) => (l / total) * avail);
+  const min = tpl.map(([k]) => MIN[k]);
+  if (min.reduce((a, b) => a + b, 0) > avail && !force) return null;
+  for (let it = 0; it < 6; it++) {
+    const lack = d.reduce((t, v, i) => t + Math.max(0, min[i] - v), 0);
+    if (lack <= 1e-6) break;
+    const spare = d.map((v, i) => Math.max(0, v - min[i]));
+    const sum = spare.reduce((a, b) => a + b, 0) || 1;
+    for (let i = 0; i < n; i++) d[i] = d[i] < min[i] ? min[i] : d[i] - (spare[i] / sum) * lack;
+  }
+  const rooms = [];
+  let z = zf;
+  for (let i = 0; i < n; i++) {
+    const line = i ? z - 0.06 : null; // önündeki duvar
+    const z1 = i ? z - 0.12 : z, z0 = z1 - d[i];
+    rooms.push({ kind: tpl[i][0], line, top: i ? line : zf, bot: i < n - 1 ? z0 - 0.06 : zb, z1, z0 });
+    z = z0;
+  }
+  return rooms;
+}
+
+/** Kuru çalıştırma için kutu kaydedici (yerel taban izleri; mesh yerine boş nesne döner). */
+function recorder(boxes) {
+  return (w, h, d, lx, ly, lz, color, rot = 0, opts = {}) => {
+    if (!opts.geo) {
+      const r = ((rot % Math.PI) + Math.PI) % Math.PI, sw = Math.abs(r - Math.PI / 2) < 0.2;
+      const hx = (sw ? d : w) / 2, hz = (sw ? w : d) / 2;
+      boxes.push({ x0: lx - hx, x1: lx + hx, z0: lz - hz, z1: lz + hz, y0: ly, y1: ly + h });
+    }
+    return { visible: true };
+  };
+}
+
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...extra });
 const H = (seed, n) => (roll(seed, "ic" + n) % 10000) / 10000;
 
@@ -211,106 +258,187 @@ export class Dollhouse {
     const zf = hd - 0.15;
     const zb = plan.corridor ? -hd + 0.15 + plan.corridorDepth : -hd + 0.15;
     this._shell(b, add);
-    this._buildCore(b, f, add, plan, zb);
+    // Önce dairelerin planı (giriş kapısının yeri eşyalara göre seçilir), sonra çekirdek ve koridor kapıları.
+    const units = [];
+    for (const unit of plan.units) {
+      const k = f * b.perFloor + unit.col;
+      if (k < b.daireler) units.push(this._planUnit(b, f, plan, unit, b.slot0 + k, zb, zf));
+    }
+    if (plan.core) this._buildCore(b, f, add, plan, zb, units);
     if (plan.corridor) {
       // Ortak koridor: arkada boydan boya; dairelerin kapıları koridor duvarında.
       add(b.w - 0.3, 0.06, plan.corridorDepth, 0, 0, -hd + 0.15 + plan.corridorDepth / 2, "#d9d4ca", 0, { shadow: false });
-      const gaps = plan.units.map((u) => [u.cx, DOOR]).concat([[0, 2.4]]);
-      this._wallX(add, -b.w / 2, b.w / 2, zb, CUT, "#ece6da", gaps);
+      const doors = plan.units.map((u) => [units.find((q) => q.unit === u)?.entry.p[0] ?? u.cx, DOOR]);
+      this._wallX(add, -b.w / 2, b.w / 2, zb, CUT, "#ece6da", doors.concat([[(plan.core[0] + plan.core[1]) / 2, 2.4]]));
       for (let x = -b.w / 2 + 2; x < b.w / 2 - 1; x += 4) {
         add(0.3, 0.05, 0.3, x, WALL_H - 0.08, -hd + 0.15 + plan.corridorDepth / 2, "#fff6e0", 0, { mat: { emissive: "#fff1d0", emissiveIntensity: 0.5 }, shadow: false });
       }
     }
     // Daireler arası duvarlar (çekirdeğe ve dış duvara denk gelmeyen sınırlar).
     for (const u of plan.units) {
-      if (u.x1 < b.w / 2 - 0.2 && Math.abs(u.x1) > 1.3) this._wallZ(add, zb, zf, u.x1, CUT, "#e9e3d8");
+      const atCore = plan.core && (Math.abs(u.x1 - plan.core[0]) < 0.01 || Math.abs(u.x1 - plan.core[1]) < 0.01);
+      if (u.x1 < b.w / 2 - 0.2 && !atCore) this._wallZ(add, zb, zf, u.x1, CUT, "#e9e3d8");
     }
-    for (const unit of plan.units) {
-      const k = f * b.perFloor + unit.col;
-      if (k >= b.daireler) continue;
-      this._buildUnit(b, f, add, plan, unit, b.slot0 + k, zb, zf);
-    }
+    for (const P of units) this._buildUnit(b, f, add, P, zb, zf);
   }
 
   /** Merdiven (iki kol ve sahanlık), asansör, giriş katında posta kutuları ve paspas. */
-  _buildCore(b, f, add, plan, zb) {
-    const hd = b.d / 2;
-    const [cx0, cx1] = plan.core;
-    // Çekirdek duvarları; koridor yoksa daire kapıları bu duvarlarda.
-    for (const x of [cx0, cx1]) this._wallZ(add, zb, hd - 0.15, x, CUT, "#ece6da", plan.corridor ? [] : [[1.6, DOOR]]);
-    add(cx1 - cx0 - 0.1, 0.06, hd - 0.15 - zb, 0, 0, (zb + hd - 0.15) / 2, "#cfc8bc", 0, { shadow: false });
-    // Merdiven: sol kol arkaya doğru yarım kata çıkar, sahanlık, sağ kol öne doğru üst kata (stairs.js).
-    doubleStair(add, { xa: -0.6, xb: 0.6, zFront: 0.6, zBack: zb + 1.0, land: 0.85, H: FLOOR_H, upper: f < b.floors - 1 });
-    // Asansör yalnız 4 ve daha çok katlı apartmanda (yönetmelik gibi); 3 katlıda o köşede saksı.
-    const ez0 = 2.4, ez1 = Math.min(hd - 0.3, 4.2);
-    if (b.floors < 4) {
-      add(0.45, 0.4, 0.45, 0.5, 0.06, (ez0 + ez1) / 2, "#b5653f");
-      add(0.7, 0.8, 0.7, 0.5, 0.85, (ez0 + ez1) / 2, "#5f8f4a", 0, { geo: new THREE.IcosahedronGeometry(0.4, 0) });
+  _buildCore(b, f, add, plan, zb, units) {
+    const hd = b.d / 2, hw = b.w / 2;
+    const [cx0, cx1] = plan.core, ccx = (cx0 + cx1) / 2;
+    // Çekirdek duvarları (dış duvara denk gelen yan atlanır); koridor yoksa daire kapıları bu duvarlarda,
+    // kanatları çekirdeğe (sahanlığa) açılır: dairenin eşyalarına değmez.
+    for (const x of [cx0, cx1]) {
+      if (Math.abs(x) > hw - 0.2) continue;
+      const P = units.find((q) => q.coreDoor && Math.abs(q.coreDoor.x - x) < 0.01);
+      this._wallZ(add, zb, hd - 0.15, x, CUT, "#ece6da", P ? [[P.coreDoor.z, DOOR]] : []);
+      if (P) {
+        const into = x === cx0 ? 1 : -1; // çekirdeğin içine doğru
+        add(DOOR, 2.1, 0.05, x + into * (DOOR / 2 + 0.06), 0, P.coreDoor.z + DOOR / 2, "#6b4a35", 0, { shadow: false });
+      }
     }
+    add(cx1 - cx0 - 0.1, 0.06, hd - 0.15 - zb, ccx, 0, (zb + hd - 0.15) / 2, "#cfc8bc", 0, { shadow: false });
+    // Merdiven: sol kol arkaya doğru yarım kata çıkar, sahanlık, sağ kol öne doğru üst kata (stairs.js).
+    doubleStair(add, { xa: ccx - 0.6, xb: ccx + 0.6, zFront: 0.6, zBack: zb + 1.0, land: 0.85, H: FLOOR_H, upper: f < b.floors - 1 });
+    // Asansör yalnız 4 ve daha çok katlı apartmanda (yönetmelik gibi).
+    const ez0 = 2.4, ez1 = Math.min(hd - 0.3, 4.2);
     const steel = { metalness: 0.4, roughness: 0.4 };
     if (b.floors >= 4) {
       // Kuyu duvarları da kesik (içerisi görünsün); kapı kasası ve kat göstergesi tam boy.
-      add(1.7, CUT, 0.1, 0, 0, ez1, "#9aa3ad", 0, { mat: steel });
-      for (const x of [-0.85, 0.85]) add(0.1, CUT, ez1 - ez0, x, 0, (ez0 + ez1) / 2, "#9aa3ad", 0, { mat: steel });
-      for (const x of [-0.82, 0.82]) add(0.08, 2.3, 0.12, x, 0, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
-      add(1.72, 0.1, 0.12, 0, 2.25, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
-      for (const x of [-0.38, 0.38]) add(0.74, CUT + 0.2, 0.05, x, 0.06, ez0, "#c9ced4", 0, { mat: { metalness: 0.7, roughness: 0.25 } });
-      add(0.6, 0.02, 1.3, 0, 0.06, (ez0 + ez1) / 2, "#5a5f66", 0, { shadow: false });
-      add(0.12, 0.25, 0.04, 1.0, 1.0, ez0 - 0.06, "#2a2a2e");
-      add(0.3, 0.08, 0.03, 0, 2.38, ez0 - 0.07, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#5fe08a", toneMapped: false }), shadow: false });
+      add(1.7, CUT, 0.1, ccx, 0, ez1, "#9aa3ad", 0, { mat: steel });
+      for (const x of [-0.85, 0.85]) add(0.1, CUT, ez1 - ez0, ccx + x, 0, (ez0 + ez1) / 2, "#9aa3ad", 0, { mat: steel });
+      for (const x of [-0.82, 0.82]) add(0.08, 2.3, 0.12, ccx + x, 0, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
+      add(1.72, 0.1, 0.12, ccx, 2.25, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
+      for (const x of [-0.38, 0.38]) add(0.74, CUT + 0.2, 0.05, ccx + x, 0.06, ez0, "#c9ced4", 0, { mat: { metalness: 0.7, roughness: 0.25 } });
+      add(0.6, 0.02, 1.3, ccx, 0.06, (ez0 + ez1) / 2, "#5a5f66", 0, { shadow: false });
+      add(0.12, 0.25, 0.04, ccx + 1.0, 1.0, ez0 - 0.06, "#2a2a2e");
+      add(0.3, 0.08, 0.03, ccx, 2.38, ez0 - 0.07, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#5fe08a", toneMapped: false }), shadow: false });
     }
     if (f === 0) {
-      add(1.4, 0.02, 0.9, 0, 0.06, hd - 0.7, "#6b4a35", 0, { shadow: false });
+      add(1.4, 0.02, 0.9, ccx, 0.06, hd - 0.7, "#6b4a35", 0, { shadow: false });
+      // Posta kutuları sol duvarda, girişin yanında (daire kapılarının arama aralığının önünde: _planUnit).
+      const wx = Math.abs(cx0) > hw - 0.2 ? -hw + 0.125 : cx0 + 0.06;
       for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
-        add(0.06, 0.2, 0.26, cx0 + 0.09, 1.1 + r * 0.22, 0.95 + c * 0.28, "#b8a06a", 0, { mat: { metalness: 0.5, roughness: 0.4 }, shadow: false });
+        add(0.06, 0.2, 0.26, wx + 0.03, 1.1 + r * 0.22, hd - 1.45 + c * 0.28, "#b8a06a", 0, { mat: { metalness: 0.5, roughness: 0.4 }, shadow: false });
       }
     }
   }
 
-  /** Bir daire: odalar, kapı boşlukları, eşyalar ve sakinin kullanacağı noktalar. */
-  _buildUnit(b, f, add, plan, unit, slot, zb, zf) {
+  /**
+   * Dairenin planı (çizimsiz): sütunlar, odalar, eşya duvarları ve giriş. Dar dairede tek sütun: odalar önden
+   * arkaya, eşyalar iki yan duvarda (A ana eşyalar, B karşısı). Geniş dairede (cottage, apartmanın sağ dairesi)
+   * iki sütun: yaşam (salon + mutfak) ve yatak tarafı (yatak, banyo, ikinci yatak), aralarında önde kapılı bölme;
+   * iki sütunun da A duvarı bölmedir. Çekirdek duvarındaki giriş kapısı eşyaların boş bıraktığı yere konur:
+   * eşyalar önce kuru çalıştırılıp kayda alınır, duvar boyunca boş aralık aranır, yoksa eşyalar aynalanıp
+   * yeniden denenir.
+   */
+  _planUnit(b, f, plan, unit, slot, zb, zf) {
     const key = slot * 7 + 3;
     const pick = (arr, tag) => arr[roll(key, tag) % arr.length];
-    const { x0, x1, cx } = unit;
-    const mirror = H(key, 1) < 0.5; // ana eşyalar hangi yan duvarda
-    const A = mirror ? x1 : x0, B = mirror ? x0 : x1;
-    const sA = mirror ? -1 : 1; // A duvarından içeri yön
-    // Doğrulanmış sakin kendi evinin duvar ve koltuk rengini seçebilir (tercih.js).
-    const pref = prefFor(slot);
-    const paint = pref?.duvar ?? pick(PAINTS, "boya");
-    const wood = pick(WOODS, "ahsap");
-    const floorCol = pick(FLOORS, "parke");
-
-    // Planı derinliğe yay.
-    const tpl = PLANS[Math.floor(H(key, 2) * PLANS.length)];
-    const total = tpl.reduce((t, [, l]) => t + l, 0);
-    const D = zf - zb;
-    const rooms = [];
-    let z = zf;
-    for (const [kind, l] of tpl) {
-      const depth = (l / total) * D;
-      rooms.push({ kind, z1: z, z0: z - depth });
-      z -= depth;
-    }
-    const floorOf = (k) => (k === "banyo" ? "#dfe6ea" : k === "mutfak" ? "#d8d0c2" : floorCol);
-    for (const r of rooms) add(x1 - x0 - 0.14, 0.06, r.z1 - r.z0 - 0.08, cx, 0, (r.z0 + r.z1) / 2, floorOf(r.kind), 0, { shadow: false });
-    // Odalar arası duvarlar, ortada kapı boşluğu ve kasası.
-    for (let i = 1; i < rooms.length; i++) {
-      this._wallX(add, x0 + 0.08, x1 - 0.08, rooms[i].z1, CUT, paint, [[cx, DOOR]]);
-      for (const e of [-1, 1]) add(0.07, 2.1, 0.16, cx + e * (DOOR / 2 + 0.035), 0, rooms[i].z1, wood, 0, { shadow: false });
-      add(DOOR + 0.14, 0.08, 0.16, cx, 2.1, rooms[i].z1, wood, 0, { shadow: false });
-    }
-    // Daire kapısı: koridor varsa arka duvarda (ortada), yoksa çekirdek duvarında.
-    const coreX = unit.side < 0 ? x1 : x0;
-    const entry = plan.corridor ? [cx, zb + 0.6] : [coreX - unit.side * 0.6, 1.6];
-    if (plan.corridor) add(0.05, 2.1, DOOR, cx - DOOR / 2, 0, zb + DOOR / 2, "#6b4a35", 0, { shadow: false });
-    else add(DOOR, 2.1, 0.05, coreX - unit.side * DOOR / 2, 0, 1.6 + DOOR / 2, "#6b4a35", 0, { shadow: false });
-
-    const spots = { entry: { p: entry, heading: 0 } };
+    const hd = b.d / 2;
+    const zbIn = plan.corridor ? zb + 0.06 : zb;
+    const D = zf - zbIn;
     const occupant = this.people.slotToIndex.get(slot);
     const job = occupant != null ? this.people.works[occupant].job : "";
-    const ctx = { x0, x1, cx, A, B, sA, wood, pick, spots, job, key, pref };
-    for (const r of rooms) this._furnish(add, r, ctx);
+    const base = { wood: pick(WOODS, "ahsap"), pick, job, key, pref: prefFor(slot) };
+    const P = { unit, slot, key, occupant, zbIn, base, part: null, coreDoor: null };
+    // Sütun: [x0, x1], ana eşya duvarı A (aIsX1: x1 yanı) ve karşısı B (duvar iç yüzleri), yürüme aksı ortada.
+    const mkCol = (x0, x1, aIsX1, rooms) => {
+      const A = aIsX1 ? x1 - IN : x0 + IN, B = aIsX1 ? x0 + IN : x1 - IN;
+      return { x0, x1, A, B, sA: aIsX1 ? -1 : 1, ax: (x0 + x1) / 2, rooms };
+    };
+    if (unit.x1 - unit.x0 > 7.6) {
+      const xs = unit.x0 + Math.max(5.0, 0.55 * (unit.x1 - unit.x0));
+      const back = D >= 9.5 ? [["yatak", 0.4], ["banyo", 0.2], ["yatak", 0.4]] : [["yatak", 0.55], ["banyo", 0.45]];
+      P.cols = [mkCol(unit.x0, xs, true, fitRooms([["salon", 0.55], ["mutfak", 0.45]], zf, zbIn, true)), mkCol(xs, unit.x1, false, fitRooms(back, zf, zbIn, true))];
+      P.part = { x: xs, z: zf - 0.75 };
+      P.cols[0].doorA = P.cols[1].doorA = P.part.z;
+    } else {
+      // Seçilen plan sığmazsa (odaların en küçük derinlikleri) sıradaki denenir.
+      const t = Math.floor(H(key, 2) * PLANS.length);
+      let rooms = null;
+      for (let i = 0; i < PLANS.length && !rooms; i++) rooms = fitRooms(PLANS[(t + i) % PLANS.length], zf, zbIn);
+      P.cols = [mkCol(unit.x0, unit.x1, H(key, 1) < 0.5, rooms ?? fitRooms(PLANS[t], zf, zbIn, true))];
+    }
+    const c0 = P.cols[0];
+    if (plan.corridor) {
+      P.entry = { p: [c0.ax, zbIn + 0.6], heading: 0, ax: c0.ax, leaf: "koridor" };
+    } else if (unit.side !== 0 && !(b.perFloor === 1 && f === 0)) {
+      // Çekirdek duvarında kapı: eşyaların bu duvarın önünü boş bıraktığı aralık (iki eşya düzeni denenir).
+      const wallX = unit.side < 0 ? unit.x1 : unit.x0;
+      const zlo = 1.15, zhi = hd - 2.25;
+      let best = null;
+      for (const flip of [false, true]) {
+        if (flip) { const q = c0; [q.A, q.B] = [q.B, q.A]; q.sA = -q.sA; }
+        const boxes = [];
+        this._furnishCols(recorder(boxes), P, {});
+        const lines = c0.rooms.slice(1).map((r) => r.line);
+        // Kutunun duvara uzaklığı (duvarı kesiyorsa 0); duvarın 1,15 m önündeki eşyalar kapı boşluğunu kapatır.
+        const dist = (q) => ((q.x0 - wallX) * (q.x1 - wallX) <= 0 ? 0 : Math.min(Math.abs(q.x0 - wallX), Math.abs(q.x1 - wallX)));
+        const blocked = (z) => lines.some((l) => Math.abs(z - l) < DOOR / 2 + 0.15) ||
+          boxes.some((q) => dist(q) < 1.15 && q.z1 > z - DOOR / 2 - 0.1 && q.z0 < z + DOOR / 2 + 0.1 && q.y1 > 0.12);
+        for (let d = 0; d <= zhi - zlo && !best; d += 0.05) {
+          for (const z of [1.6 + d, 1.6 - d]) if (z >= zlo && z <= zhi && !blocked(z)) { best = z; break; }
+        }
+        if (best) break;
+      }
+      const z = best ?? 1.6;
+      P.coreDoor = { x: wallX, z };
+      P.entry = { p: [wallX - unit.side * 0.6, z], heading: 0, ax: c0.ax };
+    } else {
+      // Ön kapıdan (cottage, iki aileli evin zemin katı).
+      const fx = b.door?.x ?? 0;
+      const col = P.cols.find((c) => fx > Math.min(c.x0, c.x1) && fx < Math.max(c.x0, c.x1)) ?? c0;
+      P.entry = { p: [fx, zf - 0.6], heading: 0, ax: col.ax };
+    }
+    return P;
+  }
+
+  /** Sütunların odalarını döşer; noktalar spots'a, her noktaya sütunun yürüme aksı (ax) yazılır. */
+  _furnishCols(add, P, spots) {
+    for (const c of P.cols) {
+      const before = new Set(Object.values(spots));
+      const ctx = { ...P.base, A: c.A, B: c.B, sA: c.sA, spots, doorA: c.doorA };
+      for (const r of c.rooms) this._furnish(add, r, ctx);
+      for (const sp of Object.values(spots)) if (sp?.p && !before.has(sp)) sp.ax = c.ax;
+    }
+  }
+
+  /** Bir daire: odalar, kapı boşlukları, eşyalar ve sakinin kullanacağı noktalar (_planUnit planıyla). */
+  _buildUnit(b, f, add, P, zb, zf) {
+    const { unit, slot, key, occupant, zbIn, base } = P;
+    const pick = base.pick;
+    const paint = base.pref?.duvar ?? pick(PAINTS, "boya");
+    const wood = base.wood;
+    const floorCol = pick(FLOORS, "parke");
+    const floorOf = (k) => (k === "banyo" ? "#dfe6ea" : k === "mutfak" ? "#d8d0c2" : floorCol);
+    const frame = (x, z, alongZ) => {
+      // Kapı kasası: iki dikme ve üst başlık (kapı boşluğunun iki yanında).
+      for (const e of [-1, 1]) {
+        if (alongZ) add(0.16, 2.1, 0.07, x, 0, z + e * (DOOR / 2 + 0.035), wood, 0, { shadow: false });
+        else add(0.07, 2.1, 0.16, x + e * (DOOR / 2 + 0.035), 0, z, wood, 0, { shadow: false });
+      }
+      if (alongZ) add(0.16, 0.08, DOOR + 0.14, x, 2.1, z, wood, 0, { shadow: false });
+      else add(DOOR + 0.14, 0.08, 0.16, x, 2.1, z, wood, 0, { shadow: false });
+    };
+    for (const c of P.cols) {
+      const x0 = Math.min(c.x0, c.x1), x1 = Math.max(c.x0, c.x1);
+      for (const r of c.rooms) add(x1 - x0 - 0.14, 0.06, r.top - r.bot - 0.08, (x0 + x1) / 2, 0, (r.top + r.bot) / 2, floorOf(r.kind), 0, { shadow: false });
+      // Odalar arası duvarlar, sütunun ortasında kapı boşluğu ve kasası.
+      for (const r of c.rooms.slice(1)) {
+        this._wallX(add, x0 + 0.06, x1 - 0.06, r.line, CUT, paint, [[c.ax, DOOR]]);
+        frame(c.ax, r.line, false);
+      }
+    }
+    if (P.part) {
+      this._wallZ(add, zbIn, zf, P.part.x, CUT, paint, [[P.part.z, DOOR]]);
+      frame(P.part.x, P.part.z, true);
+    }
+    // Koridordan giriş: kanat dairenin içine, yürüme aksının üstüne açılır (aks boş kalır).
+    if (P.entry.leaf === "koridor") add(0.05, 2.1, DOOR, P.entry.p[0] - DOOR / 2, 0, zbIn + DOOR / 2, "#6b4a35", 0, { shadow: false });
+
+    const spots = { entry: P.entry };
+    this._furnishCols(add, P, spots);
 
     // Evcil hayvan.
     const animal = occupant != null ? pet(this.people.residents[occupant], this.people.day) : "";
@@ -320,7 +448,7 @@ export class Dollhouse {
     }
 
     const lamp = new THREE.PointLight("#ffd9a0", 0, 10, 1.6);
-    lamp.position.copy(local(b, cx, f * FLOOR_H + 2.5, (zb + zf) / 2));
+    lamp.position.copy(local(b, (unit.x0 + unit.x1) / 2, f * FLOOR_H + 2.5, (zb + zf) / 2));
     this.group.add(lamp);
     this.lights.push({ lamp, slot });
     if (spots.tvMat) this.tvs.push({ mat: spots.tvMat, slot });
@@ -331,11 +459,16 @@ export class Dollhouse {
         if (!sp?.p) continue;
         conv[k] = { ...sp, w: toWorld(sp.p), heading: b.rot + (sp.heading ?? 0) };
       }
-      this.units.set(occupant, { spots: conv, cx, rooms, y0: FLAT_Y + f * FLOOR_H + 0.06, toWorld, rot: b.rot });
+      const c0 = P.cols[0];
+      this.units.set(occupant, { spots: conv, cx: c0.ax, part: P.part, rooms: c0.rooms, y0: FLAT_Y + f * FLOOR_H + 0.06, toWorld, rot: b.rot });
     }
   }
 
-  /** Oda döşeme: türüne göre eşyalar; noktalar spots'a yazılır. Orta aks (cx ± 0,5) boş kalır. */
+  /**
+   * Oda döşeme: türüne göre eşyalar; noktalar spots'a yazılır. A ve B duvar iç yüzleri, r.z0/r.z1 odanın iç
+   * yüzleri; eşyalar bu sınırların içinde kalır. Orta aks (sütun ortası ± 0,5) boş kalır. o.doorA: A duvarında
+   * kapı (iki sütunlu dairenin bölmesi) varsa z'si; önü boş bırakılır.
+   */
   _furnish(add, r, o) {
     const { A, B, sA, wood, pick, spots, pref } = o;
     const zc = (r.z0 + r.z1) / 2, dz = r.z1 - r.z0;
@@ -346,7 +479,11 @@ export class Dollhouse {
     switch (r.kind) {
       case "salon": case "acik": {
         const sofa = pref?.koltuk ?? pick(SOFAS, "koltuk");
-        const sz = r.kind === "acik" ? r.z1 - 1.7 : zc;
+        // Kanepe ortada (açık salonda önde); A duvarındaki kapının önünden geri çekilir; arkasındaki lambader
+        // ve evcil hayvan köşesi odaya sığar.
+        let sz = r.kind === "acik" ? r.z1 - 1.75 : zc;
+        if (o.doorA != null && o.doorA < r.z1 && o.doorA > r.z0) sz = Math.min(sz, o.doorA - DOOR / 2 - 0.15 - 1.05);
+        sz = Math.max(sz, r.z0 + 1.7);
         // Kanepe A duvarında, televizyon karşısında (B duvarı).
         add(0.9, 0.42, 2.1, ax(0.5), 0.06, sz, sofa);
         add(0.25, 0.5, 2.1, ax(0.15), 0.48, sz, sofa);
@@ -360,17 +497,19 @@ export class Dollhouse {
         spots.tvMat = tvMat;
         add(0.35, 0.8, 0.35, bx(0.3), 0.06, r.z1 - 0.45, "#6a8f5a");
         add(0.03, 0.6, 0.9, ax(0.03), 1.45, sz, pick(["#d98ca0", "#6f8fb5", "#e0b060", "#7aa37a"], "tablo"), 0, { shadow: false });
-        add(0.04, 1.5, 0.04, ax(0.3), 0.06, sz - 1.35, "#3c4148");
-        add(0.34, 0.3, 0.34, ax(0.3), 1.5, sz - 1.35, "#f3e3c0", 0, { mat: { emissive: "#ffd9a0", emissiveIntensity: 0.25 } });
+        add(0.04, 1.5, 0.04, ax(0.3), 0.06, sz - 1.3, "#3c4148");
+        add(0.34, 0.3, 0.34, ax(0.3), 1.5, sz - 1.3, "#f3e3c0", 0, { mat: { emissive: "#ffd9a0", emissiveIntensity: 0.25 } });
         const facing = sA > 0 ? Math.PI / 2 : -Math.PI / 2;
         spots.sofa = { p: [ax(0.62), sz + 0.4], heading: facing, seat: 0.42 };
         spots.sofa2 = { p: [ax(0.62), sz - 0.4], heading: facing, seat: 0.42 };
+        // Kafes ya da akvaryum: lambaderin yanında (açık salonda kanepenin önündeki köşede).
+        spots.petSpot = { p: r.kind === "acik" ? [ax(0.62), r.z1 - 0.32] : [ax(1.1), sz - 1.35] };
         if (r.kind === "acik") {
-          // Açık mutfak: salonun arka bölümünde B duvarında tezgâh, A tarafında yemek masası.
-          const kz = r.z0 + 1.5;
-          this._kitchenCounter(add, bx, kz, Math.min(2.4, dz * 0.4), spots, faceB);
-          this._diningTable(add, ax(0.9), kz, o, spots);
-        } else if (dz > 3.6) {
+          // Açık mutfak: salonun arka bölümünde B duvarında tezgâh (televizyonun gerisinde), A tarafında yemek masası.
+          const k0 = r.z0 + 0.1, k1 = Math.min(r.z0 + 3.25, sz - 0.9);
+          this._kitchenCounter(add, bx, k0, k1, spots, faceB);
+          this._diningTable(add, ax(0.9), r.z0 + 1.5, o, spots);
+        } else if (sz - 0.8 > r.z0 + 1.25) {
           // Kitaplık B duvarında, televizyonun önünde kalmayacak yerde.
           const bz = r.z0 + 0.7;
           add(0.32, 1.9, 1.0, bx(0.18), 0.06, bz, wood);
@@ -379,14 +518,15 @@ export class Dollhouse {
         break;
       }
       case "mutfak": {
-        this._kitchenCounter(add, ax, zc, Math.min(2.8, dz - 0.5), spots, faceA);
+        this._kitchenCounter(add, ax, r.z0 + 0.1, r.z1 - 0.1, spots, faceA);
         this._diningTable(add, bx(0.75), zc, o, spots);
         break;
       }
       case "banyo": {
         // Klozet ve duş A duvarında, lavabo ve ayna B duvarında.
-        add(0.4, 0.42, 0.55, ax(0.3), 0.06, r.z1 - 0.45, "#f6f6f4");
-        add(0.4, 0.35, 0.18, ax(0.1), 0.48, r.z1 - 0.45, "#f6f6f4");
+        // Klozet duvara sırtını verir: rezervuar duvar dibinde, oturak odaya doğru.
+        add(0.55, 0.42, 0.4, ax(0.46), 0.06, r.z1 - 0.4, "#f6f6f4");
+        add(0.18, 0.35, 0.42, ax(0.1), 0.48, r.z1 - 0.4, "#f6f6f4");
         add(0.45, 0.82, 0.5, bx(0.25), 0.06, zc, "#f6f6f4");
         add(0.03, 0.6, 0.5, bx(0.02), 1.3, zc, "#cfe3ee", 0, { mat: { roughness: 0.05, metalness: 0.6 }, shadow: false });
         add(0.9, 0.06, 0.85, ax(0.5), 0.06, r.z0 + 0.5, "#e9eef0");
@@ -452,15 +592,18 @@ export class Dollhouse {
     }
   }
 
-  _kitchenCounter(add, wallX, zc, len, spots, faceWall) {
-    // Duvar boyunca tezgâh: eviye, ocak ve davlumbaz; ucunda buzdolabı; üstte dolaplar.
+  _kitchenCounter(add, wallX, z0, z1, spots, faceWall) {
+    // Duvar boyunca tezgâh: eviye, ocak ve davlumbaz; z0 ucunda buzdolabı; üstte dolaplar. Blok [z0, z1]
+    // aralığına ortalanır, taşmaz (tezgâh en çok 2,8 m).
+    const len = Math.min(2.8, z1 - z0 - 0.75), start = (z0 + z1) / 2 - (len + 0.75) / 2;
+    const zc = start + 0.75 + len / 2;
+    add(0.68, 1.9, 0.7, wallX(0.34), 0.06, start + 0.35, "#e6e9ec");
     add(0.62, 0.9, len, wallX(0.31), 0.06, zc, "#f2efe9");
     add(0.66, 0.05, len + 0.04, wallX(0.33), 0.96, zc, "#5b5f66");
     add(0.4, 0.02, 0.5, wallX(0.33), 1.0, zc - len * 0.25, "#b9c2cc", 0, { shadow: false });
     add(0.5, 0.02, 0.6, wallX(0.33), 1.0, zc + len * 0.2, "#222222", 0, { shadow: false });
     add(0.45, 0.3, 0.6, wallX(0.23), 1.75, zc + len * 0.2, "#c9ced4", 0, { mat: { metalness: 0.5 } });
     add(0.35, 0.6, len * 0.45, wallX(0.18), 1.55, zc - len * 0.25, "#ebe6dd");
-    add(0.68, 1.9, 0.7, wallX(0.34), 0.06, zc - len / 2 - 0.4, "#e6e9ec");
     spots.stove = { p: [wallX(0.95), zc + len * 0.2], heading: faceWall };
   }
 
@@ -482,22 +625,24 @@ export class Dollhouse {
   _pet(add, animal, spots, key) {
     const t = H(key, 9);
     const base = spots.sofa?.p ?? spots.desk?.p ?? [0, 0];
+    // Köpek yatağı, kafes ve akvaryum salonun boş köşesinde (_furnish: petSpot); salon yoksa kanepe noktasında.
+    const corner = spots.petSpot?.p ?? base;
     if (animal === "Cat" || animal === "Dog") {
       const cat = animal === "Cat";
       const col = (cat ? ["#e0a050", "#3a3533", "#f2f0ea", "#8a8a8a"] : ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f"])[Math.floor(t * 4)];
       const body = add(0, 0, 0, 0, 0, 0, col, 0, { geo: cat ? new THREE.SphereGeometry(0.17, 10, 8).scale(0.75, 0.7, 1.35) : new THREE.CapsuleGeometry(0.14, 0.42, 4, 8).rotateX(Math.PI / 2) });
       const head = add(0, 0, 0, 0, 0, 0, col, 0, { geo: new THREE.SphereGeometry(cat ? 0.1 : 0.12, 8, 6) });
-      if (!cat) add(0.8, 0.08, 0.6, base[0] + (spots.sofa?.heading > 0 ? 1.6 : -1.6), 0.06, base[1] + 1.2, "#8a5a32", 0, { shadow: false });
+      if (!cat) add(0.8, 0.08, 0.6, corner[0], 0.06, corner[1], "#8a5a32", 0, { shadow: false });
       return { kind: cat ? "kedi" : "kopek", body, head, base, facing: spots.sofa?.heading ?? 0, ph: t * 40 };
     }
     if (animal === "Parrot") {
-      add(0.4, 0.55, 0.4, base[0], 1.0, base[1] - 1.6, "#cfd6de", 0, { mat: { metalness: 0.6, wireframe: true } });
-      add(0.03, 1.0, 0.03, base[0], 0.06, base[1] - 1.6, "#3c4148", 0, { shadow: false });
-      const bird = add(0.12, 0.22, 0.1, base[0], 1.15, base[1] - 1.6, "#3fa34d");
-      return { kind: "papagan", body: bird, base, ph: t * 40 };
+      add(0.4, 0.55, 0.4, corner[0], 1.0, corner[1], "#cfd6de", 0, { mat: { metalness: 0.6, wireframe: true } });
+      add(0.03, 1.0, 0.03, corner[0], 0.06, corner[1], "#3c4148", 0, { shadow: false });
+      const bird = add(0.12, 0.22, 0.1, corner[0], 1.15, corner[1], "#3fa34d");
+      return { kind: "papagan", body: bird, base: corner, ph: t * 40 };
     }
-    add(0.7, 0.35, 0.45, base[0], 0.06, base[1] + 1.8, "#cfe3ee", 0, { mat: { transparent: true, opacity: 0.5 } });
-    add(0.25, 0.1, 0.3, base[0], 0.1, base[1] + 1.8, "#6f7d4a");
+    add(0.7, 0.35, 0.45, corner[0], 0.06, corner[1], "#cfe3ee", 0, { mat: { transparent: true, opacity: 0.5 } });
+    add(0.25, 0.1, 0.3, corner[0], 0.1, corner[1], "#6f7d4a");
     return null;
   }
 
@@ -560,7 +705,10 @@ export class Dollhouse {
     };
     // Bir noktadan ötekine: önce orta aksa çıkar, aks boyunca yürür, sonra hedefe döner.
     if (dest && from && from !== dest) {
-      const path = [from.p, [u.cx, from.p[1]], [u.cx, dest.p[1]], dest.p];
+      // Sütunlar arasında bölmenin kapısından geçer (iki sütunlu daire).
+      const a = from.ax ?? u.cx, c = dest.ax ?? u.cx;
+      const path = a === c || !u.part ? [from.p, [a, from.p[1]], [a, dest.p[1]], dest.p]
+        : [from.p, [a, from.p[1]], [a, u.part.z], [c, u.part.z], [c, dest.p[1]], dest.p];
       let L = 0;
       for (let j = 1; j < path.length; j++) L += Math.hypot(path[j][0] - path[j - 1][0], path[j][1] - path[j - 1][1]);
       const el = (minute - start) * 60;
@@ -791,7 +939,7 @@ export class Dollhouse {
       if (pt.kind === "papagan") {
         // Tünekte sağa sola seker, arada kanat çırpar.
         const hop = Math.max(0, Math.sin(T * 1.3)) ** 6;
-        pt.body.position.copy(local(b, pt.base[0] + 0.08 * Math.sin(T * 0.4), y0 + 1.26 + 0.05 * hop, pt.base[1] - 1.6));
+        pt.body.position.copy(local(b, pt.base[0] + 0.08 * Math.sin(T * 0.4), y0 + 1.26 + 0.05 * hop, pt.base[1]));
         pt.body.scale.x = 1 + 1.2 * Math.max(0, Math.sin(T * 9)) * hop;
         continue;
       }

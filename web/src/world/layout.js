@@ -1124,11 +1124,56 @@ export class World {
     // Duvar kıyı çizgisinin (land = 0) üstünde; yalnız rıhtımın tam olduğu yerde (uçlarda kumsala geçiş).
     for (let x = -1000; x <= 800; x += 5) {
       let cz = Math.min(I.mainZ(Math.max(-700, Math.min(700, x))), I.shoreZ(x) - 60);
-      while (cz < I.shoreZ(x) + 400 && I.land(x, cz) > 0) cz += 0.25;
-      if (I.quay(x, cz - 2) > 0.9) wall.push([x, cz]);
-      else if (wall.length && wall.at(-1) !== null) wall.push(null);
+      // Kıyı: 2 m adımla, sonra ikiye bölerek 1 cm'ye (0,25 m adım yüz binlerce land() sorgusuydu).
+      if (I.land(x, cz) > 0) {
+        while (cz < I.shoreZ(x) + 400 && I.land(x, cz) > 0) cz += 2;
+        let lo = cz - 2;
+        for (let k = 0; k < 8; k++) { const m = (lo + cz) / 2; if (I.land(x, m) > 0) lo = m; else cz = m; }
+      }
+      const a = wall.at(-1);
+      if (I.quay(x, cz - 2) > 0.9) {
+        // Dolgu kenarı (yük terminali, tersane): kıyı çizgisi z'de sıçrar; duvar köşeyi dönüp dolgunun yanından iner.
+        if (a && Math.abs(cz - a[1]) > 6) {
+          const up = cz > a[1], side = [];
+          for (let z = a[1] + (up ? 2.5 : -2.5); up ? z < cz : z > cz; z += up ? 5 : -5) {
+            let sx = up ? x : a[0];
+            while (Math.abs(sx - (up ? x : a[0])) < 5 && I.land(sx, z) > 0) sx += up ? -0.25 : 0.25;
+            side.push([sx, z]);
+          }
+          if (side.length) {
+            if (up) side.push([side.at(-1)[0], cz]);
+            else side.unshift([side[0][0], a[1]]);
+          }
+          wall.push(...side);
+        }
+        wall.push([x, cz]);
+      } else if (wall.length && wall.at(-1) !== null) wall.push(null);
     }
-    this.features.push({ type: "rihtim", pts: wall });
+    // İskeleler ve tersane kızağı duvarı keser: duvar ve başlık şeridi iskelenin iki yanında biter (uç noktaları
+    // [x, z, 1]: city.js orada kutuyu uzatmaz, şeridi iskeleye paralel bitirir). Ahşap iskele kara tarafında şeridin
+    // ötesine uzar; altında güvertenin kirişlerine değmeyen alçak dayanak (kesik.dayanak) kalır.
+    const wallZ = (x) => {
+      for (let i = 1; i < wall.length; i++) {
+        const a = wall[i - 1], b = wall[i];
+        if (a && b && b[0] - a[0] > 0.5 && x >= a[0] && x <= b[0]) return a[1] + ((b[1] - a[1]) * (x - a[0])) / (b[0] - a[0]);
+      }
+      return null;
+    };
+    const kesik = [];
+    for (const p of this.piers) {
+      const xa = p.x0 - 0.05, xb = p.x1 + 0.05, za = wallZ(xa), zb = wallZ(xb), zc = wallZ((p.x0 + p.x1) / 2);
+      if (za === null || zb === null || zc === null || p.z0 > Math.min(za, zb, zc) - 0.3 || p.z1 < Math.max(za, zb, zc) + 0.6) continue;
+      const f = this.features.find((f) => f.type === "iskele" && f.x === (p.x0 + p.x1) / 2 && f.z === p.z0);
+      if (f) {
+        const z0 = Math.min(p.z0, Math.min(za, zb, zc) - 5.4);
+        f.len += f.z - z0;
+        f.z = p.z0 = z0;
+      }
+      kesik.push({ xa, xb, za, zb, pier: p, ...(f ? { dayanak: { z0: p.z0, top: p.top - 0.42 } } : {}) });
+    }
+    // Kesikler çizimde uygulanır (city.js, rihtimNoktalari): yalnız adada kurulmuş iskeleler (nüfusa göre ayıklanmamış)
+    // duvarı keser.
+    this.features.push({ type: "rihtim", pts: wall, kesik: kesik.sort((c, d) => c.xa - d.xa) });
   }
 
   _layoutFishingPier(coast) {
@@ -1617,7 +1662,8 @@ export class World {
           case "cay": {
             // Dondurmacı: küçük büfe ve önünde piknik masaları.
             rplaza(side, v, sw - 2, gh - 2, "avlu");
-            const bp = this._zw(zone, side * su + side * (sw / 2 - 5), v - gh / 2 + 4);
+            // Şeridin ucunda; sağ şeritte yanındaki Community Center'la arasında 0,5 m (şerit 21 m: 14 + 0,5 + 6).
+            const bp = this._zw(zone, side * su + side * (sw / 2 - 3.5), v - gh / 2 + 4);
             this.addBuilding({ kind: "bufe", x: bp[0], z: bp[1], rot: rot0 + Math.PI, w: 6, d: 4.5, floors: 1, roofType: "flat", wall: "#f7e9ef", roof: "#c9c4bb", style: { shop: true, awning: "#e07a9a" }, address: `Ice Cream Parlor, ${mahalleName(m)}` });
             for (let t = 0; t < 6; t++) {
               const [tx, tz] = this._zw(zone, side * su - 5 + (t % 2) * 9 - side * 2, v - 6 + Math.floor(t / 2) * 7);
@@ -1663,13 +1709,14 @@ export class World {
       // Community Center: sağdaki dondurmacı şeridinde, girişe yakın sokağa bakan tek katlı bina.
       if (kind === "cay" && side > 0) this._tag(`muhtarlik:${m}`, () => {
         const st = STYLES.muhtarlik;
-        const [bx, bz] = this._zw(zone, su - 2, v - gh / 2 + st.d / 2 + 1);
+        const cu = su - sw / 2 + st.w / 2; // şeridin öbür ucu (dondurmacının karşı yanı)
+        const [bx, bz] = this._zw(zone, cu, v - gh / 2 + st.d / 2 + 1);
         const names = cat().isyerleri.muhtarlik;
         const b = this.addBuilding({
           kind: "muhtarlik", x: bx, z: bz, rot: rot0 + Math.PI, w: st.w, d: st.d, floors: st.floors, roofType: st.roof,
           wall: st.wall, roof: st.roofColor, workplace: true, style: st, address: `${names[m % names.length]}`,
         });
-        const door = this._zw(zone, su - 2, v - gh / 2 + 1.35);
+        const door = this._zw(zone, cu, v - gh / 2 + 1.35);
         this._addWorkplace("muhtarlik", m % names.length, { door, path: [door, HUB], anchor: door, spread: 1.5, building: b });
       });
     }
@@ -1735,18 +1782,48 @@ export function playgroundItems(f) {
 }
 
 /**
- * Apartman katının planı: ortada merdiven ve asansör çekirdeği (2,4 m), iki yanında daireler.
- * Katta ikiden fazla daire varsa arkada ortak koridor bulunur. Hem dış cephe hem iç mekân bunu kullanır.
+ * Rıhtım duvarının noktaları, verilen iskele kesikleriyle: kesiğin uç noktaları [x, z, 1] (city.js orada duvarı
+ * uzatmaz, şeridi iskeleye paralel bitirir), kesik boyunca null. Kesik iki nokta arasına da düşebilir (marina
+ * iskelesi 2,4 m, nokta aralığı 5 m).
+ */
+export function rihtimNoktalari(wall, kesik) {
+  const pts = [];
+  for (let i = 0; i < wall.length; i++) {
+    const a = wall[i - 1], b = wall[i];
+    if (!b) { pts.push(null); continue; }
+    if (a) for (const c of kesik) {
+      if (c.xa >= b[0] || c.xb <= a[0]) continue;
+      if (c.xa > a[0]) pts.push([c.xa, c.za, 1]);
+      pts.push(null);
+      if (c.xb < b[0]) pts.push([c.xb, c.zb, 1]);
+    }
+    if (!kesik.some((c) => b[0] > c.xa && b[0] < c.xb)) pts.push(b);
+  }
+  return pts;
+}
+
+/**
+ * Konut katının planı: merdiven çekirdeği (2,4 m) ve daireler; birimler üst üste binmez. Tek katlı evde
+ * (cottage) çekirdek yok, daire binanın tamamı. Katta tek daire varsa (iki aileli ev) çekirdek sol yan
+ * duvarda (ön cephede merdiven kapısı onun önünde), daire kalan genişlik. Daha çok dairede çekirdek ortada,
+ * daireler iki yana bölüştürülür (tek sayıda solda bir fazla: 28 m apartmanda solda iki, sağda bir geniş
+ * daire). Katta ikiden fazla daire varsa arkada ortak koridor bulunur. Hem dış cephe hem iç mekân bunu kullanır.
+ * side: çekirdeğin dairenin hangi yanında kaldığının tersi (-1 çekirdek sağda, +1 solda, 0 çekirdek yok).
  */
 export function unitLayout(b) {
-  const core = 2.4;
-  const n = b.perFloor;
-  const L = Math.ceil(n / 2);
-  const u = (b.w - core) / n;
+  const W = 2.4, n = b.perFloor, hw = b.w / 2;
+  if (b.floors === 1 && n === 1) {
+    return { core: null, units: [{ col: 0, x0: -hw, x1: hw, cx: 0, side: 0 }], corridor: false, corridorDepth: 0 };
+  }
+  if (n === 1) {
+    const x0 = -hw + W;
+    return { core: [-hw, x0], units: [{ col: 0, x0, x1: hw, cx: (x0 + hw) / 2, side: 1 }], corridor: false, corridorDepth: 0 };
+  }
+  const L = Math.ceil(n / 2), R = n - L, uL = (hw - W / 2) / L, uR = (hw - W / 2) / R;
   const units = [];
   for (let c = 0; c < n; c++) {
-    const x0 = c < L ? -b.w / 2 + c * u : core / 2 + (c - L) * u;
-    units.push({ col: c, x0, x1: x0 + u, cx: x0 + u / 2, side: c < L ? -1 : 1, adjacent: c === L - 1 || c === L });
+    const x0 = c < L ? -hw + c * uL : W / 2 + (c - L) * uR, u = c < L ? uL : uR;
+    units.push({ col: c, x0, x1: x0 + u, cx: x0 + u / 2, side: c < L ? -1 : 1 });
   }
-  return { core: [-core / 2, core / 2], units, corridor: n > 2, corridorDepth: 1.5 };
+  return { core: [-W / 2, W / 2], units, corridor: n > 2, corridorDepth: 1.5 };
 }
