@@ -2,15 +2,15 @@
 // standardına (video/cikti/ANLATIM-STANDARDI.md) uygun seslendirme ve çekim planını kurar; istenirse sesi ve
 // videoyu üretir, açıklamayı panoya kopyalar ve bildirim gönderir.
 //
-//   node gunluk.mjs [--yuva aksam|ogle|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--hikaye h.json]
+//   node gunluk.mjs [--yuva ogle|aksam|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--hikaye h.json]
 //
 // --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
 // vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], "saat": "19:40",
 // "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
 // "ilk": imza çekimi (varsayılan "ucus")}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
 //
-// Yuva: akşam (21:00 taşınmasından sonra, günün özeti), öğle (bir sakinin hikâyesi ya da istek), sabah
-// (09:00 taşınma haberi). Kaç yuvanın üretileceği takipçi sayısına bağlı (SIKLIK); gerekmeyen yuva sessizce
+// Yuva (ET): öğle (12:30 PM, 09:00 taşınmasından sonra günün özeti), akşam (7:00 PM; bir sakinin hikâyesi ya da
+// istek), sabah (9:30 AM taşınma haberi). Kaç yuvanın üretileceği takipçi sayısına bağlı (SIKLIK); gerekmeyen yuva sessizce
 // atlanır (--zorla ile yine üretilir). Uydurma olay yok: her cümle simülasyondan ya da listeden gelir ve sitede
 // doğrulanır. Kullanıcı adları seste okunmaz; ekranda ve açıklamada yazılır.
 // Çıktı: cikti/gunluk/<tarih>-<yuva>/ (senaryo.json, ses, video, ACIKLAMA.txt); durum: cikti/gunluk/durum.json.
@@ -32,34 +32,44 @@ sim.setCatalog(catalog);
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-const yuva = opt("--yuva", "aksam");
-// Önerilen paylaşma saati: kullanıcı Almanya'da (TR = Almanya + 2 saat, kış saati).
-const SAAT = { sabah: "09:30 (TR 11:30)", ogle: "12:30 (TR 14:30)", aksam: "18:30 (TR 20:30)" };
-// Takipçi sayısına göre günde kaç video (önce akşam, sonra öğle, sonra sabah).
-const SIKLIK = [[0, ["aksam"]], [100, ["ogle", "aksam"]], [1000, ["sabah", "ogle", "aksam"]]];
+const yuva = opt("--yuva", "ogle");
+// Paylaşma saati: ada ET'de, kullanıcı Almanya'da (ABD/AB yaz saati geçiş haftalarında Almanya bir saat erken).
+const SAAT = { sabah: "15:30 DE (9:30 AM ET)", ogle: "18:30 DE (12:30 PM ET)", aksam: "01:00 DE (7:00 PM ET), Studio'da zamanla" };
+// Takipçi sayısına göre günde kaç video (önce öğle, sonra akşam, sonra sabah).
+const SIKLIK = [[0, ["ogle"]], [100, ["ogle", "aksam"]], [1000, ["sabah", "ogle", "aksam"]]];
 
 // --- yardımcılar ---
-const BIR = ["", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz"];
-const ON = ["", "on", "yirmi", "otuz", "kırk", "elli", "altmış", "yetmiş", "seksen", "doksan"];
-/** Sayının okunuşu (seslendirme için): 1250 → "bin iki yüz elli". */
+const BIR = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+  "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const ON = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+/** Sayının okunuşu (seslendirme için, Amerikan: "and" yok): 1250 → "one thousand two hundred fifty". */
 export function say(n) {
-  if (n === 0) return "sıfır";
-  const parts = [];
-  const grup = (k) => [k >= 100 ? (Math.floor(k / 100) === 1 ? "yüz" : BIR[Math.floor(k / 100)] + " yüz") : "", ON[Math.floor(k / 10) % 10], BIR[k % 10]].filter(Boolean).join(" ");
-  const mil = Math.floor(n / 1e6), bin = Math.floor(n / 1000) % 1000, kalan = n % 1000;
-  if (mil) parts.push(grup(mil) + " milyon");
-  if (bin) parts.push(bin === 1 ? "bin" : grup(bin) + " bin");
+  if (n === 0) return "zero";
+  const grup = (k) => {
+    const out = [];
+    if (k >= 100) out.push(BIR[Math.floor(k / 100)] + " hundred");
+    const r = k % 100;
+    if (r >= 20) out.push(ON[Math.floor(r / 10)] + (r % 10 ? "-" + BIR[r % 10] : ""));
+    else if (r) out.push(BIR[r]);
+    return out.join(" ");
+  };
+  const parts = [], mil = Math.floor(n / 1e6), bin = Math.floor(n / 1000) % 1000, kalan = n % 1000;
+  if (mil) parts.push(grup(mil) + " million");
+  if (bin) parts.push(grup(bin) + " thousand");
   if (kalan) parts.push(grup(kalan));
   return parts.join(" ");
 }
-const fmt = (n) => n.toLocaleString("tr-TR");
-const kucuk = (t) => t.toLocaleLowerCase("tr");
-const HOBI_FIIL = { balik: "balık tutuyor", kitap: "kitap okuyor", satranc: "satranç oynuyor", resim: "resim yapıyor", bisiklet: "bisiklete biniyor", yuzme: "yüzüyor", ucurtma: "uçurtma uçuruyor", gitar: "gitar çalıyor", fotograf: "fotoğraf çekiyor", kosu: "koşuyor", tavla: "tavla oynuyor", yoga: "yoga yapıyor" };
-const EVCIL_I = { Kedi: "kedisi", Köpek: "köpeği", Papağan: "papağanı", Kaplumbağa: "kaplumbağası" };
+const fmt = (n) => n.toLocaleString("en-US");
+const kucuk = (t) => t.toLowerCase();
+const a = (w) => (/^[aeiou]/i.test(w) ? "an " : "a ") + w;
+/** Yer adı cümle içinde: "The white church" → "the white church", "Driftwood Diner" → aynen, "Fishing Wharf" → "the Fishing Wharf". */
+const the = (name) => (/^the /i.test(name) ? "the " + name.slice(4) : /^Driftwood /.test(name) ? name : "the " + name);
+const kisi = (n) => (n === 1 ? "person" : "people");
+const HOBI_ING = { balik: "fishing", kitap: "reading", satranc: "playing chess", resim: "painting", bisiklet: "biking", yuzme: "swimming", ucurtma: "flying kites", gitar: "playing guitar", fotograf: "taking photos", kosu: "running", cornhole: "playing cornhole", yoga: "doing yoga", mangal: "grilling" };
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 /** Cümle: ses (okunan) ve yazi (altyazı; yoksa aynısı). vurus: öncesine 0,35 sn sessizlik. Büyük harfle başlar. */
-const buyuk = (t) => (t ? t[0].toLocaleUpperCase("tr") + t.slice(1) : t);
+const buyuk = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 const c = (ses, yazi = null, vurus = false) => ({ ses: buyuk(ses), ...(yazi ? { yazi: buyuk(yazi) } : {}), ...(vurus ? { vurus } : {}) });
 
 // --- veri --- (--veri dosya.json: deneme için sitedeki biçimde bir liste; --durum: ayrı durum dosyası)
@@ -87,8 +97,8 @@ if (!yuvalar.includes(yuva) && !args.includes("--zorla")) {
 
 const durumYolu = resolve(opt("--durum", "cikti/gunluk/durum.json"));
 const durum = { zirve: 0, istekler: {}, konular: [], sakinler: [], ...(existsSync(durumYolu) ? JSON.parse(readFileSync(durumYolu, "utf8")) : {}) };
-// --bekle: o yuvanın taşınması (09:00 / 21:00) henüz işlenmediyse çık; zamanlayıcı bir saat sonra yeniden dener.
-const TASINMA = { sabah: 9, aksam: 21 };
+// --bekle: o yuvanın dayandığı taşınma (ET 09:00 / 15:00) henüz işlenmediyse çık.
+const TASINMA = { sabah: 9, ogle: 9, aksam: 15 };
 if (args.includes("--bekle") && TASINMA[yuva] != null && (data.son_aktarim ?? 0) < sim.unixOf(today, TASINMA[yuva] * 60) && N > 0) {
   console.log(`${yuva}: ${TASINMA[yuva]}:00 taşınması henüz işlenmedi, sonra yeniden denenecek`);
   process.exit(0);
@@ -111,32 +121,32 @@ const dunku = residents.filter((r) => r.arrived_day < today).reduce((m, r) => Ma
 const acilan = stages.filter((s) => s.nufus > dunku && s.nufus <= level);
 const istekDegisen = residents.filter((r) => named(r) && r.overrides && JSON.stringify(r.overrides) !== JSON.stringify(durum.istekler?.[r.handle] ?? null));
 
-/** Sakinin işi: "ozne bir X." ve ardından durumu. Asıl mesleğinin yeri açık değilse anakarada çalışır. */
+/** Sakinin işi: "[özne] is a X." ve ardından durumu. Asıl mesleğinin yeri açık değilse anakarada çalışır. */
 function isCumleleri(r, ozne) {
   const dream = sim.dreamJob(r), job = sim.job(r);
   const rank = sim.rank(r, today);
   const unvan = kucuk(dream.kademeler[Math.min(rank, dream.kademeler.length - 1)]);
-  if (dream.id === "emekli") return [c(`${ozne} emekli.`), c("Bütün gün adada.", null, true)];
-  if (dream.id === "uzaktan") return [c(`${ozne} bir ${unvan}.`), c("Evden çalışıyor.", null, true)];
-  if (dream.id === "ogrenci") return [c(`${ozne} bir ${unvan}.`), c("Anakarada okuyor."), c("Her sabah vapura biniyor.", null, true)];
-  if (dream.id === "anakara") return [c(`${ozne} anakarada ${unvan}.`), c("Her sabah vapura biniyor.", null, true)];
+  if (dream.id === "emekli") return [c(`${ozne} is retired.`), c("On the island all day.", null, true)];
+  if (dream.id === "uzaktan") return [c(`${ozne} is ${a(unvan)}.`), c("Works from home.", null, true)];
+  if (dream.id === "ogrenci") return [c(`${ozne} is ${a(unvan)}.`), c("Studies on the mainland."), c("Takes the ferry every morning.", null, true)];
+  if (dream.id === "anakara") return [c(`${ozne} works on the mainland.`), c("Takes the ferry every morning.", null, true)];
   if (job.id !== dream.id) {
-    const yer = catalog.isyerleri[dream.yer].map((name, k) => [sim.stageOf(`${dream.yer}:${k}`), name]).sort((a, b) => a[0] - b[0])[0][1];
-    return [c(`${ozne} bir ${unvan}.`), c(`${yer} henüz yok.`), c("Şimdilik vapurla anakaraya gidiyor.", null, true)];
+    const yer = catalog.isyerleri[dream.yer].map((name, k) => [sim.stageOf(`${dream.yer}:${k}`), name]).sort((x, y) => x[0] - y[0])[0][1];
+    return [c(`${ozne} is ${a(unvan)}.`), c(`${buyuk(the(yer))} isn't open yet.`), c("For now, it's the ferry to the mainland.", null, true)];
   }
-  return [c(`${ozne} bir ${unvan}.`), c(`İş yeri ${sim.workplace(r).name}.`)];
+  return [c(`${ozne} is ${a(unvan)}.`), c(`Works at ${the(sim.workplace(r).name)}.`)];
 }
 
-/** Boş ada konuları (sırayla, tekrar etmeden). Her biri: gövde, soru, çekimler. */
+/** Boş ada konuları (sırayla, tekrar etmeden). Her biri: gövde, soru, çekimler. Hepsi koddan doğrulanmış olgular. */
 const BOS = [
-  // İmza zaten sıradaki adımı (5'te meydan bankları) söylüyor: yol haritası ondan sonrasını anlatır.
-  { id: "yolharitasi", govde: [c("Onuncu sakinle kahvehane açılıyor.", "10. sakinle kahvehane açılıyor."), c("Yirmincide market.", "20.'de market."), c("Otuzuncuda fırın.", "30.'da fırın.", true)], soru: c("Sizce fırına kaç günde ulaşırız?"), cekim: ["siradaki", "meydan"] },
-  { id: "fener", govde: [c("Sekizinci gelen fener bekçisi olacak.", "8. gelen\nfener bekçisi olacak."), c("Kendisine sorulmayacak.", null, true), c("Fener şimdilik kendi kendine yanıyor.")], soru: c("Sizce sekizinci kim olacak?"), cekim: ["fener", "fener2"], saat: "19:40" },
-  { id: "vapur", govde: [c("Vapur yirmi dakikada bir yanaşıyor.", "Vapur 20 dakikada bir yanaşıyor."), c("Kimse inmiyor.", null, true), c("Kaptan yine de sekiz dakika bekliyor.", "Kaptan yine de 8 dakika bekliyor.")], soru: c("Sizce ilk vapurdan kim inecek?"), cekim: ["iskele", "iskele2"], saat: "08:20" },
-  { id: "meslek", govde: [c("Taşınan herkese bir meslek veriliyor."), c("Otuz altı meslek var.", "36 meslek var."), c("İş yeri yoksa vapurla anakaraya gidiyorsun.", null, true)], soru: c("Sen hangi mesleği seçerdin?"), cekim: ["meydan2", "iskele"] },
-  { id: "adres", govde: [c("İlk sakinin adresi belli."), c("Kabuk Sokağı, bir numara, daire bir.", "Kabuk Sokağı No 1, Daire 1"), c("Bina ilk sakinle birlikte yapılacak.", null, true)], soru: c("Sizce bu adres kimin olacak?"), cekim: ["yakamoz", "meydan"] },
-  { id: "kahvehane", govde: [c("Kahvehane onuncu sakinle açılıyor.", "Kahvehane 10. sakinle açılıyor."), c("Tavla oynayanlar oraya gidecek."), c("Satranççılar meydana.", null, true)], soru: c("Tavla mı, satranç mı?"), cekim: ["meydan", "meydan2"] },
-  { id: "gece", govde: [c("Akşam oldu."), c("Fener yandı."), c("Bakan kimse yok.", null, true)], soru: c("Adanın ilk gecesini kim geçirecek?"), cekim: ["fener", "ucus"], saat: "20:10" },
+  // İmza zaten sıradaki adımı (5'te Green'in bankları) söylüyor: yol haritası ondan sonrasını anlatır.
+  { id: "yolharitasi", govde: [c("The tenth resident opens the diner.", "10th resident: the diner."), c("The twentieth, the general store.", "20th: the general store."), c("The thirtieth, the bakery.", "30th: the bakery.", true)], soru: c("How many days until the bakery?"), cekim: ["siradaki", "meydan"] },
+  { id: "fener", govde: [c("The eighth person to move in becomes the lighthouse keeper.", "The 8th person to move in\nbecomes the lighthouse keeper."), c("Nobody will ask them.", null, true), c("For now, the light runs itself.")], soru: c("Who will be number eight?"), cekim: ["fener", "fener2"], saat: "17:30" },
+  { id: "vapur", govde: [c("The ferry comes every twenty minutes.", "The ferry comes every 20 minutes."), c("Nobody gets off.", null, true), c("The captain waits eight minutes anyway.", "The captain waits 8 minutes anyway.")], soru: c("Who gets off the first ferry?"), cekim: ["iskele", "iskele2"], saat: "08:20" },
+  { id: "meslek", govde: [c("Everyone who moves in gets a job."), c("You can pick yours in the comments."), c("No workplace yet? You take the ferry to the mainland.", null, true)], soru: c("Which job would you pick?"), cekim: ["meydan2", "iskele"] },
+  { id: "adres", govde: [c("The first address is already set."), c("One Shell Street.", "1 Shell Street,\nShell Point"), c("The house goes up when the first person moves in.", null, true)], soru: c("Whose address will it be?"), cekim: ["ilkev", "meydan"] },
+  { id: "diner", govde: [c("The diner opens with the tenth resident.", "The diner opens\nwith the 10th resident."), c("The tenth resident is also the cook.", "The 10th resident\nis also the cook."), c("Nobody asked them either.", null, true)], soru: c("Pancakes or eggs?"), cekim: ["meydan", "meydan2"] },
+  { id: "gece", govde: [c("Evening on the island."), c("The lighthouse is on."), c("Nobody is watching.", null, true)], soru: c("Who spends the first night here?"), cekim: ["fener", "ucus"], saat: "18:30" },
 ];
 
 let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus";
@@ -145,31 +155,31 @@ if (acilan.length) {
   const s = acilan.at(-1);
   if (s.acar.includes("zeplin")) {
     // Zeplin bir yer değil: gelişini anlat, gece ışıklı reklam alanıyla çek.
-    govde.push(c("Bugün adaya bir zeplin geldi."), c("Her sabah dokuzda geliyor, gece onda dönüyor.", "Her sabah 09:00'da geliyor, 22:00'de dönüyor."),
-      c(ZEPLIN_REKLAM.ad ? `Üstünde ${ZEPLIN_REKLAM.ad} yazıyor.` : "Üstünde adamızın adı yazıyor.", null, true));
+    govde.push(c("A blimp arrived on the island today."), c("It comes at nine every morning and leaves at ten at night.", "It comes at 9 AM\nand leaves at 10 PM."),
+      c(ZEPLIN_REKLAM.ad ? `It says ${ZEPLIN_REKLAM.ad} on the side.` : "It says Driftwood on the side.", null, true));
     saat = "20:00";
-  } else govde.push(c(`Bugün ${s.ad} açıldı.`));
+  } else govde.push(c(`${the(s.ad)} opened today.`));
   // Bu açılışla anakaradan adaya dönenler: dünkü düzeyde anakarada, bugün adada çalışanlar.
   sim.setTown(durum.zirve);
   const once = new Map(residents.map((r) => [r.slot, sim.job(r).id]));
   sim.setTown(level);
   const donen = residents.filter((r) => once.get(r.slot) === "anakara" && sim.job(r).id !== "anakara");
   if (s.acar.includes("zeplin")) cekim = ["zeplin", "zeplin2"];
-  else if (donen.length) govde.push(c(`${say(donen.length)} kişi artık anakaraya gitmiyor.`, `${fmt(donen.length)} kişi artık anakaraya gitmiyor.`, true));
-  else if (s.acar.some((k) => catalog.isyerleri[k.split(":")[0]])) govde.push(c("Henüz çalışanı yok."), c("Kapısı yine de açık.", null, true));
-  else govde.push(c("Oturan kimse yok."), c("Henüz.", null, true));
+  else if (donen.length) govde.push(c(`${say(donen.length)} ${kisi(donen.length)} no longer ${donen.length === 1 ? "commutes" : "commute"} to the mainland.`, `${fmt(donen.length)} ${kisi(donen.length)} no longer ${donen.length === 1 ? "commutes" : "commute"}\nto the mainland.`, true));
+  else if (s.acar.some((k) => catalog.isyerleri[k.split(":")[0]])) govde.push(c("No staff yet."), c("The door is open anyway.", null, true));
+  else govde.push(c("Nobody uses it."), c("Yet.", null, true));
   etiketler = donen.filter(named).slice(0, 5).map((r) => r.handle);
-  soru = next ? c(`Sizce ${next.ad} ne zaman açılır?`) : c("Ada tamamlandı. Sırada ne olsun?");
+  soru = next ? c(`When do you think ${the(next.ad)} opens?`) : c("The island is complete. What should come next?");
   if (!cekim.length) cekim = ["ucus", "meydan"];
 } else if (yeniler.length) {
   tur = "yeniler";
-  govde.push(c(`Bugün ${say(yeniler.length)} kişi taşındı.`, `Bugün ${fmt(yeniler.length)} kişi taşındı.`));
+  govde.push(c(`${say(yeniler.length)} ${kisi(yeniler.length)} moved in today.`, `${fmt(yeniler.length)} ${kisi(yeniler.length)} moved in today.`));
   const fener = yeniler.find((r) => sim.dreamJob(r).id === "fener_bekcisi");
   const ilk = fener ?? yeniler.find(named) ?? yeniler[0];
-  if (fener) govde.push(c("Sekizinci sakin geldi.", "8. sakin geldi."), c("Artık fener bekçisi."), c("Kendisine sorulmadı.", null, true));
-  else govde.push(...isCumleleri(ilk, ilk === yeniler[0] ? "İlk gelen" : "Gelenlerden biri"));
+  if (fener) govde.push(c("Our eighth resident arrived.", "Our 8th resident arrived."), c("Now the lighthouse keeper."), c("Nobody asked.", null, true));
+  else govde.push(...isCumleleri(ilk, ilk === yeniler[0] ? "The first one" : "One of them"));
   etiketler = yeniler.filter(named).slice(0, 8).map((r) => r.handle);
-  soru = c("Yarın kim gelecek?");
+  soru = c("Who moves in tomorrow?");
   cekim = named(ilk) ? ["iskele", { sakin: ilk.handle }] : ["iskele", "meydan"];
 } else if (istekDegisen.length) {
   tur = "istek";
@@ -177,13 +187,13 @@ if (acilan.length) {
   const o = r.overrides;
   if (o.meslek) {
     const j = catalog.meslekler.find((m) => m.id === o.meslek);
-    // "Artık bir X." yerine "İsteği işlendi."; ardından durumu (yeri yoksa anakarada).
-    govde.push(c(`Bir sakin ${kucuk(j.kademeler[1])} olmak istedi.`), c("İsteği işlendi."), ...isCumleleri(r, "").slice(1));
-  } else if (o.evcil) govde.push(c(`Bir sakin ${kucuk(o.evcil)} istedi.`), c(`Artık bir ${EVCIL_I[o.evcil]} var.`, null, true));
-  else if (o.hobi) govde.push(c("Bir sakin yeni bir hobi istedi."), c(`Artık boş vaktinde ${HOBI_FIIL[o.hobi]}.`, null, true));
-  else govde.push(c("Bir sakin isteğini yazdı."), c("Sitede işlendi.", null, true));
+    // "Now a X." yerine "Request granted."; ardından durumu (yeri yoksa anakarada).
+    govde.push(c(`A resident asked to be ${a(kucuk(j.kademeler[1]))}.`), c("Request granted."), ...isCumleleri(r, "This resident").slice(1));
+  } else if (o.evcil) govde.push(c(`A resident asked for ${a(kucuk(o.evcil))}.`), c("Now they have one.", null, true));
+  else if (o.hobi) govde.push(c("A resident asked for a new hobby."), c(`Now they spend their free time ${HOBI_ING[o.hobi]}.`, null, true));
+  else govde.push(c("A resident sent a request."), c("It's on the site now.", null, true));
   etiketler = istekDegisen.slice(0, 5).map((r) => r.handle);
-  soru = c("Sıradaki istek senin mi?");
+  soru = c("Is the next request yours?");
   cekim = [{ sakin: r.handle }, "meydan"];
 } else if (N > 0) {
   tur = "sakin";
@@ -191,13 +201,13 @@ if (acilan.length) {
   const r = residents.filter(named).find((x) => !durum.sakinler.includes(x.handle)) ?? residents.filter(named)[0];
   if (r) {
     const t = sim.tenure(r, today);
-    govde.push(c("Bugün bir sakine yakından baktık."), ...isCumleleri(r, "Bu sakin"));
+    govde.push(c("Today we followed one resident."), ...isCumleleri(r, "This resident"));
     const h = sim.hobby(r), p = sim.pet(r, today);
-    govde.push(c(`Boş vaktinde ${HOBI_FIIL[h.id]}.`));
-    if (p) govde.push(c(`Bir de ${EVCIL_I[p]} var.`, null, true));
-    else if (t > 0) govde.push(c(`${say(t)} gündür adada.`, `${fmt(t)} gündür adada.`, true));
+    govde.push(c(`Free time: ${HOBI_ING[h.id]}.`));
+    if (p) govde.push(c(`There's also ${a(kucuk(p))}.`, null, true));
+    else if (t > 0) govde.push(c(`On the island for ${say(t)} ${t === 1 ? "day" : "days"}.`, `On the island for ${fmt(t)} ${t === 1 ? "day" : "days"}.`, true));
     etiketler = [r.handle];
-    soru = c("Komşusu kim, biliyor musun?");
+    soru = c("Do you know who their neighbor is?");
     cekim = [{ sakin: r.handle }, { sakin: r.handle }];
   }
 }
@@ -217,10 +227,12 @@ if (!tur || !govde.length) {
 }
 
 // İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı).
+const yer = next ? the(next.ad) : "";
 const imza = N === 0
-  ? [c("Bu adada kimse yaşamıyor."), c(`${next.ad} için ${say(need)} kişi lazım.`, `${next.ad} için ${fmt(need)} kişi lazım.`)]
-  : [c(`Bu adada ${say(N)} kişi yaşıyor.`, `Bu adada ${fmt(N)} kişi yaşıyor.`), ...(imza2 ? [imza2] : next ? [c(`${next.ad} için ${say(need)} kişi daha lazım.`, `${next.ad} için ${fmt(need)} kişi daha lazım.`)] : [])];
-const kapanis = [soru, c("Takip eden adaya taşınıyor."), c("Mesleğini sen seç."), c("Yorumuna yaz: meslek, balıkçı.", "Yorumuna yaz:\nmeslek: balıkçı")];
+  ? [c("Nobody lives on this island."), c(`We need ${say(need)} ${kisi(need)} for ${yer}.`, `We need ${fmt(need)} ${kisi(need)}\nfor ${yer}.`)]
+  : [c(N === 1 ? "One person lives on this island." : `${say(N)} people live on this island.`, `${fmt(N)} ${kisi(N)} ${N === 1 ? "lives" : "live"} on this island.`),
+     ...(imza2 ? [imza2] : next ? [c(`We need ${say(need)} more for ${yer}.`, `We need ${fmt(need)} more\nfor ${yer}.`)] : [])];
+const kapanis = [soru, c("Follow, and you move to the island."), c("Pick your job."), c("Comment: job, fisherman.", "Comment:\njob: fisherman")];
 const cumleler = [...imza, ...govde, ...kapanis];
 const gruplar = [
   { cekim: ilkCekim, arayuz: true, ilk: 0, son: imza.length - 1 },
@@ -247,15 +259,15 @@ console.log(`${tarih} ${yuva} · ${tur}${konuId ? ` (${konuId})` : ""} · nüfus
 for (const x of cumleler) console.log("   " + x.ses + (x.vurus ? "   [vuruş]" : ""));
 
 // --- açıklama (etkileşim: kanca + soru + istek kalıbı + etiketler) ---
-const kanca = ozelKanca ?? { acilis: `Bugün adada yeni bir yer açıldı 🏗️`, yeniler: `Bugün ${fmt(yeniler.length)} kişi Driftwood'ya taşındı 🧳`, istek: "Yorumlardan gelen istek işlendi ✍️", sakin: "Bir sakinin günü 👀", bos: "Bu adada henüz kimse yaşamıyor 🏝️" }[tur];
+const kanca = ozelKanca ?? { acilis: "Something new opened on the island today 🏗️", yeniler: `${fmt(yeniler.length)} new ${yeniler.length === 1 ? "neighbor" : "neighbors"} on Driftwood Island today 🧳`, istek: "A comment request came true ✍️", sakin: "A day in the life of a resident 👀", bos: "Nobody lives on this island yet 🏝️" }[tur];
 const aciklama = [
   kanca,
-  `${soru.yazi ?? soru.ses} 👇`,
-  `Mesleğini sen seç: yorumuna "meslek: balıkçı" gibi yaz.`,
+  `${(soru.yazi ?? soru.ses).replace(/\n/g, " ")} 👇`,
+  `Follow and you move in. Pick your job: comment "job: fisherman" (or any job).`,
   etiketler.length ? etiketler.map((h) => "@" + h).join(" ") : null,
-  "Kendini bul: driftwood.rumpuskit.com",
+  "Find yourself: driftwood.rumpuskit.com",
   "",
-  "#driftwood #keşfet #ada #şehirkurma #simülasyon #oyun #fyp",
+  "#driftwoodisland #cozygames #simulation #smalltown #islandlife",
 ].filter((x) => x != null).join("\n");
 writeFileSync(`${out}/ACIKLAMA.txt`, aciklama + "\n");
 writeFileSync(`${out}/malzeme.json`, JSON.stringify({ tarih, yuva, tur, konuId, nufus: N, takipci, level, sıradaki: next?.ad, need, yeniler: yeniler.map((r) => r.handle), etiketler }, null, 2));
@@ -290,21 +302,23 @@ function CEKIM(ad, v, sure, arayuz) {
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
   if (typeof ad === "object") return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
+  // Hepsi yörünge çekimi (hedef sitede hesaplanır; ada değişse de kadraj doğru kalır). a: 0 = kamera denizden (+z) bakar.
   const L = {
-    ucus: () => ({ adres: a, kamera: v % 2 ? [[0, 160, 150, 380, 0, 0, -40], [sure, 120, 110, 300, 0, 0, -20]] : [[0, -150, 120, 420, 0, 0, 40], [sure, -95, 80, 300, 0, 0, 15]] }),
-    // Vapur dakika 0-7 (mod 20) arasında iskelede: 16:40, 19:40 uygun.
-    iskele: () => ({ adres: a, kamera: v % 2 ? [[0, -11, 6.5, 236, -22, 4, 184], [sure, -13, 6, 228, -24, 4, 183]] : [[0, -40, 24, 186, 0, 2, 232], [sure, -30, 18, 194, 1, 2, 235]] }),
-    iskele2: () => ({ adres: a, kamera: [[0, 30, 14, 250, 0, 3, 240], [sure, 24, 12, 258, 0, 3, 238]] }),
-    meydan: () => ({ adres: a, kamera: v % 2 ? [[0, 9, 1.7, -11, 0, 10.5, -25.5], [sure, 5, 2.2, -14, 0, 11, -25.5]] : [[0, 26, 13, 30, 0, 5, -22], [sure, 19, 10, 23, 0, 6, -24]] }),
-    meydan2: () => ({ adres: a, kamera: [[0, 9, 1.7, -11, 0, 10.5, -25.5], [sure, 5, 2.2, -14, 0, 11, -25.5]] }),
-    fener: () => ({ adres: a, kamera: [[0, 700, 45, 260, 791, 4, 178], [sure, 715, 40, 250, 791, 4, 178]] }),
-    fener2: () => ({ adres: a, kamera: [[0, 812, 22, 205, 791, 18, 178], [sure, 806, 24, 210, 791, 19, 178]] }),
+    ucus: () => yor([60, -80], 520, 230, -0.45 + 0.9 * (v % 2), -0.25 + 0.9 * (v % 2), 0),
+    // Feribot dakika 0-7 (mod 20) arasında iskelede: 16:40, 08:20 uygun.
+    iskele: () => (v % 2 ? yor("iskele", 22, 5, 2.6, 2.85, 2) : yor("iskele", 60, 24, 0.5, 0.8, 2)),
+    iskele2: () => yor("iskele", 34, 12, -0.7, -0.45, 3),
+    meydan: () => (v % 2 ? yor("meydan", 16, 3, 2.3, 2.6, 3) : yor("meydan", 46, 20, 0.3, 0.6, 2)),
+    meydan2: () => yor("meydan", 16, 3, 2.3, 2.6, 3),
+    kilise: () => yor("kilise", 44, 16, 0.2, 0.5, 9),
+    fener: () => yor("fener", 80, 34, 0.6 + v, 0.9 + v, 14),
+    fener2: () => yor("fener", 28, 20, 2.0, 2.3, 20),
+    ilkev: () => yor("ilkev", 38, 20, 0.4 + v, 0.75 + v, 3),
     siradaki: () => yor("siradaki", 48, 30, 0.6 + v, 1.1 + v, 2),
     // Zeplin: yanından, gidişine göre dönen kamera (dikey kadraja sığacak uzaklıkta); ikincisi iskeleden bakış.
     zeplin: () => yor("zeplin", 150, -18, 1.1 + 0.3 * v, 1.6 + 0.3 * v, 0),
     zeplin2: () => yor("zeplin-yer", 0, 0, 0, 0, 0),
-    yakamoz: () => yor([0, -270], 160, 110, 0.4 + v, 0.75 + v, 0),
-    kapanis: () => ({ adres: a, kamera: [[0, 160, 180, 420, 0, 0, -60], [sure, 200, 250, 500, 0, 0, -80]], yazilar: [{ metin: "Takip et,<br>adaya taşın.", alt: `TikTok'ta<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
+    kapanis: () => ({ ...yor([60, -80], 640, 320, -0.1, 0.1, 0), yazilar: [{ metin: "Follow,<br>move to the island.", alt: `on TikTok<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
   };
   const shot = (L[ad] ?? L.ucus)();
   // Zeplin henüz açılmadıysa çekimde önizleme olarak gösterilir (?zeplin); metin bunu söylemeli ("150. sakinde").
@@ -313,7 +327,8 @@ function CEKIM(ad, v, sure, arayuz) {
   return shot;
 }
 
-const S = { ...S0, olcek: 2, gecis: X, muzik: "cikti/muzik/ada-1.mp3", fps: 30, w: 1080, h: 1920, cekimler, aciklama };
+const MUZIK = "cikti/muzik/ada-1.mp3"; // müzik yoksa sessiz (anlatım standardı 7)
+const S = { ...S0, olcek: 2, gecis: X, ...(existsSync(MUZIK) ? { muzik: MUZIK } : {}), fps: 30, w: 1080, h: 1920, cekimler, aciklama };
 writeFileSync(`${out}/senaryo.json`, JSON.stringify(S, null, 2));
 
 // --- çizim: site derlenir, yerel önizleme sunucusu açılır, kaydet.mjs çalışır ---

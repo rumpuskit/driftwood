@@ -15,7 +15,7 @@
 //            koşulları (kel değil vb.)
 //   yazilar: [{ metin, alt?, bas, son, yer: "ust" | "orta" | "alt" }]
 //   arayuz:  true ise sitenin üst bilgisi görünür (diğer paneller hep gizli); kart: true ise sakin kartı da
-//   yorunge: { hedef: "siradaki" | "iskele" | "fener" | "meydan" | [x, z], r, h, a0, a1, bak } hedefin
+//   yorunge: { hedef: "siradaki" | "iskele" | "fener" | "meydan" | "kilise" | "ilkev" | [x, z], r, h, a0, a1, bak } hedefin
 //            çevresinde a0'dan a1'e (radyan) dönen kamera; hedef sitede o anda hesaplanır (ör. sıradaki şantiye).
 //            "zeplin": uçan zeplinin yanında, gidiş yönüne göre a açısında (h zeplinin altı/üstü); "zeplin-yer":
 //            vapur iskelesinden (önü açık) zeplini izleyen sabit kamera.
@@ -143,8 +143,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
         const k = st.x == null ? 1 : 1 - Math.exp(-dt * 6);
         for (const c of ["x", "y", "z", "heading"]) st[c] = st[c] == null ? Z[c] : st[c] + (Z[c] - st[c]) * k;
         if (yorunge.hedef === "zeplin-yer") {
-          const pz = A.world.ferryPier.z0 + 30;
-          A.camera.position.set(2, A.world.groundY(2, pz) + 3, pz);
+          const pz = A.world.ferryPier.z0 + 30, px = (A.world.ferryPier.x0 + A.world.ferryPier.x1) / 2 + 2;
+          A.camera.position.set(px, A.world.groundY(px, pz) + 3, pz);
         } else {
           const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
           const a = st.heading + yorunge.a0 + (yorunge.a1 - yorunge.a0) * u;
@@ -157,8 +157,10 @@ for (const [ci, shot] of S.cekimler.entries()) {
     }
     if (yorunge) {
       const W = A.world, h = yorunge.hedef;
-      const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [0, W.ferryPier.z0 + 14] : h === "fener" ? [W.fener.x, W.fener.z]
-        : h === "meydan" ? [0, -12] : h;
+      const px = (W.ferryPier.x0 + W.ferryPier.x1) / 2;
+      const ev = h === "ilkev" ? W.homeOf(0) : null;
+      const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [px, W.ferryPier.z0 + 14] : h === "fener" ? [W.fener.x, W.fener.z]
+        : h === "meydan" ? [0, 0] : h === "kilise" ? [0, -84] : ev ? [ev.bx, ev.bz] : h;
       const [x, z] = at ?? [0, 0];
       const gy = Math.max(0, W.groundY(x, z));
       const ease = (u) => u * u * (3 - 2 * u);
