@@ -306,15 +306,16 @@ function CEKIM(ad, v, sure, arayuz) {
   const L = {
     ucus: () => yor([60, -80], 520, 230, -0.45 + 0.9 * (v % 2), -0.25 + 0.9 * (v % 2), 0),
     // Feribot dakika 0-7 (mod 20) arasında iskelede: 16:40, 08:20 uygun.
-    iskele: () => (v % 2 ? yor("iskele", 22, 5, 2.6, 2.85, 2) : yor("iskele", 60, 24, 0.5, 0.8, 2)),
-    iskele2: () => yor("iskele", 34, 12, -0.7, -0.45, 3),
-    meydan: () => (v % 2 ? yor("meydan", 16, 3, 2.3, 2.6, 3) : yor("meydan", 46, 20, 0.3, 0.6, 2)),
-    meydan2: () => yor("meydan", 16, 3, 2.3, 2.6, 3),
+    iskele: () => (v % 2 ? yor("iskele", 30, 6, 2.5, 2.75, 2) : yor("iskele", 75, 28, 0.5, 0.8, 2)),
+    iskele2: () => yor("iskele", 45, 14, -0.8, -0.55, 3),
+    // Çardağın yarıçapı ~6 m: yakın çekim 24 m dışından.
+    meydan: () => (v % 2 ? yor("meydan", 24, 4, 2.3, 2.6, 3) : yor("meydan", 46, 20, 0.3, 0.6, 2)),
+    meydan2: () => yor("meydan", 24, 4, 2.3 + v, 2.6 + v, 3),
     kilise: () => yor("kilise", 44, 16, 0.2, 0.5, 9),
     fener: () => yor("fener", 80, 34, 0.6 + v, 0.9 + v, 14),
     fener2: () => yor("fener", 28, 20, 2.0, 2.3, 20),
     ilkev: () => yor("ilkev", 38, 20, 0.4 + v, 0.75 + v, 3),
-    siradaki: () => yor("siradaki", 48, 30, 0.6 + v, 1.1 + v, 2),
+    siradaki: () => yor("siradaki", 70, 40, 0.6 + v, 1.1 + v, 2),
     // Zeplin: yanından, gidişine göre dönen kamera (dikey kadraja sığacak uzaklıkta); ikincisi iskeleden bakış.
     zeplin: () => yor("zeplin", 150, -18, 1.1 + 0.3 * v, 1.6 + 0.3 * v, 0),
     zeplin2: () => yor("zeplin-yer", 0, 0, 0, 0, 0),

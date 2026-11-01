@@ -53,7 +53,7 @@ const CLOCK = `(() => {
 })();`;
 
 const CSS = `
-#hud .links, #hud .waiting, #speed, #card, #navbtns, #minimap, #arama, #floorbar, #loading, #online { display: none !important; }
+#hud .links, #hud .waiting, #speed, #card, #navbtns, #minimap, #arama, #floorbar, #loading, #online, #dock { display: none !important; }
 body:not(.arayuz) #hud { display: none !important; }
 body.arayuz #sol { transform: scale(calc(2.1 * var(--k))); transform-origin: top left; top: calc(150px * var(--k)) !important; left: calc(60px * var(--k)) !important; }
 body.kart #card { display: block !important; }
@@ -159,7 +159,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
       const W = A.world, h = yorunge.hedef;
       const px = (W.ferryPier.x0 + W.ferryPier.x1) / 2;
       const ev = h === "ilkev" ? W.homeOf(0) : null;
-      const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [px, W.ferryPier.z0 + 14] : h === "fener" ? [W.fener.x, W.fener.z]
+      const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [px, W.ferryPier.z0 + 45] : h === "fener" ? [W.fener.x, W.fener.z]
         : h === "meydan" ? [0, 0] : h === "kilise" ? [0, -84] : ev ? [ev.bx, ev.bz] : h;
       const [x, z] = at ?? [0, 0];
       const gy = Math.max(0, W.groundY(x, z));
