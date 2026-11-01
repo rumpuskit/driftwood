@@ -2,26 +2,26 @@
 """Sakinlerin istekleri: videolarımızın altına yazılan yorumlardan (tik.ninja üzerinden, tasinma.py)
 ya da elle (DM, canlı yayın) gelir ve sakinin overrides alanına işlenir.
 
-Yorumdaki biçim (büyük/küçük harf ve Türkçe karakter fark etmez, birkaçı aynı yorumda olabilir):
-    meslek: balıkçı      mesleğim yazılımcı olsun      balıkçı olmak istiyorum
-    hobi: satranç        evcil: kedi                   adımı gizle / adımı göster
-Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. cankurtaran, istenemez; "istenebilir" olanlar, ör. polis ve
-fener bekçisi, hariç). İstek yalnız yorumu yazanın kendisi için ve yalnız adada oturuyorsa uygulanır; henüz
-taşınmamışsa 30 gün bekler (ISTEK_GUN).
-Aynı konuda birden çok istek varsa en son yazılan geçer.
+Yorumdaki biçim (İngilizce; büyük/küçük harf ve noktalama fark etmez, birkaçı aynı yorumda olabilir):
+    job: fisherman        I want to be a fisherman     I wanna be a cop     make me a baker     fisherman please
+    hobby: chess          pet: cat                     hide my name / show my name
+Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. lifeguard, istenemez; "istenebilir" olanlar, ör. police ve
+lighthouse keeper, hariç). İstek yalnız yorumu yazanın kendisi için ve yalnız adada oturuyorsa uygulanır; henüz
+taşınmamışsa 30 gün bekler (ISTEK_GUN). Aynı konuda birden çok istek varsa en son yazılan geçer.
 
 Yorum metni saklanmaz: yalnız ayrıştırılmış istek (kullanıcı adı, tür, değer, yorum kimliği) tutulur
 ve 30 gün sonra silinir; isteğin etkisi sakinin kaydında kalır.
 
 Kullanım (sunucuda, driftwood kullanıcısıyla):
-    python3 istekler.py dene "mesleğim balıkçı olsun"     # ayrıştırmayı dene, kaydetme
-    python3 istekler.py ekle kullaniciadi meslek balikci  # DM ya da canlı yayından gelen istek
-    python3 istekler.py liste [--gun 30]                  # son isteklerin dökümü (haftalık video)
+    python3 istekler.py dene "make me a fisherman please"  # ayrıştırmayı dene, kaydetme
+    python3 istekler.py ekle kullaniciadi meslek balikci   # DM ya da canlı yayından gelen istek (kimlik ya da ad)
+    python3 istekler.py liste [--gun 30]                   # son isteklerin dökümü (haftalık video)
 """
 
 import argparse
 import json
 import re
+import unicodedata
 import sys
 import time
 from functools import cache
@@ -32,27 +32,48 @@ from ortak import DB, ISTEK_GUN, psql, publish
 
 TURLER = ("meslek", "hobi", "evcil", "gizle")
 MAX_METIN = 300
-# Katalogda adı geçmeyen ama sık yazılacak karşılıklar.
-EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
-             "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
-             "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu"}
-# Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
-GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
-EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
-           "ucurtma": "ucurtma", "gitar": "gitar", "fotograf": "fotograf", "kosu": "kosu", "kosmak": "kosu"}
-
-_FOLD = str.maketrans("çğıöşüâîû", "cgiosuaiu")
+# Katalogda unvan olarak geçmeyen ama sık yazılacak karşılıklar (konuşma dili, eş anlamlılar).
+EK_MESLEK = {
+    "cop": "polis", "police": "polis", "policeman": "polis", "policewoman": "polis", "officer": "polis", "sheriff": "polis",
+    "doc": "doktor", "physician": "doktor", "surgeon": "doktor",
+    "programmer": "yazilimci", "coder": "yazilimci", "developer": "yazilimci", "dev": "yazilimci", "software engineer": "yazilimci",
+    "engineer": "yazilimci", "it guy": "yazilimci", "web developer": "yazilimci",
+    "farmer": "ciftci", "cranberry grower": "ciftci",
+    "chef": "asci", "cook": "asci",
+    "short order cook": "kahveci", "fry cook": "kahveci", "diner cook": "kahveci", "line cook at the diner": "kahveci",
+    "fisher": "balikci", "fisherwoman": "balikci", "fisherperson": "balikci", "lobster fisherman": "balikci",
+    "football": "futbolcu", "footballer": "futbolcu", "quarterback": "futbolcu", "qb": "futbolcu", "linebacker": "futbolcu",
+    "attorney": "avukat", "prosecutor": "savci", "da": "savci",
+    "keeper": "fener_bekcisi", "lighthouse": "fener_bekcisi",
+    "waiter": "garson", "waitress": "garson", "bartender": "garson",
+    "artist": "ressam", "woodworker": "marangoz", "sail maker": "yelkenci",
+    "guide": "rehber", "tour guide": "rehber",
+    "pilot": "zeplin_pilotu", "blimp": "zeplin_pilotu",
+    "ride operator": "lunapark", "carnival worker": "lunapark",
+    "longshoreman": "liman_iscisi", "dockworker": "liman_iscisi", "boat builder": "gemi_ustasi", "shipbuilder": "gemi_ustasi",
+    "neighborhood president": "muhtar", "hoa president": "muhtar", "association president": "muhtar",
+    "student": "ogrenci", "retiree": "emekli", "work from home": "uzaktan", "remote": "uzaktan",
+}
+# Birden çok mesleğin basamağı olabilecek genel unvanlar tek başına meslek adı sayılmaz.
+GENEL = {"manager", "intern", "chief", "associate", "director", "owner", "senior", "head", "trainee", "apprentice",
+         "assistant", "lead", "supervisor", "employee"}
+EK_HOBI = {"fish": "balik", "books": "kitap", "read": "kitap", "paint": "resim", "art": "resim", "bike": "bisiklet",
+           "cycling": "bisiklet", "bicycle": "bisiklet", "swim": "yuzme", "kite": "ucurtma", "kites": "ucurtma",
+           "guitar playing": "gitar", "photos": "fotograf", "photo": "fotograf", "run": "kosu", "jogging": "kosu",
+           "bbq": "mangal", "barbecue": "mangal", "grill": "mangal", "bean bag toss": "cornhole"}
+EK_EVCIL = {"doggo": "Dog", "puppy": "Dog", "pup": "Dog", "kitty": "Cat", "kitten": "Cat", "tortoise": "Turtle", "bird": "Parrot"}
 
 
 def katla(text: str) -> str:
-    """Küçük harf (Türkçe kurala göre), Türkçe karakterler Latin, noktalama boşluk."""
-    t = text.replace("İ", "i").replace("I", "ı").lower().translate(_FOLD)
+    """Küçük harf, aksanlar Latin, kesme işareti silinir ("I'm" → "im"), diğer noktalama boşluk."""
+    t = unicodedata.normalize("NFKD", text.replace("’", "'").replace("‘", "'")).encode("ascii", "ignore").decode()
+    t = t.lower().replace("'", "")
     return " ".join(re.sub(r"[^a-z0-9]+", " ", t).split())
 
 
 def _sozluk(pairs) -> list[tuple[str, str]]:
-    """(takma ad, değer) çiftleri; birden çok değere giden belirsiz adlar (ör. "komi") çıkarılır.
-    Uzun ad önce denenir ("usta balikci" "balikci"den önce)."""
+    """(takma ad, değer) çiftleri; birden çok değere giden belirsiz adlar (ör. "store manager") çıkarılır.
+    Uzun ad önce denenir ("lighthouse keeper" "keeper"dan önce)."""
     seen: dict[str, set] = {}
     for alias, value in pairs:
         if alias and value:
@@ -60,35 +81,49 @@ def _sozluk(pairs) -> list[tuple[str, str]]:
     return sorted(((a, v.pop()) for a, v in seen.items() if len(v) == 1), key=lambda x: -len(x[0]))
 
 
+def _cogul(alias: str) -> list[str]:
+    """Tekil ve basit çoğul ("fisherman" / "fishermen", "baker" / "bakers")."""
+    out = [alias]
+    if alias.endswith("man"):
+        out.append(alias[:-3] + "men")
+    elif not alias.endswith("s"):
+        out.append(alias + "s")
+    return out
+
+
 @cache
 def secenekler() -> dict[str, list[tuple[str, str]]]:
     c = sim.catalog()
-    # Seçimle gelen makamlar (belediye başkanı) istenemez: secim.py.
+    # Seçimle gelen makamlar (Mayor) istenemez: secim.py.
     meslekler = [j for j in c["meslekler"] if (not j.get("kadro") or j.get("istenebilir")) and not j.get("secimle")
                  and j["id"] != c["kilitli_meslek"]]
-    meslek = [(katla(j["id"].replace("_", " ")), j["id"]) for j in meslekler]
-    meslek += [(katla(k), j["id"]) for j in meslekler for k in j["kademeler"] if katla(k) not in GENEL]
+    meslek = [(katla(k), j["id"]) for j in meslekler for k in j["kademeler"] if katla(k) not in GENEL]
     meslek += list(EK_MESLEK.items())
-    hobi = [(katla(h["id"]), h["id"]) for h in c["hobiler"]] + [(katla(h["ad"]), h["id"]) for h in c["hobiler"]]
-    hobi += list(EK_HOBI.items())
-    evcil = [(katla(p), p) for p in c["evcil_hayvanlar"]]
+    meslek = [(f, v) for a, v in meslek for f in _cogul(a)]
+    hobi = [(katla(h["ad"]), h["id"]) for h in c["hobiler"]] + list(EK_HOBI.items())
+    evcil = [(f, p) for p in c["evcil_hayvanlar"] for f in _cogul(katla(p))] + list(EK_EVCIL.items())
     return {"meslek": _sozluk(meslek), "hobi": _sozluk(hobi), "evcil": _sozluk(evcil)}
 
 
-# Sitedeki yorumla doğrulama kodu: "kod 1234", "kod: 1234", "kodum 1234".
-KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
-TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
-# "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim)\b)")
-GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
-                   r"|\b(?P<ne2>gizle|goster)\w*(?: \w+){0,2} (?:adimi|ismimi)\b")
+# Sitedeki yorumla doğrulama kodu: "code 1234", "code: 1234", "my code is 1234".
+KOD = re.compile(r"\bcode\s*(?:is\s*)?(\d{4})\b")
+TETIK = re.compile(r"\b(?:(?P<meslek>jobs?|occupation|profession|career|work as)|(?P<hobi>hobby|hobbies)|(?P<evcil>pets?))\b")
+# "I want to be a fisherman", "I wanna be a cop", "make me a baker", "can I be the lighthouse keeper"...
+ISTEK = re.compile(r"\b(?:i want to (?:be|become)|i wanna (?:be|become)|wanna be|want to be|make me|id like to be|i would like to be"
+                   r"|can i be|could i be|let me be|lemme be|im gonna be|gonna be|ill be|i will be|i choose|put me (?:down )?as"
+                   r"|sign me up as|i want|i wanna|i wish to be|my dream is to be|i should be)"
+                   r" (?:an? |the |as an? )?(?P<x>(?:[a-z0-9]+ ){0,3}[a-z0-9]+)")
+# "fisherman please", "baker pls"
+LUTFEN = re.compile(r"\b((?:[a-z0-9]+ ){0,2}[a-z0-9]+) (?:please|pls|plz)\b")
+GIZLE = re.compile(r"\b(?P<ne>hide|show|unhide) (?:my )?(?:user ?name|name|handle)\b|\bmake me (?P<gizli>private|anonymous)\b")
+OLUMSUZ = re.compile(r"\b(?:dont|do not|never|not|wont|no longer)\b")
 
 
 def _bul(tur: str, parca: str) -> str | None:
-    """Parçada ilk geçen seçenek (kelime başından eşleşir: "balikciyim" → balikci)."""
+    """Parçada ilk geçen seçenek (tam kelime: "baker" "bakery"de eşleşmez); aynı yerde uzun ad önce."""
     best = None
     for alias, value in secenekler()[tur]:
-        m = re.search(r"\b" + re.escape(alias), parca)
+        m = re.search(r"\b" + re.escape(alias) + r"\b", parca)
         if m and (best is None or m.start() < best[0]):
             best = (m.start(), value)
     return best[1] if best else None
@@ -106,20 +141,23 @@ def cozumle(text: str) -> dict[str, str]:
         if deger and tur not in out:
             out[tur] = deger
     if "meslek" not in out:
-        for m in OLMAK.finditer(t):
-            deger = _bul("meslek", m.group(1))
+        for m in list(ISTEK.finditer(t)) + list(LUTFEN.finditer(t)):
+            # "I don't want to be a fisherman" istek değil.
+            if OLUMSUZ.search(t[max(0, m.start() - 12):m.start() + 6]):
+                continue
+            deger = _bul("meslek", m.group("x") if "x" in m.groupdict() else m.group(1))
             if deger:
                 out["meslek"] = deger
                 break
     if not out:
-        # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
-        # ad ("balıkçı amca çok iyi") istek sayılmaz.
+        # Yorumun tamamı bir meslek adıysa ("police officer", "lighthouse keeper 🙋") o da istektir; cümle içinde geçen
+        # ad ("the fisherman looks cute") istek sayılmaz.
         tam = dict(secenekler()["meslek"]).get(t)
         if tam:
             out["meslek"] = tam
     g = GIZLE.search(t)
     if g:
-        out["gizle"] = "1" if (g.group("ne") or g.group("ne2")) == "gizle" else "0"
+        out["gizle"] = "1" if g.group("gizli") or g.group("ne") == "hide" else "0"
     return out
 
 
@@ -212,7 +250,7 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
         for tur, deger in cozumle(it[3]).items():
             # Aynı yorumda birden çok istek: kaynak kimliği türle ayrılır.
             satirlar.append([handle, tur, deger, f"{cid}:{tur}", it[2]])
-    # Sitedeki yorumla doğrulama: "kod 1234" yazanın kodu Worker'da o kullanıcı adına verildiyse bağlanır.
+    # Sitedeki yorumla doğrulama: "code 1234" yazanın kodu Worker'da o kullanıcı adına verildiyse bağlanır.
     onay = (ortak.kayit("POST", "/api/onayla", {"ciftler": kodlar}) or {}).get("onaylanan", []) if kodlar else []
     yeni = kaydet(satirlar, "yorum", db)
     dolu = "SELECT coalesce(json_agg(json_build_array(handle, deger) ORDER BY id), '[]') FROM istekler WHERE durum = 'dolu'"
@@ -233,7 +271,7 @@ def main() -> None:
     p = sub.add_parser("ekle", help="elle istek (DM, canlı yayın)")
     p.add_argument("handle")
     p.add_argument("tur", choices=TURLER)
-    p.add_argument("deger", help="katalog kimliği ya da adı (gizle için: evet/hayir)")
+    p.add_argument("deger", help="katalog kimliği ya da İngilizce adı (gizle için: yes/no)")
     p.add_argument("--kaynak", default="dm", choices=["dm", "canli"])
     p = sub.add_parser("liste", help="son isteklerin dökümü")
     p.add_argument("--gun", type=int, default=ISTEK_GUN)
@@ -245,9 +283,10 @@ def main() -> None:
         return
     if args.komut == "ekle":
         if args.tur == "gizle":
-            deger = {"evet": "1", "hayir": "0", "1": "1", "0": "0"}.get(katla(args.deger))
+            deger = {"evet": "1", "hayir": "0", "yes": "1", "no": "0", "1": "1", "0": "0"}.get(katla(args.deger))
         else:
-            deger = _bul(args.tur, katla(args.deger))
+            deger = args.deger if args.tur == "meslek" and args.deger in {j["id"] for j in sim.catalog()["meslekler"]} \
+                else _bul(args.tur, katla(args.deger))
         if deger is None:
             sys.exit(f"HATA: '{args.deger}' geçerli bir {args.tur} değil")
         handle = sim.normalize_handle(args.handle)

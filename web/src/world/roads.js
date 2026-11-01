@@ -473,12 +473,14 @@ export function buildGrounds(world) {
   const group = new THREE.Group();
   const FLAT = world.flatY;
   const materials = [];
+  let rot = 0; // döndürülmüş alanlar (mahalle avluları, oyun parkları)
   const slab = (w, d, x, z, tex, repeat, top, color = 0xffffff) => {
     const g = new THREE.BoxGeometry(w, top + 0.1, d).translate(0, (top - 0.1) / 2, 0);
     const uv = g.attributes.uv;
     if (repeat) for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / repeat, (uv.getY(i) * d) / repeat);
     const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, color, roughness: 0.95 }));
     mesh.position.set(x, FLAT, z);
+    mesh.rotation.y = rot;
     mesh.receiveShadow = true;
     group.add(mesh);
     materials.push(mesh.material);
@@ -499,7 +501,9 @@ export function buildGrounds(world) {
       materials.push(face.material);
       continue;
     }
-    const w = p.x1 - p.x0, d = p.z1 - p.z0, cx = (p.x0 + p.x1) / 2, cz = (p.z0 + p.z1) / 2;
+    rot = p.rot ?? 0;
+    const w = p.rot != null ? p.w : p.x1 - p.x0, d = p.rot != null ? p.d : p.z1 - p.z0;
+    const cx = p.rot != null ? p.cx : (p.x0 + p.x1) / 2, cz = p.rot != null ? p.cz : (p.z0 + p.z1) / 2;
     if (p.kind === "tarla") slab(w, d, cx, cz, T.crops(CROPS[p.crop]), 2.4, 0.08);
     else if (p.kind === "saha") {
       slab(w + 8, d + 8, cx, cz, T.paving(), 2.4, 0.06);
@@ -519,6 +523,7 @@ export function buildGrounds(world) {
       slab(w + 2, d + 2, cx, cz, T.paving(), 2.4, 0.06);
       const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: T.court(), roughness: 0.8 }));
       f.position.set(cx, FLAT + 0.105, cz);
+      f.rotation.y = rot;
       f.receiveShadow = true;
       group.add(f);
       materials.push(f.material);

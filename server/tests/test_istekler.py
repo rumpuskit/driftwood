@@ -8,51 +8,84 @@ from istekler import cozumle, katla, secenekler
 class CozumleTest(unittest.TestCase):
     def test_gecerli(self):
         cases = {
-            "meslek: balıkçı": {"meslek": "balikci"},
-            "Mesleğim YAZILIMCI olsun lütfen": {"meslek": "yazilimci"},
-            "balıkçı olmak istiyorum": {"meslek": "balikci"},
-            "İzmirli öğretmen olmak istiyorum": {"meslek": "ogretmen"},
-            "Mesleğim: Seramik sanatçısı": {"meslek": "seramikci"},
-            "meslek balıkçı, hobi satranç, evcil kedi": {"meslek": "balikci", "hobi": "satranc", "evcil": "Kedi"},
-            "evcil hayvanım köpek olsun": {"evcil": "Köpek"},
-            "hobim kitap okumak": {"hobi": "kitap"},
-            "hobi: yüzmek": {"hobi": "yuzme"},
-            "adımı gizle": {"gizle": "1"},
-            "ADIMI GÖSTERİN": {"gizle": "0"},
-            "ismimi gizler misiniz": {"gizle": "1"},
-            # Polis kadrolu ama istenebilir; muhtar mahalle başına tek (koltuk sunucuda denetlenir).
-            "polis olmak istiyorum": {"meslek": "polis"},
-            "meslek: komiser": {"meslek": "polis"},
-            "Meslek:muhtar": {"meslek": "muhtar"},
-            "okul müdürü olmak istiyorum": {"meslek": "okul_muduru"},
-            "hâkim olmak istiyorum": {"meslek": "hakim"},
-            "okul müdürü": {"meslek": "okul_muduru"},
-            "meslek: fener bekçisi": {"meslek": "fener_bekcisi"},  # tek koltuk (8. sakin avukatlığı seçti)
-            "Polis 👮": {"meslek": "polis"},
-            "Meslek Football": {"meslek": "futbolcu"},
-            "Meslek çaycı/kahveci": {"meslek": "kahveci"},
-            "abla takipteyim balıkcı olucam": {"meslek": "balikci"},
-            "ben polis olcam": {"meslek": "polis"},
-            "doktor olacağım": {"meslek": "doktor"},
+            "job: fisherman": {"meslek": "balikci"},
+            "Job, fisherman": {"meslek": "balikci"},
+            "JOB FISHERMAN": {"meslek": "balikci"},
+            "I want to be a fisherman": {"meslek": "balikci"},
+            "i wanna be a cop": {"meslek": "polis"},
+            "I wanna be a cop lol": {"meslek": "polis"},
+            "make me a baker": {"meslek": "firinci"},
+            "fisherman please": {"meslek": "balikci"},
+            "teacher pls 🙏": {"meslek": "ogretmen"},
+            "I'm gonna be a nurse": {"meslek": "hemsire"},
+            "I’d like to be an architect": {"meslek": "mimar"},
+            "lemme be the lighthouse keeper": {"meslek": "fener_bekcisi"},
+            "can I be the lighthouse keeper?": {"meslek": "fener_bekcisi"},
+            "My job: software developer": {"meslek": "yazilimci"},
+            "job: programmer": {"meslek": "yazilimci"},
+            "job: doctor": {"meslek": "doktor"},
+            "job: doc": {"meslek": "doktor"},
+            "job: farmer": {"meslek": "ciftci"},
+            "job: cranberry farmer": {"meslek": "ciftci"},
+            "job: chef": {"meslek": "asci"},
+            "job: short-order cook": {"meslek": "kahveci"},
+            "job: quarterback": {"meslek": "futbolcu"},
+            "job: football player": {"meslek": "futbolcu"},
+            "job: blimp pilot": {"meslek": "zeplin_pilotu"},
+            "I want to be a blimp pilot": {"meslek": "zeplin_pilotu"},
+            "job: principal": {"meslek": "okul_muduru"},
+            "job: neighborhood association president": {"meslek": "muhtar"},
+            "job: judge": {"meslek": "hakim"},
+            "job: district attorney": {"meslek": "savci"},
+            "job: sergeant": {"meslek": "polis"},
+            "job: retired": {"meslek": "emekli"},
+            "job: bakers": {"meslek": "firinci"},
+            "Police officer 👮": {"meslek": "polis"},
+            "lighthouse keeper": {"meslek": "fener_bekcisi"},
+            "job fisherman, hobby chess, pet cat": {"meslek": "balikci", "hobi": "satranc", "evcil": "Cat"},
+            "hobby: chess": {"hobi": "satranc"},
+            "hobby: kite flying": {"hobi": "ucurtma"},
+            "my hobby is grilling": {"hobi": "mangal"},
+            "hobby: bbq": {"hobi": "mangal"},
+            "hobby cornhole": {"hobi": "cornhole"},
+            "pet: cat": {"evcil": "Cat"},
+            "my pet is a dog": {"evcil": "Dog"},
+            "pet: puppy": {"evcil": "Dog"},
+            "hide my name": {"gizle": "1"},
+            "Hide my username please": {"gizle": "1"},
+            "make me private": {"gizle": "1"},
+            "show my name": {"gizle": "0"},
+            "unhide my name": {"gizle": "0"},
         }
         for text, want in cases.items():
             self.assertEqual(cozumle(text), want, text)
 
     def test_istek_degil(self):
-        for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum", "balıkçı olmayacağım",
-                     "itfaiyeci olmak istiyorum", "belediye başkanı olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
-                     # Kadrolu işler (kontenjanlı) ve "anakara" istenemez.
-                     "meslek: cankurtaran", "meslek: uzman"):
+        for text in ("this is so cute", "the fisherman looks cute", "I don't want to be a fisherman", "I'd never be a cop",
+                     "good job", "nice job guys", "I want to be a firefighter", "I want to be the mayor", "I want coffee",
+                     "job: manager", "job: intern", "job: store manager",
+                     # Kontenjanlı işler (lifeguard) ve "mainland" istenemez; Mayor seçimle gelir.
+                     "job: lifeguard", "job: mayor", "job: associate"):
             self.assertEqual(cozumle(text), {}, text)
 
     def test_katla(self):
-        self.assertEqual(katla("  İĞNE, Işık!  çöp "), "igne isik cop")
+        self.assertEqual(katla("  I’m a Café   OWNER!! "), "im a cafe owner")
 
     def test_belirsiz_ad_yok(self):
         # Her takma ad tek bir değere gider; katalog değişip iki mesleğe aynı unvan eklenirse çıkarılır.
         for tur, pairs in secenekler().items():
             aliases = [a for a, _ in pairs]
             self.assertEqual(len(aliases), len(set(aliases)), tur)
+
+    def test_her_meslek_istenebilir(self):
+        # İstenebilen her meslek en az kendi ana unvanıyla ("Fisherman", "Short-Order Cook") tanınır.
+        from driftwood_sim import sim
+        c = sim.catalog()
+        for j in c["meslekler"]:
+            if (j.get("kadro") and not j.get("istenebilir")) or j.get("secimle") or j["id"] == c["kilitli_meslek"]:
+                continue
+            ad = j["kademeler"][1] if len(j["kademeler"]) > 1 else j["kademeler"][0]
+            self.assertEqual(cozumle(f"job: {ad}").get("meslek"), j["id"], ad)
 
 
 if __name__ == "__main__":
@@ -64,11 +97,11 @@ class DogrulamaKoduTest(unittest.TestCase):
 
     def test_kod(self):
         from istekler import KOD
-        for text, want in {"kod 4821": "4821", "Kod: 4821 ben buradayım": "4821", "kodum 1234": "1234",
-                           "kod4821": "4821", "KOD 12345": None, "kodlar çok güzel": None}.items():
+        for text, want in {"code 4821": "4821", "Code: 4821 it's me": "4821", "my code is 1234": "1234",
+                           "code4821": "4821", "CODE 12345": None, "codes are cool": None}.items():
             m = KOD.search(katla(text))
             self.assertEqual(m and m.group(1), want, text)
-        self.assertEqual(cozumle("kod 4821"), {})
+        self.assertEqual(cozumle("code 4821"), {})
 
     def test_worker_cagrisi(self):
         import istekler
@@ -80,7 +113,7 @@ class DogrulamaKoduTest(unittest.TestCase):
         istekler.psql = lambda sql, db=None, extra=None: "[]" if "json_agg" in sql else "0"
         istekler.uygula = lambda db=None: []
         try:
-            out = istekler.yorumlar([["c1", "Ali", 1, "kod 4821"], ["c2", "veli", 2, "meslek: balıkçı"], ["c3", "biz", 3, "kod 1111"]], hesap="biz")
+            out = istekler.yorumlar([["c1", "Ali", 1, "code 4821"], ["c2", "veli", 2, "job: fisherman"], ["c3", "biz", 3, "code 1111"]], hesap="biz")
         finally:
             ortak.kayit, istekler.kaydet, istekler.psql, istekler.uygula = eski_kayit, eski_kaydet, eski_psql, eski_uygula
         self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali"]]})])

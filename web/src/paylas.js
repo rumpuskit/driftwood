@@ -62,7 +62,7 @@ export function residentCard(shot, info) {
   // Üst bant: amblem ve ad.
   roundRect(g, 48, 48, 430, 96, 48); g.fillStyle = "rgba(255,255,255,0.88)"; g.fill();
   emblem(g, 98, 96, 30);
-  fitText(g, "Driftwood", 144, 113, 320, 46, 900);
+  fitText(g, "Driftwood Island", 144, 113, 320, 46, 900);
   // Kart.
   const top = SH - 150;
   roundRect(g, 48, top, W - 96, 860, 44); g.fillStyle = "#ffffff"; g.fill();
@@ -85,8 +85,8 @@ export function residentCard(shot, info) {
   }
   // Alt: çağrı ve bağlantı.
   roundRect(g, 48, H - 250, W - 96, 190, 40); g.fillStyle = C.coral; g.fill();
-  fitText(g, "Sen de adaya taşın", W / 2, H - 165, W - 180, 54, 900, "#ffffff", "center");
-  fitText(g, `TikTok'ta @${TIKTOK} takip et`, W / 2, H - 108, W - 180, 34, 800, "#ffe3e9", "center");
+  fitText(g, "Move to the island too", W / 2, H - 165, W - 180, 54, 900, "#ffffff", "center");
+  fitText(g, `Follow @${TIKTOK} on TikTok`, W / 2, H - 108, W - 180, 34, 800, "#ffe3e9", "center");
   fitText(g, info.link.replace(/^https?:\/\//, ""), W / 2, H - 22, W - 120, 30, 700, C.soft, "center");
   return cv;
 }

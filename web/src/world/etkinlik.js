@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { roll, weekday } from "../sim.js";
 import { moonPhase, sunTimes } from "./sky.js";
 import { votedFilm, votedTheme } from "../tercih.js";
+import { clockText } from "../fmt.js";
 
 const frac = (n) => (n >>> 0) / 4294967296;
 
@@ -18,34 +19,34 @@ const frac = (n) => (n >>> 0) / 4294967296;
  * c: { w: dünya, pools, groupPools, dog, sun: {rise, set}, theme, workplace(kind) }
  */
 export const ETKINLIK = {
-  meydan_sohbet: { ad: "Meydanda", mode: "group:meydan", yer: "meydan", w: 7, sosyal: true },
-  meydan_bank: { ad: "Meydanda bankta oturuyor", mode: "seat:meydan", yer: "meydan", w: 4, sosyal: true },
-  kafe: { ad: "Kafede oturuyor", mode: "seat:kafe", yer: "meydan", w: 6, sosyal: true, gerek: (c) => c.pools["seat:kafe"]?.length, saat: (s) => s.bas >= 480 && s.bas < 1380 },
-  carsi: { ad: "Çarşıda vitrinlere bakıyor", mode: "shop", yer: "meydan", w: 5, gerek: (c) => !!c.w.carsiWalks, saat: (s) => s.bas >= 570 && s.bas < 1260 },
-  kahvehane: { ad: "Kahvehanede", mode: "inside:kahvehane", yer: "kahvehane", w: 5, sosyal: true, gerek: (c) => !!c.w.places.kahvehane, saat: (s) => s.bas >= 420 },
-  kahvehane_bahce: { ad: "Kahvehanenin önünde çay içiyor", mode: "seat:kahvehane", yer: "kahvehane", w: 3, sosyal: true, gerek: (c) => c.pools["seat:kahvehane"]?.length, saat: (s) => s.bas >= 420 },
-  park: { ad: "Parkta", mode: "group:park", yer: "park", w: 5, sosyal: true, gerek: (c) => !!c.w.places.park, saat: (s) => s.bas >= 390 && s.bas < 1320 },
-  park_bank: { ad: "Parkta bankta oturuyor", mode: "seat:park", yer: "park", w: 3, gerek: (c) => c.pools["seat:park"]?.length, saat: (s) => s.bas >= 390 && s.bas < 1320 },
-  sahil_yolu: { ad: "Sahil yolunda yürüyüşte", mode: "stroll", yer: "sahil_yolu", w: 5, gerek: (c) => !!c.w.places.sahil_yolu, saat: (s, c) => s.bas >= c.sun.rise - 30 && s.bas < 1350 },
-  pazar: { ad: "Pazarda alışverişte", mode: "stroll", yer: "pazar", w: 4, gerek: (c) => !!c.w.places.pazar, saat: (s) => s.bas >= 480 && s.bas < 1170 },
-  piknik: { ad: "Piknikte", mode: "group:piknik", yer: "tepe", w: 3, sosyal: true, gerek: (c) => c.groupPools.piknik?.length, saat: (s, c) => s.bas >= 600 && s.son <= c.sun.set + 30 && s.son - s.bas >= 60 },
-  tepe_yuruyus: { ad: "Tepeye yürüyüşte", mode: "hike", yer: "tepe", w: 3, saat: (s, c) => s.bas >= c.sun.rise + 20 && s.bas <= c.sun.set - 50 },
-  plaj_yuruyus: { ad: "Kumsalda yürüyüşte", mode: "beachwalk", yer: "plaj", w: 4, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set + 70 },
-  kosu: { ad: "Koşuya çıktı", mode: "jog:plaj", yer: "plaj", w: 1.5, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set + 40 },
-  gun_batimi: { ad: "Gün batımını izliyor", mode: "sunset", yer: "fener", w: 9, gerek: (c) => c.pools.sunset?.length, saat: (s, c) => s.bas <= c.sun.set + 5 && s.son >= c.sun.set - 25 && s.bas >= c.sun.set - 120 },
-  vapur: { ad: "İskelede vapuru izliyor", mode: "pier", yer: "iskele_vapur", w: 3, gerek: (c) => c.pools.pier?.length, saat: (s) => s.bas >= 360 && s.bas < 1380 },
-  tas: { ad: "Kıyıda taş sektiriyor", mode: "skip", yer: "plaj", w: 2, gerek: (c) => c.pools.skip?.length, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set },
-  kiyi_balik: { ad: "Kıyıdan balık tutuyor", mode: "fish", yer: "kiyi", w: 2, gerek: (c) => c.pools.fish?.length, saat: (s) => s.bas >= 330 && s.bas < 1320 },
-  fotograf: { ad: "Manzara fotoğrafı çekiyor", mode: "view", yer: "fener", w: 1.5, gerek: (c) => c.pools.view?.length, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set },
-  kapi_onu: { ad: "Kapı önünde", mode: "kapi", yer: "kapi", w: 5, sosyal: true, saat: (s) => s.bas >= 960 && s.bas < 1380 },
-  yildiz: { ad: "Tepede yıldızları izliyor", mode: "stars", yer: "tepe", w: 1.5, gerek: (c) => c.pools.stars?.length, saat: (s, c) => s.bas >= c.sun.set + 75 && s.son - s.bas >= 45 },
-  market: { ad: "Markette alışverişte", mode: "inside:market", yer: "market", w: 3, gerek: (c) => !!c.workplace("market"), saat: (s) => s.bas >= 480 && s.bas < 1320 && s.son - s.bas <= 80 },
-  firin: { ad: "Fırında simit alıyor", mode: "inside:firin", yer: "firin", w: 2, gerek: (c) => !!c.workplace("firin"), saat: (s) => s.bas >= 420 && s.bas < 1200 && s.son - s.bas <= 70 },
-  cami: { ad: "Camide", mode: "inside:cami", yer: "cami", w: 1.2, gerek: (c) => !!c.workplace("cami"), saat: (s) => s.son - s.bas <= 90 },
-  ucurtma: { ad: "Uçurtma uçuruyor", mode: "kite", yer: "tepe", w: 0.4, gerek: (c) => c.pools.kite?.length, saat: (s, c) => s.bas >= c.sun.rise + 30 && s.bas <= c.sun.set - 30 },
-  kopek: { ad: "Köpeğini gezdiriyor", mode: "stroll", yer: "plaj", w: 0, kopek: 9, saat: (s, c) => s.bas >= c.sun.rise - 30 && s.bas < 1380 },
-  sinema: { ad: "Plajda açık hava sinemasında", mode: "seat:sinema", yer: "plaj", w: 0, gerek: (c) => c.pools["seat:sinema"]?.length, saat: (s, c) => c.theme?.id === "sinema" && s.bas < c.theme.son - 30 && s.son > c.theme.bas + 20 },
-  temizlik: { ad: "Sahil temizliğinde", mode: "cleanup", yer: "plaj", w: 0, saat: (s, c) => c.theme?.id === "temizlik" && s.bas < c.theme.son && s.son > c.theme.bas },
+  meydan_sohbet: { ad: "On the Town Green", mode: "group:meydan", yer: "meydan", w: 7, sosyal: true },
+  meydan_bank: { ad: "Sitting on a bench on the Town Green", mode: "seat:meydan", yer: "meydan", w: 4, sosyal: true },
+  kafe: { ad: "Sitting at a café", mode: "seat:kafe", yer: "meydan", w: 6, sosyal: true, gerek: (c) => c.pools["seat:kafe"]?.length, saat: (s) => s.bas >= 480 && s.bas < 1380 },
+  carsi: { ad: "Window-shopping on Main Street", mode: "shop", yer: "meydan", w: 5, gerek: (c) => !!c.w.carsiWalks, saat: (s) => s.bas >= 570 && s.bas < 1260 },
+  kahvehane: { ad: "At the Diner", mode: "inside:kahvehane", yer: "kahvehane", w: 5, sosyal: true, gerek: (c) => !!c.w.places.kahvehane, saat: (s) => s.bas >= 420 },
+  kahvehane_bahce: { ad: "Having coffee outside the Diner", mode: "seat:kahvehane", yer: "kahvehane", w: 3, sosyal: true, gerek: (c) => c.pools["seat:kahvehane"]?.length, saat: (s) => s.bas >= 420 },
+  park: { ad: "At the park", mode: "group:park", yer: "park", w: 5, sosyal: true, gerek: (c) => !!c.w.places.park, saat: (s) => s.bas >= 390 && s.bas < 1320 },
+  park_bank: { ad: "Sitting on a park bench", mode: "seat:park", yer: "park", w: 3, gerek: (c) => c.pools["seat:park"]?.length, saat: (s) => s.bas >= 390 && s.bas < 1320 },
+  sahil_yolu: { ad: "Walking the Harbor Walk", mode: "stroll", yer: "sahil_yolu", w: 5, gerek: (c) => !!c.w.places.sahil_yolu, saat: (s, c) => s.bas >= c.sun.rise - 30 && s.bas < 1350 },
+  pazar: { ad: "Shopping at the Farmers Market", mode: "stroll", yer: "pazar", w: 4, gerek: (c) => !!c.w.places.pazar, saat: (s) => s.bas >= 480 && s.bas < 1170 },
+  piknik: { ad: "Having a picnic", mode: "group:piknik", yer: "tepe", w: 3, sosyal: true, gerek: (c) => c.groupPools.piknik?.length, saat: (s, c) => s.bas >= 600 && s.son <= c.sun.set + 30 && s.son - s.bas >= 60 },
+  tepe_yuruyus: { ad: "Hiking up Bluff Head", mode: "hike", yer: "tepe", w: 3, saat: (s, c) => s.bas >= c.sun.rise + 20 && s.bas <= c.sun.set - 50 },
+  plaj_yuruyus: { ad: "Walking on the beach", mode: "beachwalk", yer: "plaj", w: 4, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set + 70 },
+  kosu: { ad: "Out for a run", mode: "jog:plaj", yer: "plaj", w: 1.5, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set + 40 },
+  gun_batimi: { ad: "Watching the sunset", mode: "sunset", yer: "fener", w: 9, gerek: (c) => c.pools.sunset?.length, saat: (s, c) => s.bas <= c.sun.set + 5 && s.son >= c.sun.set - 25 && s.bas >= c.sun.set - 120 },
+  vapur: { ad: "Watching the ferry come in", mode: "pier", yer: "iskele_vapur", w: 3, gerek: (c) => c.pools.pier?.length, saat: (s) => s.bas >= 360 && s.bas < 1380 },
+  tas: { ad: "Skipping stones at the shore", mode: "skip", yer: "plaj", w: 2, gerek: (c) => c.pools.skip?.length, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set },
+  kiyi_balik: { ad: "Fishing from the shore", mode: "fish", yer: "kiyi", w: 2, gerek: (c) => c.pools.fish?.length, saat: (s) => s.bas >= 330 && s.bas < 1320 },
+  fotograf: { ad: "Taking photos of the view", mode: "view", yer: "fener", w: 1.5, gerek: (c) => c.pools.view?.length, saat: (s, c) => s.bas >= c.sun.rise && s.bas <= c.sun.set },
+  kapi_onu: { ad: "Out on the front porch", mode: "kapi", yer: "kapi", w: 5, sosyal: true, saat: (s) => s.bas >= 960 && s.bas < 1380 },
+  yildiz: { ad: "Stargazing on Bluff Head", mode: "stars", yer: "tepe", w: 1.5, gerek: (c) => c.pools.stars?.length, saat: (s, c) => s.bas >= c.sun.set + 75 && s.son - s.bas >= 45 },
+  market: { ad: "Shopping at the store", mode: "inside:market", yer: "market", w: 3, gerek: (c) => !!c.workplace("market"), saat: (s) => s.bas >= 480 && s.bas < 1320 && s.son - s.bas <= 80 },
+  firin: { ad: "Picking up bread at the bakery", mode: "inside:firin", yer: "firin", w: 2, gerek: (c) => !!c.workplace("firin"), saat: (s) => s.bas >= 420 && s.bas < 1200 && s.son - s.bas <= 70 },
+  cami: { ad: "At church", mode: "inside:cami", yer: "cami", w: 1.2, gerek: (c) => !!c.workplace("cami"), saat: (s) => s.son - s.bas <= 90 },
+  ucurtma: { ad: "Flying a kite", mode: "kite", yer: "tepe", w: 0.4, gerek: (c) => c.pools.kite?.length, saat: (s, c) => s.bas >= c.sun.rise + 30 && s.bas <= c.sun.set - 30 },
+  kopek: { ad: "Walking the dog", mode: "stroll", yer: "plaj", w: 0, kopek: 9, saat: (s, c) => s.bas >= c.sun.rise - 30 && s.bas < 1380 },
+  sinema: { ad: "At movie night on the beach", mode: "seat:sinema", yer: "plaj", w: 0, gerek: (c) => c.pools["seat:sinema"]?.length, saat: (s, c) => c.theme?.id === "sinema" && s.bas < c.theme.son - 30 && s.son > c.theme.bas + 20 },
+  temizlik: { ad: "Helping with the beach cleanup", mode: "cleanup", yer: "plaj", w: 0, saat: (s, c) => c.theme?.id === "temizlik" && s.bas < c.theme.son && s.son > c.theme.bas },
 };
 const IDS = Object.keys(ETKINLIK);
 // Herkesin sevdiği üç etkinlik (yeri adada açıldıkça devreye girer): seçimde üç kat ağırlık.
@@ -68,18 +69,18 @@ export function dayTheme(day, world) {
   const wd = weekday(day);
   const sun = sunTimes(day);
   const has = (kind) => world.workplaces[kind]?.some(Boolean);
-  if (wd === 4 && has("cami")) return { id: "cuma", ad: "Cuma namazı", yer: "cami", bas: 750, son: 830, boost: { cami: 45 } };
-  if (wd === 5) return { id: "sinema", ad: "Plajda açık hava sineması", yer: "plaj", bas: 1230, son: 1365, boost: { sinema: 1 } };
-  if (wd === 6) return { id: "pazar", ad: "Pazar keyfi: piknik ve yürüyüş", yer: "tepe", boost: { piknik: 6, tepe_yuruyus: 2.5, plaj_yuruyus: 2, kosu: 2, firin: 2 } };
+  if (wd === 4 && has("cami")) return { id: "cuma", ad: "Friday community lunch at the church hall", yer: "cami", bas: 750, son: 830, boost: { cami: 45 } };
+  if (wd === 5) return { id: "sinema", ad: "Beach movie night", yer: "plaj", bas: 1230, son: 1365, boost: { sinema: 1 } };
+  if (wd === 6) return { id: "pazar", ad: "Lazy Sunday: picnics and walks", yer: "tepe", boost: { piknik: 6, tepe_yuruyus: 2.5, plaj_yuruyus: 2, kosu: 2, firin: 2 } };
   const moon = moonPhase(day, 1320);
   const list = [
-    { id: "ucurtma", ad: "Rüzgârlı gün: tepede uçurtma", yer: "tepe", boost: { ucurtma: 30, plaj_yuruyus: 1.5 } },
-    { id: "gunbatimi", ad: `Açık hava: gün batımı ${fmtMin(sun.set)}`, yer: "fener", boost: { gun_batimi: 3, fotograf: 4, tepe_yuruyus: 1.5 } },
-    { id: "balik", ad: "Balık bereketi: herkes kıyıda", yer: "iskele", boost: { kiyi_balik: 8, vapur: 2 } },
-    { id: "temizlik", ad: "Sahil temizliği", yer: "plaj", bas: 600, son: 720, boost: { temizlik: 1 } },
-    ...(moon < 0.12 || moon > 0.88 ? [{ id: "yildiz", ad: "Aysız gece: tepede yıldızlar", yer: "tepe", boost: { yildiz: 12 } }] : []),
-    ...(world.places.kahvehane ? [{ id: "tavla", ad: "Kahvehanede tavla turnuvası", yer: "kahvehane", boost: { kahvehane: 3, kahvehane_bahce: 4 } }] : []),
-    { id: "komsuluk", ad: "Komşuluk günü: kapı önleri dolu", yer: "meydan", boost: { kapi_onu: 3, piknik: 1.5 } },
+    { id: "ucurtma", ad: "Windy day: kites on Bluff Head", yer: "tepe", boost: { ucurtma: 30, plaj_yuruyus: 1.5 } },
+    { id: "gunbatimi", ad: `Clear skies: sunset at ${clockText(sun.set)}`, yer: "fener", boost: { gun_batimi: 3, fotograf: 4, tepe_yuruyus: 1.5 } },
+    { id: "balik", ad: "The fish are biting: everyone's at the shore", yer: "iskele", boost: { kiyi_balik: 8, vapur: 2 } },
+    { id: "temizlik", ad: "Beach cleanup", yer: "plaj", bas: 600, son: 720, boost: { temizlik: 1 } },
+    ...(moon < 0.12 || moon > 0.88 ? [{ id: "yildiz", ad: "Moonless night: stars over Bluff Head", yer: "tepe", boost: { yildiz: 12 } }] : []),
+    ...(world.places.kahvehane ? [{ id: "tavla", ad: "Checkers tournament at the Diner", yer: "kahvehane", boost: { kahvehane: 3, kahvehane_bahce: 4 } }] : []),
+    { id: "komsuluk", ad: "Neighbor day: everyone's out on the porch", yer: "meydan", boost: { kapi_onu: 3, piknik: 1.5 } },
   ];
   // Sitedeki ankette bir gün önceden oylanan olay (oy varsa) sıranın yerine geçer.
   const voted = votedTheme(day);
@@ -87,8 +88,6 @@ export function dayTheme(day, world) {
   if (pick) return { ...pick, oylama: true };
   return list[roll(day, "gunun_olayi") % list.length];
 }
-
-const fmtMin = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
 
 /**
  * Bir çıkış için etkinlik seçer. seg: plan parçası; k: sırası; hobby: hobi çıkışıysa true (yalnız bazı günler
@@ -124,7 +123,7 @@ export function chooseActivity(seed, day, k, seg, c, fav) {
 const FILMS = {
   komedi: { skies: [["#87c3e8", "#f6f4ef"], ["#f2c230", "#fff3c4"]], walk: 18 },
   macera: { skies: [["#1b2a4a", "#f2a65a"], ["#0f2a2a", "#2f9c9a"]], walk: 34 },
-  korku: { skies: [["#0b0b14", "#3a1022"], ["#120f1f", "#2b1d3a"]], walk: 8 },
+  korku: { skies: [["#2a2a2a", "#d6d6d6"], ["#111111", "#9a9a9a"]], walk: 12 }, // "Classic": siyah-beyaz eski film
   animasyon: { skies: [["#7ad1c4", "#f6b2d6"], ["#b5a6ef", "#fde2a8"]], walk: 22 },
 };
 

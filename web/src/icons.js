@@ -69,4 +69,7 @@ export const BINA_SIMGE = {
 /** Araç türü → simge. */
 export const ARAC_SIMGE = { zeplin: "zeplin", car: "araba", taxi: "taksi", bus: "otobus", ambulans: "ambulans", itfaiye: "kamyon", cop: "kamyon" };
 /** Haritadaki yerler → simge. */
-export const YER_SIMGE = { Meydan: "cesme", İskele: "vapur", Sahil: "dalga", Park: "agac", Plaj: "semsiye", Tepe: "dag", Fener: "fener", Tarlalar: "basak", Zeplin: "zeplin" };
+export const YER_SIMGE = {
+  "Town Green": "cesme", "Ferry Landing": "vapur", "Harbor Walk": "dalga", "Kettle Pond Park": "agac", "Ocean Beach": "semsiye",
+  "Bluff Head": "dag", "Gull Point Light": "fener", "Cranberry Bog": "basak", "Apple Orchard": "basak", "Driftwood Blimp": "zeplin",
+};

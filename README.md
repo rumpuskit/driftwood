@@ -1,111 +1,113 @@
-# Driftwood
+# Driftwood Island
 
-TikTok takipçilerinin sakin olarak yaşadığı, takipçi geldikçe büyüyen bir ada: https://driftwood.rumpuskit.com
+A small island town where every TikTok follower of @driftwoodlive lives as a resident, growing with every new follower: https://driftwood.rumpuskit.com
 
-## Temel ilke
+## Core principle
 
-Takip etmenin dışında hiçbir özellik kullanıcıdan işlem istemez. Sakinlerin hayatı (meslek, terfi, evcil hayvan, günlük plan) kullanıcı adından türetilen tohum değer ve günden **deterministik** olarak hesaplanır. Bu yüzden sunucu kimsenin hayatını saklamaz, sadece kimliği, sırayı (adres buradan hesaplanır) ve istekleri tutar. Bu yapı 10 milyon sakine kadar ölçeklenir.
+Following is the only thing anyone has to do; every other feature is optional. Each resident's life (job, promotions, pet, daily plan) is computed **deterministically** from a seed derived from the username and the day. So the server never stores anyone's life, only the identity, the order (the address is computed from it) and requests. This design scales to 10 million residents.
 
-## Sakinler nereden gelir?
+## Where do residents come from?
 
-TikTok takipçi listesini resmî arayüzünden vermez; resmî "Verilerini indir" dosyası da günler sürer. Bu yüzden liste, hesabın herkese açık takipçi listesinden, bağımsız bir profil görüntüleme sitesi (tik.ninja) üzerinden okunur. Bu iş bu depoda değil, ayrı bir yerel takip aracında (Mac'te, launchd ile) yapılır. Akış:
+TikTok doesn't provide the follower list through its official API, and the official "Download your data" file takes days. So the list is read from the account's public follower list through an independent profile viewer site (tik.ninja). That happens outside this repo, in a separate local follower tool (on a Mac, via launchd). The flow:
 
-1. **Saatte bir** araç yalnız profildeki takipçi **sayısını** okuyup sunucuya yollar. Henüz taşınmamış olanlar vapur iskelesinde valizleriyle bekler.
-2. **Günde üç kez** (09:00, 15:00, 21:00; `web/src/config.js` `TASINMA_SAATLERI` ve aracın `config.toml`'u) araç listeyi tarar. Aktif takipçilerin tamamını takip sırasıyla `ssh` ile sunucudaki `tasinma.py`'ye yollar. Bu ssh anahtarı yalnız o betiği çalıştırabilir (zorunlu komut).
-3. `tasinma.py`, `import_followers.aktar()` ile listeyi işler: yeni gelenler takip sırasına göre önce boş evlere yerleşir, takibi bırakanlar ayrılır (evi 7 gün tutulur, sonra kaydı silinir), adadan çıkmak isteyenler bir daha taşınmaz. Liste aktif nüfusun %80'inden azsa işlenmez (yarım liste adayı boşaltmasın).
-4. Aynı taşınmada araç, son 30 günün videolarından yorum sayısı değişenlerin yorumlarını okuyup listeden sonra yollar. `istekler.py` yorumları ayrıştırır (`meslek: balıkçı`, `hobi: tavla`, `evcil: kedi`, `adımı gizle`; yalnız katalogdaki seçenekler, kadrolu işler hariç). İstek yazanın kendisi için ve yalnız adada oturuyorsa sakinin `overrides` alanına işlenir; henüz taşınmamışsa 7 gün bekler. Yorum metni saklanmaz, istek kaydı 7 gün sonra silinir.
-5. Güncel liste Cloudflare Worker'ına (`sayac/`) gider; site listeyi oradan okur. Ziyaretçi trafiği sunucuya gelmez.
+1. **Once an hour** the tool reads only the follower **count** from the profile and sends it to the server. Followers who haven't moved in yet wait at the Ferry Landing with their suitcases.
+2. **Move-ins three times a day: 9 AM, 3 PM, 9 PM (ET)** (`web/src/config.js` `TASINMA_SAATLERI` and the tool's `config.toml`), the tool scans the list and sends all active followers, in follow order, over `ssh` to `tasinma.py` on the server. That ssh key can only run that script (forced command).
+3. `tasinma.py` processes the list with `import_followers.aktar()`: newcomers move into empty homes first, in follow order; people who unfollowed leave (their home is kept for 7 days, then the record is deleted); people who asked to leave never move in again. If the list is smaller than 80% of the active population, it is not processed (a partial list must not empty the island).
+4. At the same move-in, the tool reads the comments on videos from the last 30 days whose comment count changed and sends them after the list. `istekler.py` parses them (`job: fisherman`, `hobby: chess`, `pet: cat`, `hide my name` / `show my name`; only catalog options, staffed jobs excluded); `secim.py` handles `I'm running` and `vote: @handle` during a mayoral election. A request applies only to the commenter, and only if they live on the island, through the resident's `overrides` field; if they haven't moved in yet it waits 30 days. Comment text is never stored, and request records are deleted after 30 days. Verification comments (`code 1234`) are matched in the same pass.
+5. The updated list goes to the Cloudflare Worker (`sayac/`, `driftwood-sayac` at https://driftwood-data.rumpuskit.com); the site reads the list from there. Visitor traffic never reaches the server.
 
-TikTok bazı hesapları (ör. gizli hesapları) herkese açık takipçi listesinde göstermez; onlar taşınamaz ve iskelede bekleyen sayılmaz (profil sayısıyla nüfus farkı `durum.disarida`). tik.ninja kapanırsa resmî dışa aktarım dosyası `import_followers.py` ile elle işlenebilir.
+TikTok leaves some accounts (such as private accounts) out of the public follower list; those can't move in and aren't counted as waiting at the Ferry Landing (the gap between the profile count and the population is `durum.disarida`). If tik.ninja shuts down, the official export file can be processed by hand with `import_followers.py`.
 
-## Ada nasıl büyür?
+## How does the island grow?
 
-Ada boş başlar: vapur iskelesi, toprak patikalar, çeşmeli meydan ve bayrak direği, tepe, fener ve kumsal. Her şeyin yeri baştan bellidir ama yalnızca açılmış olanlar kurulur:
+The island starts empty: the Ferry Landing, dirt roads, an empty Town Green with a flagpole, Gull Point Light, Ocean Beach and the dune grass. Everything has a fixed spot, but only what has opened is built:
 
-- **Evler** sakinlerle gelir: bir apartman, ilk dairesine biri taşınınca dikilir. Mahalle girişe en yakın sokaktan dışa doğru dolar; sokaklar evlerin önüne kadar uzanır.
-- **Yerler** `data/catalog.json` içindeki `gelisim` tablosuna göre açılır: 5. sakinde meydan bankları, 10'da kahvehane, 20'de market, 30'da fırın... 200'de çevre yolu ile arabalar ve otobüs, 600'de yük limanı, 2.650'de son kafe. Sonraki mahallelerin camisi, çay bahçesi ve okulu, mahalle dolmaya başladıktan sonra aynı aralıklarla gelir; çarşı dükkânları 240. sakinden başlayarak tek tek açılır.
-- Gelişim düzeyi adanın **ulaştığı en yüksek nüfustur** (`zirve`); takibi bırakanlar yüzünden açılmış bir yer kapanmaz.
-- İş yeri henüz açılmamış bir mesleğin sahibi o yer açılana kadar **anakarada çalışır** (vapurla gider gelir); kartında "Driftwood Fırını açılınca fırın çırağı olacak (30. sakinde)" yazar. Açılınca asıl işine geçer.
-- Sitede "Sıradaki: … · N sakin daha" satırı ve haritada sıradaki yapının şantiye çitli hayalet taslağı görünür. Taşınma çıktısındaki `acilan` listesi taşınma videolarının malzemesidir; takip aracı bir yer açılınca bildirim de gönderir.
+- **Homes** arrive with residents: cottages, two-family houses, fourplexes and apartments, depending on the neighborhood. A neighborhood fills from the street nearest the entrance outward; streets reach as far as the homes.
+- **Places** open according to the `gelisim` table in `data/catalog.json`: Town Green benches at 5 residents, the Driftwood Diner at 10, the General Store at 20, the Bakery at 30... the island loop road with cars and the shuttle bus at 200, the freight terminal at 600, the last café at 2,650. Later neighborhoods get their church, ice cream parlor, school and community center at the same intervals once they start filling up; Main Street shops open one by one starting at the 240th resident.
+- The development level is the **highest population the island has reached** (`zirve`); a place that has opened never closes because people unfollow.
+- A resident whose workplace hasn't opened yet **works on the mainland, takes the ferry** until it does; the card says "Will be a baker when the Bakery opens (30 residents)". Once it opens, they switch to their real job.
+- The site shows a "Next: … · N more residents" line, and the map shows a ghost outline of the next building behind a construction fence. The `acilan` list in the move-in output is material for move-in videos; the follower tool also sends a notification when a place opens.
 
-## Yapı
+## Layout
 
 ```
-data/catalog.json          meslekler, iş yerleri, hobiler, isim listeleri (web ve sunucu ortak)
-web/                       tarayıcı istemcisi (Three.js + Vite), telefonda ve TikTok uygulama içi tarayıcısında açılır
-  src/sim.js               deterministik simülasyon: hash, saat, adres, sakinin günü
-  src/world/layout.js      adanın yerleşimi: nüfustan hücreler, mahalleler, çarşı, kıyı, yollar
-  src/world/roads.js       asfalt, Arnavut kaldırımı, kaldırım, yaya geçidi, sokak lambaları
-  src/world/city.js        apartmanlar, dükkânlar, kent eşyası (InstancedMesh)
-  src/world/human.js       eklemli insan figürü, eşyalar, köpekler
-  src/world/people.js      sokaktaki hayat: yürüyüş, oturma, sohbet, hobiler, iş
-  src/world/life.js        evdeki hayat: uyku, yemek, televizyon...
-  src/world/interior.js    ev içi (bebek evi) görünümü: seçilen kat kesilir, daireler eşyalı
-  src/world/*.js           arazi, ağaçlar, gökyüzü, levhalar, dokular
-  src/ui.js                saat, hız, "Kendini bul" araması ve sakin kartı
-  tests/parity_vectors.mjs parite testi için JS çıktısı
+data/catalog.json          jobs, workplaces, hobbies, name lists (shared by web and server)
+web/                       browser client (Three.js + Vite), opens on phones and in TikTok's in-app browser
+  src/sim.js               deterministic simulation: hash, clock, address, a resident's day
+  src/fmt.js               displayed formats: 12-hour clock, "Oct 31" dates, weekdays, numbers, feet and mph
+  src/world/layout.js      island layout: neighborhoods, Main Street, shore, roads
+  src/world/roads.js       asphalt, sidewalks, crosswalks, street lights
+  src/world/city.js        homes, shops, street furniture (InstancedMesh)
+  src/world/human.js       jointed human figure, props, dogs
+  src/world/people.js      life on the street: walking, sitting, chatting, hobbies, work
+  src/world/life.js        life at home: sleeping, meals, TV...
+  src/world/interior.js    dollhouse interior view: the chosen floor is cut open, homes are furnished
+  src/world/*.js           terrain, trees, sky, labels, textures
+  src/ui.js                clock, speed, "find yourself" search and the resident card
+  tests/parity_vectors.mjs JS output for the parity test
 server/
-  driftwood_sim/sim.py     simülasyonun Python karşılığı (web ile bit bit aynı)
-  schema.sql               Postgres şeması (sakinler, aktarimlar, istekler)
-  tasinma.py               Mac'teki takip aracından gelen sayı/liste/yorumlar (ssh zorunlu komutu)
-  istekler.py              yorumdan ya da DM'den gelen istekler (meslek, hobi, evcil, adı gizle)
-  import_followers.py      takipçi listesini şehre işler, listeyi yayınlar (elle: dosyadan)
-  cikar.py                 adadan çıkmak / adını gizlemek isteyenler (DM ile)
-  ortak.py                 psql, listenin yayını (public/sakinler.json + Worker)
-sayac/                     Cloudflare Worker: çevrimiçi sayacı, /sakinler.json, eski ada.rumpuskit.com adresinin yönlendirmesi
-  tests/test_parity.py     JS ve Python aynı sonucu veriyor mu?
-  tests/test_tasinma.py    taşınma ve yorum istekleri uçtan uca (gerçek Postgres ister, DRIFTWOOD_TEST_DB ile)
-  tests/test_istekler.py   yorumdan istek ayrıştırma
+  driftwood_sim/sim.py     Python port of the simulation (bit-for-bit the same as web)
+  schema.sql               Postgres schema (residents, imports, requests)
+  tasinma.py               count/list/comments from the follower tool on the Mac (ssh forced command)
+  istekler.py              requests from comments or DMs (job, hobby, pet, hide name)
+  secim.py                 mayoral election: candidates and votes from comments and the site
+  import_followers.py      applies the follower list to the town, publishes the list (by hand: from a file)
+  cikar.py                 residents who want to leave or hide their name (via DM)
+  ortak.py                 psql, publishing the list (public/sakinler.json + Worker)
+  tests/test_parity.py     do JS and Python give the same result?
+  tests/test_tasinma.py    move-ins and comment requests end to end (needs a real Postgres, via DRIFTWOOD_TEST_DB)
+  tests/test_istekler.py   parsing requests from comments
+sayac/                     Cloudflare Worker driftwood-sayac: online counter, /sakinler.json, site API (verification, choices, polls)
 ```
 
-## Komutlar
+## Commands
 
 ```sh
-# Geliştirme sunucusu (http://localhost:5173)
+# Dev server (http://localhost:5173)
 cd web && npm install && npm run dev
 
-# Adres çubuğu seçenekleri: ?nufus=12000 (gerçek liste yerine örnek nüfus), ?gelisim=500 (adayı o gelişim
-# düzeyinde göster), ?bekleyen=40 (iskelede bekleyen),
-# ?test (60×/600× düğmeleri), ?saat=21:30 (sabit saat, test/hiz ile), ?hiz=60 (zaman hızı),
-# ?bul=sakin_0042 (sakini bulup göster), ?bak=x,z,uzaklık (kamera)
+# URL options: ?nufus=12000 (sample population instead of the real list), ?gelisim=500 (show the island at that
+# development level), ?bekleyen=40 (followers waiting at the Ferry Landing),
+# ?test (60×/600× buttons), ?saat=21:30 (fixed time, with test/hiz), ?hiz=60 (time speed),
+# ?bul=sakin_0042 (find and show a resident), ?bak=x,z,distance (camera)
 
-# Parite ve plan testleri (Node gerekir)
+# Parity and plan tests (needs Node)
 cd server && python3 -m unittest -v
 
-# Sunucuya yükle ($SUNUCU: ssh takma adı; sadece /opt/driftwood)
+# Upload to the server ($SUNUCU: ssh alias; only /opt/driftwood)
 rsync -a --delete --exclude __pycache__ --relative server/ data/catalog.json $SUNUCU:/opt/driftwood/app/
 ssh $SUNUCU 'chown -R driftwood:driftwood /opt/driftwood/app'
 
-# Taşınma testleri (geçici Postgres; asıl veritabanına dokunmaz)
+# Move-in tests (throwaway Postgres; never touches the real database)
 docker run -d --rm --name driftwood-deneme -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:54391:5432 postgres:17-alpine
 cd server && PGHOST=127.0.0.1 PGPORT=54391 PGUSER=postgres DRIFTWOOD_TEST_DB=driftwood_deneme python3 -m unittest tests.test_tasinma
 
-# Bir listeyi elle işle (sunucuda; önce --dry-run ile bak). Normalde takip aracı günde 3 kez kendisi yollar.
+# Process a list by hand (on the server; check with --dry-run first). Normally the follower tool sends it 3 times a day.
 cd /opt/driftwood/app/server
 sudo -u driftwood python3 import_followers.py liste.json --dry-run
 sudo -u driftwood python3 import_followers.py tiktok-export.zip
 
-# Adadan çıkma / adı gizleme isteği (DM)
-sudo -u driftwood python3 cikar.py kullaniciadi
-sudo -u driftwood python3 cikar.py --gizle kullaniciadi
+# Request to leave / hide name (DM)
+sudo -u driftwood python3 cikar.py username
+sudo -u driftwood python3 cikar.py --gizle username
 
-# İstekler: ayrıştırmayı dene, DM/canlı yayından gelen isteği işle, son haftanın dökümü (istekler videosu)
-sudo -u driftwood python3 istekler.py dene "mesleğim balıkçı olsun"
-sudo -u driftwood python3 istekler.py ekle kullaniciadi meslek balıkçı
+# Requests: try the parser, apply a request from a DM or live stream, list the last weeks' requests (requests video)
+sudo -u driftwood python3 istekler.py dene "make me a fisherman please"
+sudo -u driftwood python3 istekler.py ekle username meslek fisherman
 sudo -u driftwood python3 istekler.py liste
 
-# Worker (sayaç + liste + yönlendirme)
+# Worker (counter + list + site API)
 cd sayac && npx wrangler@4 deploy
 ```
 
-## Sunucu kuralları
+## Server rules
 
-Sunucuda başka servisler de çalışıyor. Driftwood sadece `driftwood` Linux kullanıcısı, `/opt/driftwood` klasörü ve `driftwood` Postgres veritabanını kullanır. nginx, Redis ve diğer servislere dokunulmaz.
+Other services also run on the server. Driftwood only uses the `driftwood` Linux user, the `/opt/driftwood` folder and the `driftwood` Postgres database. nginx, Redis and other services are never touched.
 
-## Yayın
+## Publishing
 
-`main` dalına her push'ta GitHub Actions parite testlerini çalıştırır, web istemcisini derler ve GitHub Pages'a yayınlar: https://driftwood.rumpuskit.com (Cloudflare üzerinden; eski ada.rumpuskit.com oraya yönlenir).
+On every push to `main`, GitHub Actions runs the parity tests, builds the web client and publishes it to GitHub Pages: https://driftwood.rumpuskit.com (through Cloudflare).
 
-## Simülasyon kuralı değişirse
+## If a simulation rule changes
 
-`web/src/sim.js` ile `server/driftwood_sim/sim.py` birlikte değişir ve parite testi çalıştırılır. Kural değişikliği bütün sakinlerin hayatını geriye dönük olarak değiştirir. Yayından sonra bunu bilinçli bir "şehir olayı" olarak yap.
+`web/src/sim.js` and `server/driftwood_sim/sim.py` change together, and the parity test is run. A rule change rewrites every resident's life retroactively. After launch, do it on purpose, as a "town event".

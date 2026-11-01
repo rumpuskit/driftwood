@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>TikTok bağlantısı</title>
+<title>TikTok connection</title>
 <style>
   :root { --ink: #2f3b52; --bg: #f4f7fb; --card: #fff; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink: #eef2fa; --bg: #1b2440; --card: #26304d; } }
@@ -16,20 +16,20 @@
 </head>
 <body>
 <main>
-  <h1>TikTok bağlantısı</h1>
-  <p id="msg">Bu sayfa yalnızca Driftwood'nın video yükleme aracının kendi TikTok hesabımıza bağlanması içindir.</p>
+  <h1>TikTok connection</h1>
+  <p id="msg">This page is only for connecting Driftwood Island's video upload tool to our own TikTok account.</p>
   <code id="code" hidden></code>
 </main>
 <script>
   // TikTok izin ekranından dönüşte gelen kod: video yükleme aracına (Mac) bir kez verilir, karşılığında belirteç alınır.
   const q = new URLSearchParams(location.search);
   if (q.get("code")) {
-    document.getElementById("msg").textContent = "İzin verildi. Bu kodu kopyalayıp yükleme aracına ver (kod birkaç dakika içinde geçersiz olur):";
+    document.getElementById("msg").textContent = "Access granted. Copy this code into the upload tool (it expires in a few minutes):";
     const c = document.getElementById("code");
     c.hidden = false;
     c.textContent = q.get("code");
   } else if (q.get("error")) {
-    document.getElementById("msg").textContent = "TikTok izni verilmedi: " + q.get("error");
+    document.getElementById("msg").textContent = "TikTok access was not granted: " + q.get("error");
   }
 </script>
 </body>

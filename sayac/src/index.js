@@ -75,17 +75,17 @@ async function residents(request, env, ctx) {
   }
   if (request.method === "PUT") {
     const auth = request.headers.get("authorization") ?? "";
-    if (!env.YAYIN_ANAHTARI || !same(auth, `Bearer ${env.YAYIN_ANAHTARI}`)) return new Response("izin yok", { status: 401 });
+    if (!env.YAYIN_ANAHTARI || !same(auth, `Bearer ${env.YAYIN_ANAHTARI}`)) return new Response("not allowed", { status: 401 });
     const text = await request.text();
     let data;
-    try { data = JSON.parse(text); } catch { return new Response("geçersiz JSON", { status: 400 }); }
-    if (data?.v !== 1 || !Array.isArray(data.sakinler)) return new Response("beklenmeyen biçim", { status: 400 });
+    try { data = JSON.parse(text); } catch { return new Response("invalid JSON", { status: 400 }); }
+    if (data?.v !== 1 || !Array.isArray(data.sakinler)) return new Response("unexpected format", { status: 400 });
     await env.SAKINLER.put("sakinler", text);
     await caches.default.delete(new Request(new URL("/sakinler.json", request.url).toString()));
     return new Response(JSON.stringify({ ok: true, sakin: data.sakinler.length }), { headers: { "content-type": "application/json" } });
   }
   if (request.method === "OPTIONS") return new Response(null, { headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET" } });
-  return new Response("yöntem yok", { status: 405 });
+  return new Response("method not allowed", { status: 405 });
 }
 
 /** Kayıt isteklerini tek Durable Object'e iletir; tarayıcı için CORS ve tercih listesi için kısa önbellek. */
@@ -124,11 +124,11 @@ export default {
     // Sitenin yazabildiği her şey (doğrulama, tercihler, anketler, saklı nesne, seçim): Kayit (kayit.js).
     if (url.pathname.startsWith("/api/") || url.pathname === "/tercihler.json") return kayit(request, env, ctx, url, origin);
     if (url.pathname === "/ws") {
-      if (request.headers.get("Upgrade") !== "websocket") return new Response("WebSocket bekleniyor", { status: 426 });
-      if (origin && !ORIGINS.includes(origin)) return new Response("izin yok", { status: 403 });
+      if (request.headers.get("Upgrade") !== "websocket") return new Response("WebSocket expected", { status: 426 });
+      if (origin && !ORIGINS.includes(origin)) return new Response("not allowed", { status: 403 });
       const stub = env.PRESENCE.get(env.PRESENCE.idFromName("ada"));
       return stub.fetch(request);
     }
-    return new Response("Driftwood çevrimiçi sayacı", { headers: { "content-type": "text/plain; charset=utf-8" } });
+    return new Response("Driftwood Island online counter", { headers: { "content-type": "text/plain; charset=utf-8" } });
   },
 };

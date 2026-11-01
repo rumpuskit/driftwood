@@ -71,7 +71,7 @@ class TasinmaTest(unittest.TestCase):
         code, out = self.send({"tur": "liste", "takipci": 13, "liste": liste})
         self.assertEqual(code, 0, out)
         self.assertEqual((out["gelen"], out["nufus"], out["ayrilan"]), (12, 12, 0))
-        self.assertIn("Kahvehane", " ".join(out["acilan"]))
+        self.assertIn("Driftwood Diner", " ".join(out["acilan"]))
         order = self.q("SELECT string_agg(handle, ',' ORDER BY slot) FROM sakinler").split(",")
         self.assertEqual(order[:5], ["ilk", "b0", "b1", "b2", "b3"])
         # Profilde 13, listede 12: biri listede hiç görünmüyor (gizli hesap), iskelede beklemez.
@@ -103,11 +103,11 @@ class TasinmaTest(unittest.TestCase):
         self.assertEqual(self.send({"tur": "liste", "takipci": 6, "liste": liste})[0], 0)
         t = int(time.time()) - 3600
         yorumlar = [
-            ["c1", "Ali", t, "meslek: balıkçı"],
-            ["c2", "ayse", t, "adımı gizle lütfen"],
-            ["c3", "yeni", t, "hobi: tavla"],              # henüz adada değil: bekler
-            ["c4", "driftwoodlive", t, "meslek: doktor"],  # kendi yorumumuz
-            ["c5", "ali", t - 600, "meslek: doktor"],      # daha eski: balıkçıyı ezmez
+            ["c1", "Ali", t, "job: fisherman"],
+            ["c2", "ayse", t, "hide my name please"],
+            ["c3", "yeni", t, "hobby: cornhole"],              # henüz adada değil: bekler
+            ["c4", "driftwoodlive", t, "job: doctor"],  # kendi yorumumuz
+            ["c5", "ali", t - 600, "job: doctor"],      # daha eski: balıkçıyı ezmez
             ["c6", "k00", t, "çok güzel olmuş"],
             ["c7", "k01", t, None],
         ]
@@ -124,16 +124,16 @@ class TasinmaTest(unittest.TestCase):
         self.assertEqual((out["istek"], out["uygulanan"]), (0, []))
 
         # Sonradan yazılan istek geçer; geç okunan daha eski yorum ezmez.
-        self.send({"tur": "yorumlar", "yorumlar": [["c8", "ali", t + 60, "hobim satranç, mesleğim aşçı"]]})
-        self.send({"tur": "yorumlar", "yorumlar": [["c9", "ali", t - 60, "meslek: mimar"]]})
+        self.send({"tur": "yorumlar", "yorumlar": [["c8", "ali", t + 60, "hobby chess, job cook"]]})
+        self.send({"tur": "yorumlar", "yorumlar": [["c9", "ali", t - 60, "job: architect"]]})
         self.assertEqual(self.q("SELECT overrides FROM sakinler WHERE handle = 'ali'"),
                          '{"hobi": "satranc", "meslek": "asci"}')
-        self.send({"tur": "yorumlar", "yorumlar": [["c10", "ayse", t + 60, "adımı göster"]]})
+        self.send({"tur": "yorumlar", "yorumlar": [["c10", "ayse", t + 60, "show my name"]]})
         self.assertEqual(self.q("SELECT hidden FROM sakinler WHERE handle = 'ayse'"), "f")
 
         # "yeni" taşınınca bekleyen isteği uygulanır.
         code, out = self.send({"tur": "liste", "takipci": 7, "liste": liste + [["yeni", 500, 0]]})
-        self.assertEqual(out["istek_uygulanan"], [["yeni", "hobi", "tavla"]])
+        self.assertEqual(out["istek_uygulanan"], [["yeni", "hobi", "cornhole"]])
         # İstek kaydı 30 gün tutulur (8 günlük durur), sonra silinir (etkisi sakinde kalır); çıkanın istekleri hemen silinir.
         self.q("UPDATE istekler SET created_at = now() - interval '8 days' WHERE handle = 'yeni'")
         self.send({"tur": "yorumlar", "yorumlar": []})
@@ -141,7 +141,7 @@ class TasinmaTest(unittest.TestCase):
         self.q("UPDATE istekler SET created_at = now() - interval '31 days' WHERE handle = 'yeni'")
         self.send({"tur": "yorumlar", "yorumlar": []})
         self.assertEqual(self.q("SELECT count(*) FROM istekler WHERE handle = 'yeni'"), "0")
-        self.assertEqual(self.q("SELECT overrides->>'hobi' FROM sakinler WHERE handle = 'yeni'"), "tavla")
+        self.assertEqual(self.q("SELECT overrides->>'hobi' FROM sakinler WHERE handle = 'yeni'"), "cornhole")
         sh(sys.executable, str(SERVER / "cikar.py"), "ali", env=self.env, cwd=SERVER)
         self.assertEqual(self.q("SELECT count(*) FROM istekler WHERE handle = 'ali'"), "0")
         # Bozuk yorum listesi hata değil, bozuk satırlar geçilir; liste değilse hata.
@@ -154,25 +154,25 @@ class TasinmaTest(unittest.TestCase):
         self.assertEqual(self.send({"tur": "liste", "takipci": 10, "liste": liste})[0], 0)
         t = int(time.time()) - 3600
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
-            ["m1", "k01", t + 60, "meslek: muhtar"], ["m2", "k00", t, "Meslek:muhtar"], ["m3", "k02", t, "meslek: polis"]]})
+            ["m1", "k01", t + 60, "job: neighborhood association president"], ["m2", "k00", t, "Job:Neighborhood Association President"], ["m3", "k02", t, "job: police officer"]]})
         self.assertEqual(code, 0, out)
         self.assertEqual(sorted(out["uygulanan"]), [["k00", "meslek", "muhtar"], ["k02", "meslek", "polis"]])
         self.assertEqual(out["dolu"], [["k01", "muhtar"]])
-        code, out = self.send({"tur": "yorumlar", "yorumlar": [["m4", "k03", t + 120, "muhtar olmak istiyorum"]]})
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [["m4", "k03", t + 120, "I wanna be the neighborhood association president"]]})
         self.assertEqual((out["uygulanan"], out["dolu"]), ([], [["k03", "muhtar"]]))
         # Muhtar takibi bırakır: koltuk boşalır, yeni istek geçer.
         self.assertEqual(self.send({"tur": "liste", "takipci": 9, "liste": liste[1:]})[0], 0)
         self.assertEqual(self.q("SELECT overrides FROM sakinler WHERE handle = 'k00'"), "{}")
-        code, out = self.send({"tur": "yorumlar", "yorumlar": [["m5", "k03", t + 180, "meslek: muhtar"]]})
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [["m5", "k03", t + 180, "job: neighborhood association president"]]})
         self.assertEqual(out["uygulanan"], [["k03", "meslek", "muhtar"]])
         self.assertNotIn("dolu", out)
         # Okul müdürü de tek koltuk; muhtarlıktan bağımsız.
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
-            ["m6", "k04", t, "meslek: okul müdürü"], ["m7", "k05", t + 5, "okul müdürü olmak istiyorum"]]})
+            ["m6", "k04", t, "job: principal"], ["m7", "k05", t + 5, "I want to be the principal"]]})
         self.assertEqual((out["uygulanan"], out["dolu"]), ([["k04", "meslek", "okul_muduru"]], [["k05", "okul_muduru"]]))
         # Fener bekçisi: adada tek koltuk (8. sakinin kadrosu, isteyen olursa isteyen alır).
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
-            ["m8", "k06", t, "meslek: fener bekçisi"], ["m9", "k08", t + 5, "fener bekçisi"]]})
+            ["m8", "k06", t, "job: lighthouse keeper"], ["m9", "k08", t + 5, "lighthouse keeper"]]})
         self.assertEqual((out["uygulanan"], out["dolu"]), ([["k06", "meslek", "fener_bekcisi"]], [["k08", "fener_bekcisi"]]))
 
     def test_belediye_secimi(self):
@@ -183,12 +183,12 @@ class TasinmaTest(unittest.TestCase):
         self.assertEqual(self.published()["secim"]["durum"], "acik")
         t = int(time.time()) + 60  # seçim açıldıktan sonra yazılan yorumlar (öncekiler sayılmaz)
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
-            ["s0", "k002", t - 30, "meslek: polis"], ["s9", "k007", t - 3600, "adayım"],
-            ["s1", "k001", t - 20, "adayım"], ["s2", "k002", t - 10, "Başkan adayıyım!"],
-            ["s3", "k003", t, "oy: @k001"], ["s4", "k004", t, "oyum @K002"],
-            ["s5", "k005", t - 5, "oy @k001"], ["s6", "k005", t, "oy: @k002."],  # son oy geçer
-            ["s7", "yabanci", t, "oy: @k001"],                                      # adada değil
-            ["s8", "k006", t, "adaya yeni taşındım, oyun güzel @k001"]]})            # ne aday ne oy
+            ["s0", "k002", t - 30, "job: police officer"], ["s9", "k007", t - 3600, "I'm running"],
+            ["s1", "k001", t - 20, "I'm running"], ["s2", "k002", t - 10, "Running for mayor!"],
+            ["s3", "k003", t, "vote: @k001"], ["s4", "k004", t, "my vote goes to @K002"],
+            ["s5", "k005", t - 5, "vote @k001"], ["s6", "k005", t, "vote: @k002."],  # son oy geçer
+            ["s7", "yabanci", t, "vote: @k001"],                                      # adada değil
+            ["s8", "k006", t, "just moved here, great game @k001"]]})            # ne aday ne oy
         self.assertEqual((code, out["secim"]), (0, {"aday": 2, "oy": 3}), out)
         self.assertEqual(self.published()["secim"]["adaylar"], [["k002", 2], ["k001", 1]])
         # Süre dolar: sonraki taşınmada sonuç. Kazanan başkan olur, eski mesleği saklanır.

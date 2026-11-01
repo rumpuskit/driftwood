@@ -58,5 +58,5 @@ export const api = {
   anket: (ids) => call("GET", `/api/anket?id=${ids.join(",")}&cihaz=${deviceId()}`),
   oy: (id, secim) => call("POST", "/api/anket", { id, secim, cihaz: deviceId() }),
   bulundu: (gun, post = false) => (post ? call("POST", "/api/bulundu", { gun, cihaz: deviceId() }) : call("GET", `/api/bulundu?gun=${gun}`)),
-  tercihler: async () => { const r = await call("GET", "/tercihler.json"); if (!r || typeof r.tercih !== "object") throw new Error("liste yok"); return r; },
+  tercihler: async () => { const r = await call("GET", "/tercihler.json"); if (!r || typeof r.tercih !== "object") throw new Error("no list"); return r; },
 };

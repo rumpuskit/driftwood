@@ -309,7 +309,7 @@ export class Dollhouse {
     const spots = { entry: { p: entry, heading: 0 } };
     const occupant = this.people.slotToIndex.get(slot);
     const job = occupant != null ? this.people.works[occupant].job : "";
-    const ctx = { x0, x1, cx, A, B, sA, wood, pick, spots, job, key };
+    const ctx = { x0, x1, cx, A, B, sA, wood, pick, spots, job, key, pref };
     for (const r of rooms) this._furnish(add, r, ctx);
 
     // Evcil hayvan.
@@ -337,7 +337,7 @@ export class Dollhouse {
 
   /** Oda döşeme: türüne göre eşyalar; noktalar spots'a yazılır. Orta aks (cx ± 0,5) boş kalır. */
   _furnish(add, r, o) {
-    const { A, B, sA, wood, pick, spots } = o;
+    const { A, B, sA, wood, pick, spots, pref } = o;
     const zc = (r.z0 + r.z1) / 2, dz = r.z1 - r.z0;
     const ax = (d) => A + sA * d; // A duvarından içeri d metre
     const bx = (d) => B - sA * d; // B duvarından içeri d metre
@@ -482,15 +482,15 @@ export class Dollhouse {
   _pet(add, animal, spots, key) {
     const t = H(key, 9);
     const base = spots.sofa?.p ?? spots.desk?.p ?? [0, 0];
-    if (animal === "Kedi" || animal === "Köpek") {
-      const cat = animal === "Kedi";
+    if (animal === "Cat" || animal === "Dog") {
+      const cat = animal === "Cat";
       const col = (cat ? ["#e0a050", "#3a3533", "#f2f0ea", "#8a8a8a"] : ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f"])[Math.floor(t * 4)];
       const body = add(0, 0, 0, 0, 0, 0, col, 0, { geo: cat ? new THREE.SphereGeometry(0.17, 10, 8).scale(0.75, 0.7, 1.35) : new THREE.CapsuleGeometry(0.14, 0.42, 4, 8).rotateX(Math.PI / 2) });
       const head = add(0, 0, 0, 0, 0, 0, col, 0, { geo: new THREE.SphereGeometry(cat ? 0.1 : 0.12, 8, 6) });
       if (!cat) add(0.8, 0.08, 0.6, base[0] + (spots.sofa?.heading > 0 ? 1.6 : -1.6), 0.06, base[1] + 1.2, "#8a5a32", 0, { shadow: false });
       return { kind: cat ? "kedi" : "kopek", body, head, base, facing: spots.sofa?.heading ?? 0, ph: t * 40 };
     }
-    if (animal === "Papağan") {
+    if (animal === "Parrot") {
       add(0.4, 0.55, 0.4, base[0], 1.0, base[1] - 1.6, "#cfd6de", 0, { mat: { metalness: 0.6, wireframe: true } });
       add(0.03, 1.0, 0.03, base[0], 0.06, base[1] - 1.6, "#3c4148", 0, { shadow: false });
       const bird = add(0.12, 0.22, 0.1, base[0], 1.15, base[1] - 1.6, "#3fa34d");

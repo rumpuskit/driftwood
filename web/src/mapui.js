@@ -2,10 +2,12 @@
 // yazarken öneri), yakınlaştırma ve pusula.
 import { svg, YER_SIMGE } from "./icons.js";
 import { at } from "./ui.js";
+import * as sim from "./sim.js";
 
 const $ = (id) => document.getElementById(id);
-// Arama için: büyük/küçük harf ve Türkçe karakter farkı gözetilmez.
-const fold = (t) => t.replace(/İ/g, "i").replace(/I/g, "ı").toLocaleLowerCase("tr").replace(/[çğıöşü]/g, (c) => "cgiosu"["çğıöşü".indexOf(c)]).trim();
+// Arama için: büyük/küçük harf ve aksan farkı gözetilmez ("Café" = "cafe").
+const fold = (t) => t.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const yerAdi = (kind, yedek) => sim.cat()?.isyerleri?.[kind]?.[0] ?? yedek;
 
 export function createMapUI({ world, camera, controls, flyTo, ui, residents, zeplin = null }) {
   const { x0, x1, z0, z1 } = world.bounds;
@@ -128,18 +130,20 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents, zep
 
   // Yerler (yalnızca adada açılmış olanlar): panelde simgeli düğmeler, aramada öneri.
   const prom = world.promenade, park = world.plazas.find((q) => q.kind === "park"), tarla = world.workplaces.tarla?.find(Boolean);
+  // Mahalle etiketleri: katalogdaki mahalle adlarıyla aynı metin (sim.mahalleName, soneksiz).
+  const mahalleler = new Set(sim.cat().mahalleler);
   const places = [
-    ["Meydan", 0, 0, 90],
-    ["İskele", 0, world.coastPoint(0, 60, 0, 1)[1] + 10, 110],
-    prom && ["Sahil", ...prom[Math.floor(prom.length / 2)], 90],
-    park && ["Park", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 120],
-    ["Plaj", ...world.places.plaj.anchors[4], 110],
-    ["Tepe", ...world.places.tepe.anchors[0], 120],
-    ["Fener", world.fener.x, world.fener.z, 90],
-    tarla && ["Tarlalar", ...tarla.anchor, 160],
-    ...world.labels.filter((l) => /Mahallesi$/.test(l.text)).map((l) => [l.text.replace(" Mahallesi", ""), l.x, l.z, 220]),
+    ["Town Green", 0, 0, 90],
+    ["Ferry Landing", 0, world.coastPoint(0, 60, 0, 1)[1] + 10, 110],
+    prom && ["Harbor Walk", ...prom[Math.floor(prom.length / 2)], 90],
+    park && ["Kettle Pond Park", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 120],
+    [yerAdi("plaj", "Ocean Beach"), ...world.places.plaj.anchors[4], 110],
+    ["Bluff Head", ...world.places.tepe.anchors[0], 120],
+    [yerAdi("fener", "Gull Point Light"), world.fener.x, world.fener.z, 90],
+    tarla && [tarla.name ?? yerAdi("tarla", "Cranberry Bog"), ...tarla.anchor, 160],
+    ...world.labels.filter((l) => mahalleler.has(l.text)).map((l) => [l.text, l.x, l.z, 220]),
     // Zeplin: yeri sabit değil; dokununca kartı açılır ve uçuştaysa izlenir.
-    zeplin && ["Zeplin", 0, 0, 0, () => ui.selectVehicle({ kind: "zeplin" })],
+    zeplin && [yerAdi("zeplin", "Driftwood Blimp"), 0, 0, 0, () => ui.selectVehicle({ kind: "zeplin" })],
   ].filter(Boolean);
   const icon = (name) => svg(YER_SIMGE[name] ?? "mahalle");
   const go = ([, x, z, d, act]) => {
@@ -187,8 +191,8 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents, zep
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       const ic = document.createElement("span"), name = document.createElement("span"), note = document.createElement("small");
-      if (it.kind === "yer") { ic.innerHTML = icon(it.pl[0]); name.textContent = it.pl[0]; note.textContent = "yer"; }
-      else { ic.innerHTML = svg("kisi"); name.textContent = at(residents[it.i]); note.textContent = "sakin"; }
+      if (it.kind === "yer") { ic.innerHTML = icon(it.pl[0]); name.textContent = it.pl[0]; note.textContent = "place"; }
+      else { ic.innerHTML = svg("kisi"); name.textContent = at(residents[it.i]); note.textContent = "resident"; }
       li.append(ic, name, note);
       li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(n); });
       return li;

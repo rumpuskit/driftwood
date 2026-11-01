@@ -149,23 +149,36 @@ def ada_name(ada: int) -> str:
 
 def mahalle_name(mahalle: int) -> str:
     names = catalog()["mahalleler"]
-    name = names[mahalle % len(names)]
-    if mahalle >= len(names):
-        name += f" {mahalle // len(names) + 1}"
-    return name + " Mahallesi"
+    return names[mahalle % len(names)]
 
 
 def sokak_name(mahalle: int, sokak: int) -> str:
-    names = catalog()["sokaklar"]
-    return names[(sokak + mahalle * 7) % len(names)] + " Sokağı"
+    names, ekler = catalog()["sokaklar"], catalog()["sokak_ekleri"]
+    g = (mahalle % cap("mahalle_per_ada")) * cap("sokak_per_mahalle") + sokak
+    n = g % len(names)
+    return f"{names[n]} {ekler[(g // len(names) + n) % len(ekler)]}"
+
+
+def housing_of(mahalle: int) -> dict:
+    mi = mahalle % cap("mahalle_per_ada")
+    return next(k for k in catalog()["konut"] if k.get("son") is None or mi <= k["son"])
+
+
+def house_of(slot: int) -> dict:
+    p = address_parts(slot)
+    k = housing_of(p["mahalle"])
+    i = p["bina"] * cap("daire_per_bina") + p["daire"]
+    return {"tip": k["tip"], "birim": k["birim"], "ev": i // k["birim"], "apt": i % k["birim"] + 1 if k["birim"] > 1 else 0}
+
+
+def street_address(slot: int) -> str:
+    p, h = address_parts(slot), house_of(slot)
+    return f"{h['ev'] + 1} {sokak_name(p['mahalle'], p['sokak'])}" + (f", Apt {h['apt']}" if h["apt"] else "")
 
 
 def address_text(slot: int) -> str:
     p = address_parts(slot)
-    return (
-        f"{sokak_name(p['mahalle'], p['sokak'])} No {p['bina'] + 1}, Daire {p['daire'] + 1}, "
-        f"{mahalle_name(p['mahalle'])}, {ada_name(p['ada'])}"
-    )
+    return f"{street_address(slot)}, {mahalle_name(p['mahalle'])}, {ada_name(p['ada'])}"
 
 
 # --- sakin (resident_sim.gd) ---
@@ -460,7 +473,7 @@ def day_plan(r: dict, day: int) -> list:
         _add(plan, 30 + roll(s, "gece_donus", day - 1) % 60, "meydan", "meydan")
         _travel(plan, commute, "meydan", PLACE_HOME)
 
-    sleep = 1350 + roll(s, "uyku", day) % 80
+    sleep = 1350 + roll(s, "uyku", day) % 50
     if works_on(r, day) and job(r)["yer"] == "ev":
         # Evden çalışan: sabah evde masasında; çoğu öğle arasında kısa bir çıkış yapar; akşam işçiler gibi.
         shift = catalog()["vardiyalar"][shift_of(r)]

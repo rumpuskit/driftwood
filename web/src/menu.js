@@ -4,6 +4,7 @@
 import { svg } from "./icons.js";
 import { photoFrame, shareCanvas } from "./paylas.js";
 import * as sim from "./sim.js";
+import { DAYS, clockText } from "./fmt.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -50,7 +51,7 @@ export function createMenu({ capture, minute, today, shiftView, toast }) {
     document.body.classList.add("foto");
     $("foto-bar").hidden = false;
     slider.value = String(Math.round(minute()));
-    label.textContent = sim.formatMinute(minute());
+    label.textContent = clockText(minute());
   }
   function exitPhoto() {
     foto = false;
@@ -62,7 +63,7 @@ export function createMenu({ capture, minute, today, shiftView, toast }) {
   slider.addEventListener("input", () => {
     const m = Number(slider.value);
     shiftView(m);
-    label.textContent = sim.formatMinute(m);
+    label.textContent = clockText(m);
   });
   let lastShot = null;
   $("foto-cek").addEventListener("click", () => {
@@ -70,16 +71,15 @@ export function createMenu({ capture, minute, today, shiftView, toast }) {
     const h = Math.round(w * (innerHeight / innerWidth));
     const shot = capture(null, w, h);
     const day = today();
-    const days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
-    lastShot = photoFrame(shot, `${days[sim.weekday(day)]} ${sim.formatMinute(minute())}`);
+    lastShot = photoFrame(shot, `${DAYS[sim.weekday(day)]} ${clockText(minute())}`);
     $("foto-img").src = lastShot.toDataURL("image/jpeg", 0.9);
     $("foto-onizleme").hidden = false;
   });
   $("foto-yeniden").addEventListener("click", () => { $("foto-onizleme").hidden = true; });
   $("foto-paylas").addEventListener("click", async () => {
     if (!lastShot) return;
-    const res = await shareCanvas(lastShot, { name: `driftwood-foto-${Date.now()}`, text: "Driftwood'dan bir kare", url: "https://driftwood.rumpuskit.com" });
-    if (res.startsWith("indirildi")) toast("Fotoğraf indirildi");
+    const res = await shareCanvas(lastShot, { name: `driftwood-foto-${Date.now()}`, text: "A moment on Driftwood Island", url: "https://driftwood.rumpuskit.com" });
+    if (res.startsWith("indirildi")) toast("Photo downloaded");
   });
   $("foto-kapat").addEventListener("click", exitPhoto);
 

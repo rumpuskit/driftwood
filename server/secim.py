@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Belediye başkanlığı seçimi: belediye açılınca (katalog: belediye:0) adanın ilk seçimi başlar.
+"""Mayor seçimi: Town Hall açılınca (katalog: belediye:0) adanın ilk seçimi başlar.
 
-Seçim 3 gün sürer; kazananın dönemi 30 gün, sonra yeni seçim. Her şey yorumlarla:
-    adayım / başkan adayıyım / belediye başkanı olmak istiyorum   → aday olur (adada oturuyorsa)
-    oy: @kullaniciadi / oyum @kullaniciadi                         → o adaya oy (seçmen adada oturmalı)
+Seçim 3 gün sürer; kazananın dönemi 30 gün, sonra yeni seçim. Her şey yorumlarla (İngilizce):
+    I'm running / running for mayor / I want to be mayor / vote for me   → aday olur (adada oturuyorsa)
+    vote: @handle / my vote goes to @handle / voting for @handle          → o adaya oy (seçmen adada oturmalı)
 Seçmen başına tek oy; en son yazılan geçer. Sonuç: en çok oy, eşitlikte önce aday olan. Aday ya da oy
 yoksa seçim bir dönem (3 gün) uzar. Kazanana "belediye_baskani" mesleği verilir (sim: belediyede çalışır);
 dönemi biten ya da adadan ayrılan başkanın önceki mesleği geri gelir (overrides.eski_meslek).
@@ -56,9 +56,10 @@ CREATE TABLE IF NOT EXISTS secim_oylar (
 );
 """
 
-ADAY = re.compile(r"\b(?:aday(?:im|iyim|ligimi|ligimizi)?|baskan adayi\w*|belediye baskani ol\w*|baskan olmak isti\w*"
-                  r"|mesle[kg]\w* (?:belediye )?baskan\w*)\b")
-OY = re.compile(r"\boy(?:um|umu|u|lar|larimi|umuz)?\b")
+ADAY = re.compile(r"\b(?:im running|i am running|running for mayor|run for mayor|i want to be (?:the )?mayor"
+                  r"|i wanna be (?:the )?mayor|make me (?:the )?mayor|vote for me|mayor candidate|im a candidate"
+                  r"|(?:job|jobs) mayor|i choose mayor)\b")
+OY = re.compile(r"\bvot(?:e|es|ed|ing)\b")
 ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
 
 
@@ -69,7 +70,7 @@ BIRAK = f"""UPDATE sakinler SET overrides = (overrides - 'meslek' - 'eski_meslek
 
 
 def cozumle(text: str) -> dict:
-    """{"aday": True} ya da {"oy": "kullaniciadi"}; ikisi de yoksa {}. Oy, @etiket ve "oy" kelimesi ister."""
+    """{"aday": True} ya da {"oy": "kullaniciadi"}; ikisi de yoksa {}. Oy, @etiket ve "vote" kelimesi ister."""
     t = katla(text[:300])
     out = {}
     m = ETIKET.search(text)
@@ -89,7 +90,7 @@ def site_items(db: str = DB) -> list:
     if not r or not r.get("oylar"):
         return []
     items = [[f"site:{o['handle']}:{o['olusma']}", o["handle"], int(o["olusma"]) // 1000,
-              "adayım" if o["tur"] == "aday" else f"oy @{o['aday']}"] for o in r["oylar"]]
+              "I'm running" if o["tur"] == "aday" else f"vote: @{o['aday']}"] for o in r["oylar"]]
     en_son = max(int(o["olusma"]) for o in r["oylar"])
     psql(f"""INSERT INTO durum (anahtar, deger) VALUES ('secim_site_son', '{{"ms": {en_son}}}')
              ON CONFLICT (anahtar) DO UPDATE SET deger = EXCLUDED.deger, updated_at = now();""", db)

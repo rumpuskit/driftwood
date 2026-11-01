@@ -1,9 +1,11 @@
 // Ada turu: ilk gelen için kamerayla 30 saniyelik gezinti (meydan, mahalle, iskele, tepe ve fener, plaj, günün
 // olayı, sıradaki şantiye). Her durakta gerçek bilgi; kullanıcı kamerayı tutunca ya da "Turu bitir"de biter.
 import * as sim from "./sim.js";
+import { FERRY } from "./world/ferry.js";
+import { num, plural } from "./fmt.js";
 
 const $ = (id) => document.getElementById(id);
-const fmt = new Intl.NumberFormat("tr-TR");
+const yerAdi = (kind, yedek) => sim.cat()?.isyerleri?.[kind]?.[0] ?? yedek;
 
 export function createTour({ world, people, residents, flyTo, cinema, vec }) {
   let timer = null, running = false;
@@ -12,23 +14,24 @@ export function createTour({ world, people, residents, flyTo, cinema, vec }) {
     const out = [];
     const N = residents.length;
     const out1 = people.activities.filter((a) => a && !["ev", "uyku", "is"].includes(a.ne)).length;
-    out.push({ at: [0, 0], d: 90, t: "Meydan", s: N ? `Adada ${fmt.format(N)} kişi yaşıyor; şu an ${fmt.format(out1)} kişi dışarıda.` : "Ada ilk sakinini bekliyor." });
+    out.push({ at: [0, 0], d: 90, t: "Town Green", s: N ? `${plural(N, "resident")} live on the island; ${num(out1)} are out and about right now.` : "The island is waiting for its first resident." });
     const homes = world.buildings.filter((b) => b.daireler);
     if (homes.length) {
       const cx = homes.reduce((a, b) => a + b.x, 0) / homes.length, cz = homes.reduce((a, b) => a + b.z, 0) / homes.length;
-      const lab = world.labels.find((l) => /Mahallesi$/.test(l.text));
-      out.push({ at: [cx, cz], d: 120, t: lab?.text ?? "Evler", s: "Takip eden herkesin burada bir evi var. Arama çubuğuna @kullanıcıadını yaz, evini bul." });
+      const mahalleler = new Set(sim.cat().mahalleler);
+      const lab = world.labels.find((l) => mahalleler.has(l.text));
+      out.push({ at: [cx, cz], d: 120, t: lab?.text ?? "Homes", s: "Every follower has a home here. Type your @username in the search bar to find yours." });
     }
     const pier = world.ferryPier;
-    if (pier) out.push({ at: [0, pier.z0 + 30], d: 80, t: "Vapur iskelesi", s: "Vapur 20 dakikada bir yanaşıyor. Yeni gelenler buradan iner, anakarada çalışanlar buradan gider." });
-    if (world.places.tepe) out.push({ at: world.places.tepe.anchors[0], d: 110, t: "Tepe", s: "Yürüyüş patikası, piknik örtüleri, akşamları gün batımı." });
-    if (world.fener) out.push({ at: [world.fener.x, world.fener.z], d: 70, t: "Fener", s: "Adanın en eski yapısı. Gece boyu yanar." });
+    if (pier) out.push({ at: [0, pier.z0 + 30], d: 80, t: "Ferry Landing", s: `The ferry comes in every ${FERRY.period} minutes. Newcomers arrive here, and mainland commuters leave from here.` });
+    if (world.places.tepe) out.push({ at: world.places.tepe.anchors[0], d: 110, t: "Bluff Head", s: "A hiking trail, picnic blankets and sunsets in the evening." });
+    if (world.fener) out.push({ at: [world.fener.x, world.fener.z], d: 70, t: yerAdi("fener", "Gull Point Light"), s: "The oldest building on the island. It shines all night." });
     const plaj = world.places.plaj?.anchors;
-    if (plaj?.length) out.push({ at: cinema?.spot ?? plaj[plaj.length >> 1], d: 90, t: "Plaj", s: "Kumsal yürüyüşleri, taş sektirenler; cumartesi akşamı açık hava sineması." });
+    if (plaj?.length) out.push({ at: cinema?.spot ?? plaj[plaj.length >> 1], d: 90, t: yerAdi("plaj", "Ocean Beach"), s: "Beach walks and stone skipping; movie night on Saturday evenings." });
     const th = people.theme;
-    if (th) out.push({ at: th.yer === "plaj" && cinema ? cinema.spot : world.placeOf(th.yer).anchors[0], d: 100, t: "Bugün", s: th.ad });
+    if (th) out.push({ at: th.yer === "plaj" && cinema ? cinema.spot : world.placeOf(th.yer).anchors[0], d: 100, t: "Today", s: th.ad });
     const ns = world.nextStage;
-    if (ns?.at) out.push({ at: ns.at, d: 110, t: `Sırada: ${ns.name}`, s: `${fmt.format(Math.max(1, ns.nufus - N))} kişi daha gelince açılıyor. Takip et, adaya taşın.` });
+    if (ns?.at) out.push({ at: ns.at, d: 110, t: `Next: ${ns.name}`, s: `Opens with ${plural(Math.max(1, ns.nufus - N), "more resident")}. Follow and move to the island.` });
     return out;
   }
 
@@ -73,19 +76,19 @@ export function createTour({ world, people, residents, flyTo, cinema, vec }) {
   let offerTimer = null;
   function offer() {
     if (running) return;
-    $("tur-yazi").textContent = "İlk kez mi geliyorsun?";
+    $("tur-yazi").textContent = "First time here?";
     const small = document.createElement("small");
-    small.textContent = "30 saniyelik ada turu: meydan, evler, iskele, tepe, plaj ve bugünün olayı.";
+    small.textContent = "Take a 30-second tour of the island.";
     $("tur-yazi").append(small);
     $("tur-basla").hidden = false;
-    $("tur-bitir").textContent = "Geç";
+    $("tur-bitir").textContent = "Skip";
     $("tur").hidden = false;
     offerTimer = setTimeout(() => { if (!running) closeOffer(); }, 12000);
   }
   function closeOffer() {
     clearTimeout(offerTimer);
     $("tur-basla").hidden = true;
-    $("tur-bitir").textContent = "Turu bitir";
+    $("tur-bitir").textContent = "End tour";
     if (!running) $("tur").hidden = true;
   }
   $("tur-basla").addEventListener("click", () => { closeOffer(); start(); });

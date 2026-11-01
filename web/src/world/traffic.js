@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { stations } from "./roads.js";
-import { CELL_D, CELL_W } from "./layout.js";
+import { ZONE, mainZ, zoneToWorld } from "./island.js";
 import { MinHeap } from "./heap.js";
 import { mahalleName } from "../sim.js";
 import { pedState, signalState } from "./signals.js";
@@ -492,7 +492,6 @@ export class Traffic {
     const w = this.world;
     this.lines = [];
     if (w.vehicles === false) return;
-    const halfW = CELL_W / 2, halfD = CELL_D / 2;
     const make = (name, color, waypoints, headway) => {
       const seq = this._loopSeq(waypoints);
       if (!seq) return;
@@ -526,21 +525,21 @@ export class Traffic {
       const cycle = route.len / BUS_NOMINAL / 60 + (stops.length * BUS_DWELL) / 60;
       this.lines.push({ name, color, route, stops, headway, cycle, first: 360, last: 1440 - Math.ceil(cycle) - 5 });
     };
-    const avZ0 = w.avenueZ(0);
-    make("Çevre Hattı", "#d8433d", [[halfW, -halfD + 20], [halfW - 30, avZ0], [-halfW + 30, avZ0], [-halfW, -halfD + 20]], 8);
-    const cells = w.cells.filter((c) => c.type === "mahalle");
-    if (cells.length) {
-      const pts = [[halfW, -halfD + 20]];
-      for (const c of cells) pts.push([c.cx * CELL_W, c.cz * CELL_D]);
-      pts.push([-halfW, -halfD + 20]);
-      make("Mahalle Hattı", "#2f6fb5", pts, 10);
-      // Her mahallenin kendi hattı: dış caddeleri ve orta caddesi boyunca halka.
-      const colors = ["#3e8a86", "#8a62d1", "#d9822b", "#2f7a4f", "#b8312f"];
-      cells.forEach((c, k) => {
-        const ox = c.cx * CELL_W, oz = c.cz * CELL_D;
-        make(`${mahalleName(c.mahalle).replace(" Mahallesi", "")} Hattı`, colors[k % colors.length], [
-          [ox, oz - halfD + 40], [ox + halfW - 30, oz - halfD], [ox + halfW, oz + halfD - 40],
-          [ox, oz + halfD], [ox - halfW, oz + halfD - 40], [ox - halfW + 30, oz - halfD],
+    // Island Shuttle: Main Street ve Town Green çevresinde halka (feribot iskelesinin önünden geçer).
+    make("Island Shuttle", "#c43a3a", [[400, mainZ(400)], [-400, mainZ(-400)], [-90, -58], [90, -58]], 8);
+    const built = w.zones.slice(0, w.mahalleler);
+    if (built.length) {
+      // Neighborhood Loop: kasabadan kurulu mahallelerin giriş caddelerine uğrar.
+      const pts = [[300, mainZ(300)]];
+      for (const z of built) pts.push(zoneToWorld(z, 0, ZONE.depth / 2));
+      pts.push([-300, mainZ(-300)]);
+      make("Neighborhood Loop", "#2f4256", pts, 10);
+      // İlk mahallelerin kendi halkası: çevre yolları ve giriş caddesi boyunca.
+      const colors = ["#3e7a5a", "#8a62d1", "#d9822b", "#2f7fb5", "#8e2f2a"];
+      built.slice(0, 6).forEach((z, k) => {
+        const e = ZONE.side;
+        make(`${mahalleName(z.m)} Loop`, colors[k % colors.length], [
+          zoneToWorld(z, 0, 20), zoneToWorld(z, z.hw - e, ZONE.depth / 2), zoneToWorld(z, 0, ZONE.depth - e), zoneToWorld(z, -z.hw + e, ZONE.depth / 2),
         ], 12);
       });
     }

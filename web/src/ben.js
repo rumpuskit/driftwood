@@ -2,7 +2,7 @@
 // kişi kodu videolarımızdan birine yorum olarak yazar; yorumlar saatte bir okunur, kod o ada bağlanınca bu cihaz
 // o sakin olarak seçim yapabilir. Serbest metin yok: her seçim hazır listeden.
 import { api } from "./api.js";
-import { TIKTOK } from "./config.js";
+import { TASINMA_SAATLERI, TIKTOK, hourText } from "./config.js";
 import { ETKINLIK } from "./world/etkinlik.js";
 import { CICEK_AD, SECENEK, dateKey, setPrefs } from "./tercih.js";
 import * as sim from "./sim.js";
@@ -21,8 +21,8 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
   function render() {
     if (!sayfa.isOpen) return;
     clearInterval(poll); poll = null;
-    if (!state) return sayfa.set(el("p", "Yükleniyor…", "muted"));
-    if (state.hata) return sayfa.set([el("p", `Şu an bağlanılamadı (${state.hata}). Biraz sonra yeniden dene.`, "muted"), button("Yeniden dene", "ana", refresh)]);
+    if (!state) return sayfa.set(el("p", "Loading…", "muted"));
+    if (state.hata) return sayfa.set([el("p", `Couldn't connect right now (${state.hata}). Please try again in a bit.`, "muted"), button("Try again", "ana", refresh)]);
     if (state.handle) return sayfa.set(verified());
     if (state.bekleyen) {
       poll = setInterval(refresh, 60000); // yorumlar saatte bir okunur; açık kaldıkça dakikada bir bakılır
@@ -33,16 +33,16 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
 
   function start() {
     const out = [];
-    out.push(el("p", "Adadaki evin senin mi? Kendini doğrula: evinin duvar ve koltuk rengini, pencerendeki çiçekleri, evcilinin adını seç; bugün ne yapacağına ve kiminle buluşacağına sen karar ver."));
-    out.push(el("p", `Nasıl: kullanıcı adını yaz, sana 4 haneli bir kod verelim; kodu @${TIKTOK} videolarımızdan birine yorum olarak yaz. Şifre ya da giriş yok.`, "muted"));
+    out.push(el("p", "Is that home on the island yours? Verify it's you, then pick your wall and couch colors, your window flowers and your pet's name, and decide what you do today and who you meet."));
+    out.push(el("p", `How it works: type your username and we'll give you a 4-digit code. Post the code as a comment on any recent @${TIKTOK} video. No password, no login.`, "muted"));
     const input = el("input");
-    Object.assign(input, { type: "text", placeholder: "@kullanıcıadı", autocomplete: "off", spellcheck: false, inputMode: "text", value: prefill ? "@" + prefill : "" });
+    Object.assign(input, { type: "text", placeholder: "@username", autocomplete: "off", spellcheck: false, inputMode: "text", value: prefill ? "@" + prefill : "" });
     input.className = "ben-input";
     input.style.cssText = "width:100%;box-sizing:border-box;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--glass-2);color:var(--ink);font:800 15px Nunito,system-ui,sans-serif;margin:8px 0";
     const msg = el("p", "", "muted");
-    const go = button("Kod al", "ana", async () => {
+    const go = button("Get my code", "ana", async () => {
       const h = input.value.trim().replace(/^@/, "").toLowerCase();
-      if (!/^[a-z0-9._]{2,24}$/.test(h)) { msg.textContent = "Kullanıcı adını TikTok'taki gibi yaz (harf, rakam, nokta, alt çizgi)."; return; }
+      if (!/^[a-z0-9._]{2,24}$/.test(h)) { msg.textContent = "Type your username exactly as on TikTok (letters, numbers, periods, underscores)."; return; }
       if (busy) return;
       busy = true;
       try { await api.baslat(h); await refresh(); } catch (e) { msg.textContent = e.message; } finally { busy = false; }
@@ -55,13 +55,13 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
   function pending() {
     const { kod, handle } = state.bekleyen;
     const out = [];
-    out.push(el("p", `@${handle} için kodun:`));
+    out.push(el("p", `Your code for @${handle}:`));
     out.push(el("p", kod, "kod"));
-    out.push(el("p", `@${TIKTOK} videolarımızdan herhangi birine yorum olarak şunu yaz:`));
-    out.push(el("p", `kod ${kod}`, "kod"));
-    out.push(el("p", "Yorumlar saatte bir okunur; kodun eşleşince bu ekran kendiliğinden açılır (sayfayı kapatsan da bu cihaz hatırlar). Kod 48 saat geçerli.", "muted"));
-    if (idxOf(handle) < 0) out.push(el("p", "Bu ad şu an adada görünmüyor: önce TikTok'ta takip et, sıradaki taşınmada evin hazırlanır.", "muted"));
-    out.push(button("Şimdi bak", "secim", refresh), button("Vazgeç", "secim", async () => { await api.cikis(); state = null; refresh(); }));
+    out.push(el("p", `Comment this on any recent @${TIKTOK} video:`));
+    out.push(el("p", `code ${kod}`, "kod"));
+    out.push(el("p", `Comments are read at each move-in (${TASINMA_SAATLERI.map(hourText).join(", ")} ET). When your code matches, this page opens by itself (this device remembers, even if you close the page). The code is good for 48 hours.`, "muted"));
+    if (idxOf(handle) < 0) out.push(el("p", "This name isn't on the island right now. Follow on TikTok first; your home is ready at the next move-in.", "muted"));
+    out.push(button("Check now", "secim", refresh), button("Cancel", "secim", async () => { await api.cikis(); state = null; refresh(); }));
     return out;
   }
 
@@ -84,7 +84,7 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
       const b = el("button", null, "renk" + (state.tercih[key] === c ? " on" : ""));
       b.style.background = c;
       b.setAttribute("aria-label", `${title} ${c}`);
-      b.addEventListener("click", () => save({ [key]: state.tercih[key] === c ? null : c }, "Kaydedildi"));
+      b.addEventListener("click", () => save({ [key]: state.tercih[key] === c ? null : c }, "Saved"));
       box.append(b);
     }
     return [el("h3", title), box];
@@ -99,58 +99,58 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
   function verified() {
     const h = state.handle, i = idxOf(h), t = state.tercih ?? {};
     const out = [];
-    out.push(el("p", `@${h} olarak doğrulandın.`));
-    if (i < 0) { out.push(el("p", "Adada henüz evin yok: TikTok'ta takip et, sıradaki taşınmada yerleşince seçimlerin evine işlenir.", "muted")); }
+    out.push(el("p", `You're verified as @${h}.`));
+    if (i < 0) { out.push(el("p", "You don't have a home on the island yet. Follow on TikTok; once you move in at the next move-in, your choices show up in your home.", "muted")); }
     else {
-      const go = button("Evime git", "ana", () => { sayfa.close(); ui.select(i); });
-      const share = button("Kartımı paylaş", "secim", () => { sayfa.close(); ui.select(i); setTimeout(() => document.querySelector("#card-actions button:last-child")?.click(), 1200); });
+      const go = button("Go to my home", "ana", () => { sayfa.close(); ui.select(i); });
+      const share = button("Share my card", "secim", () => { sayfa.close(); ui.select(i); setTimeout(() => document.querySelector("#card-actions button:last-child")?.click(), 1200); });
       out.push(go, share);
     }
-    out.push(...swatches("duvar", "Duvar rengi"), ...swatches("koltuk", "Koltuk"), ...swatches("perde", "Perde"));
-    out.push(el("h3", "Pencere çiçekleri"), chips(SECENEK.cicek.filter((c) => c !== "yok"), t.cicek, (c) => CICEK_AD[c], (c) => save({ cicek: c }, c ? "Çiçekler pencerende" : "Çiçekler kaldırıldı")));
+    out.push(...swatches("duvar", "Wall color"), ...swatches("koltuk", "Couch"), ...swatches("perde", "Curtains"));
+    out.push(el("h3", "Window flowers"), chips(SECENEK.cicek.filter((c) => c !== "yok"), t.cicek, (c) => CICEK_AD[c], (c) => save({ cicek: c }, c ? "Flowers are in your window" : "Flowers removed")));
     const pet = i >= 0 ? sim.pet(residents[i], today()) : null;
     if (pet) {
-      out.push(el("h3", `${pet} adı`));
-      out.push(chips(SECENEK.evcil_ad, t.evcil_ad, (n) => n, (n) => save({ evcil_ad: n }, n ? `${pet} artık ${n}` : null)));
-    } else out.push(el("p", "Evcil hayvanın yok; videolarımıza “evcil: kedi” yazarsan sıradaki taşınmada gelir, sonra adını buradan seçersin.", "muted"));
+      out.push(el("h3", `${pet}'s name`));
+      out.push(chips(SECENEK.evcil_ad, t.evcil_ad, (n) => n, (n) => save({ evcil_ad: n }, n ? `Your ${pet.toLowerCase()} is now ${n}` : null)));
+    } else out.push(el("p", "You don't have a pet. Comment “pet: cat” on one of our videos and it arrives at the next move-in; then you can pick its name here.", "muted"));
 
     // Bugün: etkinlik ve buluşma (yalnız bugüne geçerli).
     const g = t.gun?.tarih === dateKey(today()) ? t.gun : {};
-    out.push(el("h3", "Bugün ne yapayım?"));
-    out.push(el("p", "Dışarı çıktığın saatlere uyarsa karakterin bunu yapar (ör. yıldız izlemek gece olur).", "muted"));
-    const setGun = (patch) => save({ gun: { tarih: dateKey(today()), etkinlik: g.etkinlik ?? null, bulusma: g.bulusma ?? null, ...patch } }, "Bugünün planı kaydedildi");
+    out.push(el("h3", "What should I do today?"));
+    out.push(el("p", "Your character does it if it fits the hours you're out (stargazing, for example, happens at night).", "muted"));
+    const setGun = (patch) => save({ gun: { tarih: dateKey(today()), etkinlik: g.etkinlik ?? null, bulusma: g.bulusma ?? null, ...patch } }, "Today's plan saved");
     out.push(chips(SECENEK.etkinlik, g.etkinlik, (id) => ETKINLIK[id]?.ad.replace(/,.*$/, "") ?? id, (id) => setGun({ etkinlik: id })));
-    out.push(el("h3", "Kiminle buluşayım?"));
-    out.push(el("p", "İkiniz de birbirinizi seçerseniz dışarıda aynı saatlerde aynı yerde olursunuz.", "muted"));
+    out.push(el("h3", "Who should I meet?"));
+    out.push(el("p", "If you both pick each other, you'll be out at the same place at the same time.", "muted"));
     const friends = residents.filter((r) => r.handle && r.handle !== h).map((r) => r.handle).sort();
     const sel = el("select");
     sel.style.cssText = "width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--glass-2);color:var(--ink);font:800 14px Nunito,system-ui,sans-serif";
-    sel.append(new Option("Kimse", ""), ...friends.map((f) => new Option("@" + f, f, false, g.bulusma === f)));
+    sel.append(new Option("Nobody", ""), ...friends.map((f) => new Option("@" + f, f, false, g.bulusma === f)));
     sel.addEventListener("change", () => setGun({ bulusma: sel.value || null }));
     out.push(sel);
     if (g.bulusma) {
       const other = people.residents.findIndex((r) => r.handle === g.bulusma);
       const mutual = other >= 0 && people.meet?.[i] === other;
-      out.push(el("p", mutual ? `@${g.bulusma} de seni seçti: bugün buluşuyorsunuz.` : `@${g.bulusma} seni seçerse buluşursunuz. Ona söyle!`, "muted"));
+      out.push(el("p", mutual ? `@${g.bulusma} picked you too: you're meeting up today.` : `You'll meet if @${g.bulusma} picks you too. Let them know.`, "muted"));
     }
 
     // Seçim (açıksa): adaylık ve oy siteden de verilir; sunucu yorumdakiyle aynı kuralı uygular.
     const s = secim?.();
     if (s?.durum === "acik") {
-      out.push(el("h3", "Belediye başkanlığı seçimi"));
-      out.push(button("Adayım", "secim", async () => { try { await api.secim({ aday: true }); ui.toast("Adaylığın kaydedildi; sıradaki okumada listeye girer"); } catch (e) { ui.toast(e.message); } }));
-      for (const [ad] of (s.adaylar ?? []).filter(([a]) => a)) out.push(button(`Oyum @${ad}`, "secim", async () => { try { await api.secim({ oy: ad }); ui.toast("Oyun kaydedildi; sıradaki okumada sayılır"); } catch (e) { ui.toast(e.message); } }));
+      out.push(el("h3", "Mayoral election"));
+      out.push(button("I'm running", "secim", async () => { try { await api.secim({ aday: true }); ui.toast("You're signed up as a candidate; you'll be on the list after the next count"); } catch (e) { ui.toast(e.message); } }));
+      for (const [ad] of (s.adaylar ?? []).filter(([a]) => a)) out.push(button(`Vote: @${ad}`, "secim", async () => { try { await api.secim({ oy: ad }); ui.toast("Vote saved; it's counted at the next count"); } catch (e) { ui.toast(e.message); } }));
     }
     out.push(el("p", " "));
-    out.push(button("Bu cihazda çıkış yap", "secim", async () => { await api.cikis(); state = null; refresh(); }));
+    out.push(button("Sign out on this device", "secim", async () => { await api.cikis(); state = null; refresh(); }));
     return out;
   }
 
   return {
-    /** handle: karttaki "Bu benim" ile gelindiyse ad kutusu dolu gelir. */
+    /** handle: karttaki "This is me" ile gelindiyse ad kutusu dolu gelir. */
     open(handle = "") {
       prefill = handle;
-      sayfa.open("Benim evim", el("p", "Yükleniyor…", "muted"));
+      sayfa.open("My home", el("p", "Loading…", "muted"));
       refresh();
     },
     /** Sayfa yüklenince: doğrulanmışsa sessizce durumu al (kart ve menü için). */

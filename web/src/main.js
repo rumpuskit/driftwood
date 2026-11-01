@@ -26,7 +26,9 @@ import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
 import { Follower } from "./follow.js";
-import { VERI_URL, ZEPLIN_REKLAM } from "./config.js";
+import { TASINMA_SAATLERI, VERI_URL, ZEPLIN_REKLAM, hourText } from "./config.js";
+import { FERRY } from "./world/ferry.js";
+import { clockText, plural } from "./fmt.js";
 import { Zeplin } from "./world/zeplin.js";
 import { api } from "./api.js";
 import { buildFlowers, curtain, dateKey, setPrefs, setVotes, weekKey } from "./tercih.js";
@@ -47,19 +49,19 @@ const nowUnix = () => Date.now() / 1000;
 const loadFill = document.getElementById("load-fill"), loadStep = document.getElementById("load-step"), loadPct = document.getElementById("load-pct");
 function progress(f, text) {
   loadFill.style.width = `${Math.round(f * 100)}%`;
-  loadPct.textContent = `%${Math.round(f * 100)}`;
+  loadPct.textContent = `${Math.round(f * 100)}%`;
   loadFill.parentElement.setAttribute("aria-valuenow", String(Math.round(f * 100)));
   if (text) loadStep.textContent = text;
 }
 // Ağır kurulum adımları arasında tarayıcıya bir kare çizdirir (çubuk ilerlesin).
 const paint = () => new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
 const TIPS = [
-  "TikTok'ta takip eden herkes bir sonraki taşınmada adaya yerleşir: 09:00, 15:00 ve 21:00.",
-  "Aşağıdaki aramaya @kullanıcıadını yaz, evini ve gününü gör.",
-  "Bir sakine dokun: kamera onu izler. \"Gözünden bak\" ile arkasından yürü.",
-  "Videolarımıza \"meslek: balıkçı\" yaz, sonraki taşınmada balıkçı ol.",
-  "Her yeni sakinle adada yeni bir yer açılıyor: kahvehane, fırın, okul, liman…",
-  "Adada saat Türkiye saatiyle akar: gece ışıklar yanar, sabah vapur kalkar.",
+  `Move-ins three times a day: ${TASINMA_SAATLERI.map(hourText).join(", ")} (ET). Follow on TikTok and you move in at the next one.`,
+  "Type your @username in the search below to see your home and your day.",
+  "Tap a resident and the camera follows them. \"Over the shoulder\" walks right behind them.",
+  "Comment \"job: fisherman\" on one of our videos and you become a fisherman at the next move-in.",
+  "New places open as residents arrive: the Diner, the Bakery, the school, the freight terminal…",
+  `Island time is Eastern Time: lights come on after sunset and the first ferry docks at ${clockText(FERRY.first)}.`,
 ];
 {
   const tip = document.getElementById("load-tip");
@@ -72,7 +74,7 @@ const TIPS = [
   const timer = setInterval(show, 4200);
   document.getElementById("enter").addEventListener("click", () => clearInterval(timer), { once: true });
 }
-progress(0.06, "Sakin listesi alınıyor…");
+progress(0.06, "Getting the resident list…");
 
 // Sakinler: TikTok takipçileri. Asıl liste sunucudaki veritabanındadır; her aktarımdan sonra Cloudflare'e
 // yollanır, site oradan okur. ?nufus=N örnek sakinlerle N kişilik ada kurar (video ve testler için),
@@ -85,13 +87,13 @@ const { residents, waiting, listError, peak = 0, secim = null } = sample > 0 ? s
 const prefsData = {};
 const oylarim = {}; // açılıştaki anket durumu (bu cihaz oy verdi mi): sekmedeki "yeni" noktası için
 if (!(sample > 0)) {
-  const within = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("zaman aşımı")), 4000))]);
+  const within = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 4000))]);
   const [t, a] = await Promise.allSettled([within(api.tercihler()), within(api.anket([`tema:${dateKey(today)}`, `tema:${dateKey(today + 1)}`, `film:${weekKey(today)}`])), within(api.ping())]);
   if (t.status === "fulfilled") Object.assign(prefsData, t.value.tercih ?? {});
   if (a.status === "fulfilled") { setVotes(a.value); Object.assign(oylarim, a.value); }
 }
 setPrefs(prefsData, residents);
-progress(0.16, "Ada kuruluyor…");
+progress(0.16, "Building the island…");
 await paint();
 // Ada, en büyük sıra numarasına kadar kurulur: ayrılanların boş kalan evleri de durur (yeni gelen yerleşir).
 const population = residents.reduce((m, r) => Math.max(m, r.slot + 1), 0);
@@ -129,7 +131,7 @@ async function loadResidents() {
     return out;
   } catch (e) {
     // Liste alınamadıysa son görülen liste (varsa); yoksa boş ada ve uyarı.
-    console.warn("sakin listesi alınamadı", e);
+    console.warn("could not load the resident list", e);
     try {
       const cached = localStorage.getItem("sakinler");
       if (cached) return { ...parse(JSON.parse(cached)), listError: "stale" };
@@ -145,7 +147,7 @@ let renderer;
 try {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 } catch (e) {
-  document.getElementById("loading").textContent = "Tarayıcın 3B çizimi desteklemiyor (WebGL).";
+  document.getElementById("loading").textContent = "Your browser does not support 3D graphics (WebGL).";
   throw e;
 }
 renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 2 : 1.75));
@@ -175,11 +177,11 @@ controls.onUserMove = (kind) => { flight = null; if (follower) follower.zoomTo =
 const T0 = performance.now();
 const world = new World(population);
 const T1 = performance.now();
-progress(0.3, "Yollar döşeniyor…");
+progress(0.3, "Laying the roads…");
 await paint();
 const roads = buildRoads(world);
 const T2 = performance.now();
-progress(0.42, "Kıyılar ve tepeler şekilleniyor…");
+progress(0.42, "Shaping the shore and hills…");
 await paint();
 const terrain = buildTerrain(world);
 const T3 = performance.now();
@@ -189,18 +191,18 @@ const harbor = buildHarbor(world);
 const beach = buildBeach(world);
 scene.add(water, terrain, roads, grounds, harbor, beach, buildFields(world));
 const T6 = performance.now();
-progress(0.54, "Trafik ışıkları kuruluyor…");
+progress(0.54, "Putting up traffic lights…");
 await paint();
 const traffic = new Traffic(world);
 const T7 = performance.now();
 scene.add(buildStops(traffic, world));
 const signals = buildSignals(traffic, world);
 scene.add(signals);
-progress(0.62, "Evler ve dükkânlar yapılıyor…");
+progress(0.62, "Building homes and shops…");
 await paint();
 const city = buildCity(world);
 const T4 = performance.now();
-progress(0.76, "Ağaçlar dikiliyor…");
+progress(0.76, "Planting trees…");
 await paint();
 const trees = buildTrees(world);
 const T5 = performance.now();
@@ -227,14 +229,14 @@ const labels = buildLabels(world);
 scene.add(clouds, labels);
 const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80);
 scene.add(vehicles.group);
-progress(0.86, residents.length ? "Sakinler evlerine yerleşiyor…" : "Ada ilk sakinini bekliyor…");
+progress(0.86, residents.length ? "Residents are settling in…" : "The island is waiting for its first resident…");
 await paint();
 const people = new People(world, residents, traffic);
 people.waiting = waiting;
 const stories = new Stories(people);
 people.stories = stories;
 const T8 = performance.now();
-if (params.has("denetle")) console.info(`süreler: dünya ${Math.round(T1 - T0)} yollar ${Math.round(T2 - T1)} arazi ${Math.round(T3 - T2)} şehir ${Math.round(T4 - T3)} ağaçlar ${Math.round(T5 - T4)} trafik ${Math.round(T7 - T6)} insanlar ${Math.round(T8 - T7)}`);
+if (params.has("denetle")) console.info(`timings: world ${Math.round(T1 - T0)} roads ${Math.round(T2 - T1)} terrain ${Math.round(T3 - T2)} city ${Math.round(T4 - T3)} trees ${Math.round(T5 - T4)} traffic ${Math.round(T7 - T6)} people ${Math.round(T8 - T7)}`);
 scene.add(people.group);
 const dollhouse = new Dollhouse(world, city, people, scene);
 people.dollhouse = dollhouse;
@@ -261,7 +263,7 @@ soundBtn.addEventListener("click", () => {
   soundBtn.innerHTML = svg(soundWanted ? "sesAcik" : "sesKapali");
   pref.set(soundWanted);
 });
-const limanZ = world.coastPoint(0, 60, 0, 1)[1];
+const limanZ = world.coastPoint(210, 60, 0, 1)[1]; // feribot iskelesinin kıyısı
 function soundEnv(dist, light, minute) {
   const t = controls.target;
   // Yakındaki insanlar ve araçlar ağırlıkla sayılır: odaktaki kişi tam, 12 m ötedeki yarım (araçta 25 m).
@@ -278,14 +280,14 @@ function soundEnv(dist, light, minute) {
     const q = v.route.position(v.s), d2 = (q.x - t.x) ** 2 + (q.z - t.z) ** 2;
     if (d2 < 100 * 100) traffic += 1 / (1 + d2 / 625);
   }
-  const cell = world.cellByKey.get(`${Math.round(t.x / 560)},${Math.round(t.z / 270)}`);
+  const zt = world.zoneAt(t.x, t.z);
   const inPark = world.parks.some((q) => t.x > q.x0 - 20 && t.x < q.x1 + 20 && t.z > q.z0 - 20 && t.z < q.z1 + 20) || world.plazas.some((q) => q.kind === "park" && t.x > q.x0 && t.x < q.x1 && t.z > q.z0 && t.z < q.z1);
   return {
     dist, minute, day: light, people: near, traffic,
     coast: Math.max(0, world.margin(t.x, t.z) - world.sdf(t.x, t.z)),
-    fountain: Math.hypot(t.x, t.z),
-    harbor: Math.hypot(t.x, t.z - limanZ),
-    nature: inPark || !cell || cell.type === "tepe" || cell.type === "kir" ? 1 : 0.35,
+    fountain: 1e9, // Green'de çeşme yok (çardak)
+    harbor: Math.hypot(t.x - 210, t.z - limanZ),
+    nature: inPark || zt === "tepe" || zt === "kir" || zt === "kumul" || zt === "tarla" ? 1 : 0.35,
     match: people.ball ? Math.hypot(t.x - world.pitch.cx, t.z - world.pitch.cz) : null,
   };
 }
@@ -306,14 +308,14 @@ scene.add(marker);
 // Başlangıç görünümü adanın o anki büyüklüğüne göre: küçük adada yerleşik yere (meydan, evler, açılmış yerler)
 // yakın ve ortalı, şehir büyüdükçe uzak (en çok merkez ve ilk mahalleler). Sabit uzak açı ilk günlerde adayı
 // boş bir orman gibi gösteriyordu.
-const home = new THREE.Vector3(0, 0, -60);
+const home = new THREE.Vector3(60, 0, 70); // Green ile feribot iskelesinin arası
 const aspectBoost = innerWidth < innerHeight ? 1.9 : 1;
 let homeDist = 480;
 {
   // Adada baştan duran altyapı (vapur iskelesi binası, fener bekçisinin evi, liman) yerleşimden sayılmaz.
   const built = world.buildings.filter((b) => !["liman", "kulube", "ambar", "tersane"].includes(b.kind) && Math.hypot(b.x, b.z) < 700);
   if (built.length) {
-    const pts = [[0, 0], ...built.map((b) => [b.x, b.z])]; // meydan hep dahil
+    const pts = [[0, 0], [210, 160], ...built.map((b) => [b.x, b.z])]; // Green ve feribot iskelesi hep dahil
     const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cz = pts.reduce((a, p) => a + p[1], 0) / pts.length;
     const r = Math.max(35, ...built.map((b) => Math.hypot(b.x - cx, b.z - cz) + Math.max(b.w, b.d) / 2));
     homeDist = Math.min(480, Math.max(140, r * 2.4));
@@ -411,22 +413,22 @@ const anketAcik = () => {
   const temaAcik = !(wd === 5 || wd === 6 || (wd === 4 && world.workplaces.cami?.some(Boolean)));
   return (temaAcik && !oylarim[`tema:${dateKey(t + 1)}`]?.benim) || !oylarim[`film:${weekKey(t)}`]?.benim;
 };
-menu.add({ icon: "kitap", label: "Gazete", badge: () => seen.get("gazete") !== todayKey(), run: () => {
+menu.add({ icon: "kitap", label: "News", badge: () => seen.get("gazete") !== todayKey(), run: () => {
   seen.set("gazete", todayKey());
-  menu.sayfa.open("Driftwood Gazetesi", gazete({
-    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Gizli komşu" : "@" + (r?.handle ?? "?")),
+  menu.sayfa.open("The Driftwood Gazette", gazete({
+    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Private neighbor" : "@" + (r?.handle ?? "?")),
     select: (i) => { menu.sayfa.close(); ui.select(i); }, flyToTheme,
     sakli: () => ({ ...hidden.info(), bulundu: hidden.found() }), tur: () => { menu.sayfa.close(); ui.close(); tour.start(); },
   }));
 } });
-menu.add({ icon: "ev", label: "Benim evim", short: "Evim", badge: () => !seen.get("evim"), hidden: () => !api.available, run: () => { seen.set("evim", "1"); ben.open(); } });
-menu.add({ icon: "sepet", label: "Anket", badge: anketAcik, hidden: () => !api.available, run: () => anket.open() });
-menu.add({ icon: "kamera", label: "Fotoğraf", badge: () => !seen.get("foto"), run: () => { seen.set("foto", "1"); ui.close(); menu.enterPhoto(); } });
-menu.add({ icon: "goz", label: "Saklı nesne", short: "Saklı", badge: () => !hidden.found(), run: () => {
+menu.add({ icon: "ev", label: "My home", badge: () => !seen.get("evim"), hidden: () => !api.available, run: () => { seen.set("evim", "1"); ben.open(); } });
+menu.add({ icon: "sepet", label: "Poll", badge: anketAcik, hidden: () => !api.available, run: () => anket.open() });
+menu.add({ icon: "kamera", label: "Photo", badge: () => !seen.get("foto"), run: () => { seen.set("foto", "1"); ui.close(); menu.enterPhoto(); } });
+menu.add({ icon: "goz", label: "Hidden", badge: () => !hidden.found(), run: () => {
   const h = hidden.info();
   if (!h) return;
-  if (hidden.found()) return ui.toast(`Bugünkü ${h.ad} bulundu. Yarın yenisi saklanacak.`);
-  ui.toast(`İpucu: bugün ${h.area} ${h.ad} var. Yakınlaş ve ona dokun.`, 5000);
+  if (hidden.found()) return ui.toast(`You already found today's hidden object (${h.ad}). A new one is hidden tomorrow.`);
+  ui.toast(`Hint: today there's ${h.ad} ${h.area}. Zoom in and tap it.`, 5000);
 } });
 ben.peek();
 if (api.available) Object.assign(claim, { open: (h) => { seen.set("evim", "1"); ui.close(); ben.open(h); menu.refresh(); }, me: () => ben.handle });
@@ -447,10 +449,10 @@ canvas.addEventListener("pointerup", (e) => {
   // Günün saklı nesnesi: bulana seri ve bugün kaç kişinin bulduğu.
   if (hidden.pick(raycaster)) {
     const h = hidden.info(), res = hidden.markFound();
-    const seri = res.seri > 1 ? ` ${res.seri} gündür üst üste buluyorsun.` : "";
+    const seri = res.seri > 1 ? ` That's ${res.seri} days in a row.` : "";
     menu.refresh();
-    if (api.available) api.bulundu(dateKey(h.day), true).then((r) => ui.toast(`Buldun: ${h.ad}!${seri} Bugün ${r.n} kişi buldu.`, 5000)).catch(() => ui.toast(`Buldun: ${h.ad}!${seri}`, 5000));
-    else ui.toast(`Buldun: ${h.ad}!${seri}`, 5000);
+    if (api.available) api.bulundu(dateKey(h.day), true).then((r) => ui.toast(`You found it: ${h.ad}.${seri} ${plural(r.n, "person", "people")} found it today.`, 5000)).catch(() => ui.toast(`You found it: ${h.ad}.${seri}`, 5000));
+    else ui.toast(`You found it: ${h.ad}.${seri}`, 5000);
     return;
   }
   const index = people.pick(raycaster);
@@ -606,7 +608,7 @@ const intro = !["bul", "bak", "takip", "denetle"].some((k) => params.has(k));
 const homeView = { target: controls.target.clone(), pos: camera.position.clone() };
 if (intro) camera.position.copy(homeView.target).add(new THREE.Vector3(-120, 900, 1100));
 function ready() {
-  progress(1, "Ada hazır");
+  progress(1, "The island is ready");
   if (params.has("denetle")) return enter();
   const btn = document.getElementById("enter");
   btn.hidden = false;
@@ -648,7 +650,7 @@ function adaptQuality(real) {
   else return;
   renderer.setSize(innerWidth, innerHeight, false);
   quality.steps++;
-  if (params.has("denetle")) console.info(`kalite düşürüldü: ${fps.toFixed(1)} fps → piksel oranı ${renderer.getPixelRatio()}, gölge ${renderer.shadowMap.enabled}`);
+  if (params.has("denetle")) console.info(`quality lowered: ${fps.toFixed(1)} fps → pixel ratio ${renderer.getPixelRatio()}, shadows ${renderer.shadowMap.enabled}`);
 }
 let lastSim = null;
 let zeplinNight = 0;
@@ -666,7 +668,7 @@ function tick() {
   people.setDay(day);
   const U1 = performance.now();
   people.update(minute, real);
-  if (frame < 3 && params.has("denetle")) console.info(`kare ${frame}: gün ${Math.round(U1 - U0)} ms, güncelleme ${Math.round(performance.now() - U1)} ms`);
+  if (frame < 3 && params.has("denetle")) console.info(`frame ${frame}: day ${Math.round(U1 - U0)} ms, update ${Math.round(performance.now() - U1)} ms`);
   city.setOpenDoors(people.openDoors);
   ball.visible = !!people.ball;
   if (people.ball) ball.position.set(people.ball[0], world.groundY(people.ball[0], people.ball[1]) + people.ball[2], people.ball[1]);
@@ -778,7 +780,7 @@ function tick() {
   mapUI.update(real);
   renderer.render(scene, camera);
   if (frame === 1) {
-    console.info(`Driftwood hazır: ${Math.round(performance.now())} ms`);
+    console.info(`Driftwood ready: ${Math.round(performance.now())} ms`);
     ready();
   }
   adaptQuality(real);
@@ -812,6 +814,6 @@ function tryFollow() {
     if (!people.visible[i] || !a) continue;
     if (a.ne === what || (a.ne === "hobi" && people.hobbies[i].id === what)) hits.push(i);
   }
-  console.info(`takip ${what}: ${hits.length} kişi`);
+  console.info(`follow ${what}: ${hits.length} residents`);
   if (hits.length) ui.select(hits[Number(nth) % hits.length]);
 }

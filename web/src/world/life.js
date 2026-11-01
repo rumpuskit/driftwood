@@ -3,17 +3,17 @@
 import { roll } from "../sim.js";
 
 export const HOME_LABELS = {
-  uyku: "Uyuyor",
-  hazirlik: "Hazırlanıyor",
-  kahvalti: "Kahvaltı yapıyor",
-  yemek_yapma: "Yemek yapıyor",
-  aksam_yemegi: "Akşam yemeği yiyor",
-  tv: "Televizyon izliyor",
-  kitap: "Kitap okuyor",
-  telefon: "Telefonda geziniyor",
-  dinlenme: "Kanepede dinleniyor",
-  temizlik: "Ev topluyor",
-  calisma: "Evden çalışıyor",
+  uyku: "Asleep",
+  hazirlik: "Getting ready",
+  kahvalti: "Having breakfast",
+  yemek_yapma: "Cooking",
+  aksam_yemegi: "Having dinner",
+  tv: "Watching TV",
+  kitap: "Reading a book",
+  telefon: "Scrolling on their phone",
+  dinlenme: "Relaxing on the couch",
+  temizlik: "Tidying up",
+  calisma: "Working from home",
 };
 
 /** seg: simülasyon parçası (ne: "ev" | "uyku"), minute: günün dakikası. */

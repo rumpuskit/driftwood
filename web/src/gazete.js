@@ -2,15 +2,8 @@
 // Uydurma yok: her satır sitede doğrulanabilir; satıra dokununca kamera oraya/o sakine gider.
 import * as sim from "./sim.js";
 import { FERRY } from "./world/ferry.js";
-
-const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
-const fmt = new Intl.NumberFormat("tr-TR");
-
-export function dateText(day) {
-  const d = new Date(day * 86400000);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
+import { TIKTOK } from "./config.js";
+import { clockText, dateText, longDateText, num, plural } from "./fmt.js";
 
 /** Gelişim adımlarının açıldığı gün: N. sakinin geldiği gün (o sırada gelen kişi açtı). */
 export function openings(residents) {
@@ -31,31 +24,32 @@ export function gazete(d) {
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
   const out = [];
   const first = residents.reduce((m, r) => Math.min(m, r.arrived_day), day);
-  out.push(el("p", `${DAYS[sim.weekday(day)]}, ${dateText(day)} · Sayı ${fmt.format(day - first + 1)}`, "muted"));
+  out.push(el("p", `${longDateText(day)} · Issue ${num(day - first + 1)}`, "muted"));
 
   // Manşet: günün olayı.
   const th = people.theme;
   if (th) {
-    out.push(el("h3", "Manşet"));
+    out.push(el("h3", "Top story"));
     const p = el("p");
     const b = el("span", th.ad, "link");
     b.addEventListener("click", () => d.flyToTheme());
-    p.append(b, th.bas != null ? ` · ${sim.formatMinute(th.bas)}–${sim.formatMinute(th.son)}` : "");
+    p.append(b, th.bas != null ? ` · ${clockText(th.bas)}–${clockText(th.son)}` : "");
     out.push(p);
   }
 
   // Günün saklı nesnesi (ipucu bölge, bulunduysa söyler).
   const sk = d.sakli?.();
   if (sk?.ad) {
-    out.push(el("h3", "Saklı nesne"));
-    out.push(el("p", sk.bulundu ? `Bugünkü ${sk.ad} bulundu. Yarın yenisi saklanacak.` : `Bugün adada ${sk.ad} saklı: ${sk.area} bak, yakınlaş ve ona dokun.`));
+    out.push(el("h3", "Hidden object"));
+    out.push(el("p", sk.bulundu ? `You found today's hidden object (${sk.ad}). A new one is hidden tomorrow.` : `Hidden on the island today: ${sk.ad}. Look ${sk.area}, zoom in and tap it.`));
   }
 
   // Bugün ve dün gelenler.
   const named = residents.map((r, i) => [r, i]).filter(([r]) => !r.hidden);
   const bugun = named.filter(([r]) => r.arrived_day === day), dun = named.filter(([r]) => r.arrived_day === day - 1);
-  out.push(el("h3", "Ada bugün"));
-  out.push(el("p", `Adada ${fmt.format(residents.length)} kişi yaşıyor. Bugün ${fmt.format(residents.filter((r) => r.arrived_day === day).length)}, dün ${fmt.format(residents.filter((r) => r.arrived_day === day - 1).length)} kişi taşındı.`));
+  out.push(el("h3", "The island today"));
+  const N = residents.length, nToday = residents.filter((r) => r.arrived_day === day).length;
+  out.push(el("p", `${N === 1 ? "1 resident lives" : `${num(N)} residents live`} on the island. ${plural(nToday, "person", "people")} moved in today, ${num(residents.filter((r) => r.arrived_day === day - 1).length)} yesterday.`));
   const people1 = (list, title) => {
     if (!list.length) return;
     const p = el("p");
@@ -65,43 +59,43 @@ export function gazete(d) {
       a.addEventListener("click", () => d.select(i));
       p.append(n ? ", " : "", a);
     });
-    if (list.length > 24) p.append(` ve ${fmt.format(list.length - 24)} kişi daha`);
+    if (list.length > 24) p.append(` and ${num(list.length - 24)} more`);
     out.push(p);
   };
-  people1(bugun, "Bugün gelenler");
-  people1(dun, "Dün gelenler");
+  people1(bugun, "Moved in today");
+  people1(dun, "Moved in yesterday");
 
   // Açılanlar ve sıradaki.
   const ops = openings(residents);
   const recent = ops.filter((o) => o.day != null && day - o.day <= 7).reverse();
-  out.push(el("h3", "Açılanlar"));
+  out.push(el("h3", "Just opened"));
   if (recent.length) {
     const ul = el("ul", null, "liste");
     for (const o of recent) {
       const li = el("li");
-      li.append(el("b", o.day === day ? "Bugün" : o.day === day - 1 ? "Dün" : dateText(o.day).replace(/ \d{4}$/, "")));
+      li.append(el("b", o.day === day ? "Today" : o.day === day - 1 ? "Yesterday" : dateText(o.day)));
       const span = el("span");
-      span.append(`${o.ad} · ${o.nufus}. sakin `);
+      span.append(`${o.ad} · opened when `);
       const a = el("span", d.at(o.r), "link");
       const idx = residents.indexOf(o.r);
       a.addEventListener("click", () => d.select(idx));
-      span.append(a, " ile");
+      span.append(a, ` became resident #${num(o.nufus)}`);
       li.append(span);
       ul.append(li);
     }
     out.push(ul);
-  } else out.push(el("p", "Bu hafta yeni bir yer açılmadı.", "muted"));
+  } else out.push(el("p", "No new places opened this week.", "muted"));
   const next = sim.cat().gelisim.find((g) => g.nufus > sim.townLevel());
-  if (next) out.push(el("p", `Sırada ${next.ad}: ${fmt.format(next.nufus - residents.length)} kişi daha lazım (${next.nufus}. sakinde).`));
+  if (next) out.push(el("p", `Next: ${next.ad} · ${plural(Math.max(1, next.nufus - residents.length), "more resident")} (opens at ${num(next.nufus)}).`));
 
   // Program.
-  out.push(el("h3", "Bugünün programı"));
+  out.push(el("h3", "Today's schedule"));
   const prog = el("ul", null, "liste");
   const row = (t, s) => { const li = el("li"); li.append(el("b", t), el("span", s)); prog.append(li); };
-  row(sim.formatMinute(FERRY.first), `İlk vapur; ${FERRY.period} dakikada bir, son sefer ${sim.formatMinute(FERRY.last)}`);
-  if (d.zeplin) row("09:00", "Driftwood Blimp adaya geliyor, 22:00'de dönüyor");
-  if (th?.bas != null) row(sim.formatMinute(th.bas), th.ad);
-  if (world.pitch) row("19:30", `Driftwood Gulls maçı${sim.weekday(day) >= 5 ? " (ayrıca 15:00)" : ""}`);
+  row(clockText(FERRY.first), `First ferry; every ${FERRY.period} minutes, last one at ${clockText(FERRY.last)}`);
+  if (d.zeplin) row(clockText(540), `The Driftwood Blimp flies in and heads back at ${clockText(1320)}`);
+  if (th?.bas != null) row(clockText(th.bas), th.ad);
+  if (world.pitch) row(clockText(1170), `Driftwood Gulls game${sim.weekday(day) >= 5 ? ` (also at ${clockText(900)})` : ""}`);
   out.push(prog);
 
   // Meslekler.
@@ -114,42 +108,42 @@ export function gazete(d) {
   const top = [...jobs].sort((a, b) => b[1] - a[1]).slice(0, 6);
   const secen = residents.filter((r) => r.overrides?.meslek).length;
   if (top.length) {
-    out.push(el("h3", "Meslekler"));
-    out.push(el("p", top.map(([n, c]) => `${fmt.format(c)} ${n.toLocaleLowerCase("tr")}`).join(", ") + "."));
-    if (secen) out.push(el("p", `${fmt.format(secen)} kişi mesleğini yorumla kendisi seçti.`, "muted"));
+    out.push(el("h3", "Jobs"));
+    out.push(el("p", top.map(([n, c]) => `${n} (${num(c)})`).join(", ") + "."));
+    if (secen) out.push(el("p", `${plural(secen, "resident")} picked their own job with a comment.`, "muted"));
   }
 
   // Haftanın sakini (her pazartesi değişir).
   if (named.length) {
     const week = Math.floor((day + 3) / 7);
     const [r, i] = named[sim.roll(week, "haftanin_sakini") % named.length];
-    out.push(el("h3", "Haftanın sakini"));
+    out.push(el("h3", "Resident of the week"));
     const p = el("p");
     const a = el("span", d.at(r), "link");
     a.addEventListener("click", () => d.select(i));
-    p.append(a, ` · ${sim.title(r, day)} · ${people.hobbies[i].ad.toLocaleLowerCase("tr")} seviyor · ${sim.addressText(r.slot).replace(/, Driftwood$/, "")}`);
+    p.append(a, ` · ${sim.title(r, day)} · loves ${people.hobbies[i].ad.toLowerCase()} · ${sim.streetAddress(r.slot)}, ${sim.mahalleName(sim.addressParts(r.slot).mahalle)}`);
     out.push(p);
   }
 
   // Ada tarihi.
   if (ops.length) {
-    out.push(el("h3", "Ada tarihi"));
+    out.push(el("h3", "Island history"));
     const ul = el("ul", null, "liste");
     for (const o of [...ops].reverse()) {
       const li = el("li");
-      li.append(el("b", o.day != null ? dateText(o.day).replace(/ \d{4}$/, "") : "—"));
-      li.append(el("span", `${o.ad} (${o.nufus}. sakin)`));
+      li.append(el("b", o.day != null ? dateText(o.day) : "—"));
+      li.append(el("span", `${o.ad} (${plural(o.nufus, "resident")})`));
       ul.append(li);
     }
     out.push(ul);
   }
   if (d.tur) {
     const p = el("p");
-    const a = el("span", "Ada turuna çık (30 saniye)", "link");
+    const a = el("span", "Take the island tour (30 seconds)", "link");
     a.addEventListener("click", () => d.tur());
     p.append(a);
-    out.push(el("h3", "Adayı tanı"), p);
+    out.push(el("h3", "Get to know the island"), p);
   }
-  out.push(el("p", "TikTok'ta @driftwoodlive'yı takip eden adaya taşınır. Mesleğini seçmek için videolarımıza “meslek: balıkçı” gibi yaz.", "muted"));
+  out.push(el("p", `Everyone who follows @${TIKTOK} on TikTok moves to the island. To pick your job, comment something like “job: fisherman” on one of our videos.`, "muted"));
   return out;
 }

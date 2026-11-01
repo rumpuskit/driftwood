@@ -223,22 +223,42 @@ export function adaName(ada) {
   return ada < names.length ? name : `${name} ${Math.floor(ada / names.length) + 1}`;
 }
 
+/** Mahalle adı ("Gull Hill"); ada içinde tekrar etmez (ada başına mahalle sayısı kadar ad var). */
 export function mahalleName(mahalle) {
   const names = catalog.mahalleler;
-  let name = names[mahalle % names.length];
-  if (mahalle >= names.length) name += ` ${Math.floor(mahalle / names.length) + 1}`;
-  return name + " Mahallesi";
+  return names[mahalle % names.length];
 }
 
+/** Sokak adı: ad + sonek ("Shell Street", "Oyster Lane"); ada içindeki her sokak için ayrı bir çift. */
 export function sokakName(mahalle, sokak) {
-  const names = catalog.sokaklar;
-  return names[(sokak + mahalle * 7) % names.length] + " Sokağı";
+  const names = catalog.sokaklar, ekler = catalog.sokak_ekleri;
+  const g = (mahalle % cap("mahalle_per_ada")) * cap("sokak_per_mahalle") + sokak;
+  const n = g % names.length;
+  return `${names[n]} ${ekler[(Math.floor(g / names.length) + n) % ekler.length]}`;
+}
+
+/** Mahallenin konut tipi (katalog "konut"): cottage 1, twofamily 2, fourplex 4, apartments 8 birim/yapı. */
+export function housingOf(mahalle) {
+  const mi = mahalle % cap("mahalle_per_ada");
+  return catalog.konut.find((k) => k.son === undefined || mi <= k.son);
+}
+
+/** Sakinin evi: sokaktaki yapı sırası (ev, 0'dan), yapıdaki daire (apt, 1'den; tek birimlik evde 0). */
+export function houseOf(slot) {
+  const p = addressParts(slot), k = housingOf(p.mahalle);
+  const i = p.bina * cap("daire_per_bina") + p.daire;
+  return { tip: k.tip, birim: k.birim, ev: Math.floor(i / k.birim), apt: k.birim > 1 ? (i % k.birim) + 1 : 0 };
+}
+
+/** "14 Oyster Lane, Apt 2" (ev numarası sokakta 1'den, iki yana dönüşümlü). */
+export function streetAddress(slot) {
+  const p = addressParts(slot), h = houseOf(slot);
+  return `${h.ev + 1} ${sokakName(p.mahalle, p.sokak)}${h.apt ? `, Apt ${h.apt}` : ""}`;
 }
 
 export function addressText(slot) {
   const p = addressParts(slot);
-  return `${sokakName(p.mahalle, p.sokak)} No ${p.bina + 1}, Daire ${p.daire + 1}, ` +
-    `${mahalleName(p.mahalle)}, ${adaName(p.ada)}`;
+  return `${streetAddress(slot)}, ${mahalleName(p.mahalle)}, ${adaName(p.ada)}`;
 }
 
 // --- sakin ---
@@ -482,7 +502,7 @@ export function dayPlan(r, day) {
     travel(plan, commute, "meydan", PLACE_HOME);
   }
 
-  let sleep = 1350 + (roll(s, "uyku", day) % 80);
+  let sleep = 1350 + (roll(s, "uyku", day) % 50);
   if (worksOn(r, day) && job(r).yer === "ev") {
     // Evden çalışan: sabah evde masasında; çoğu öğle arasında kısa bir çıkış yapar; akşam işçiler gibi.
     const j = job(r);

@@ -726,7 +726,7 @@ export class People {
     this.plans = this.residents.map((r) => dayPlan(r, day));
     // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
     this.homeWork = this.residents.map((r, i) => this.works[i].job === "uzaktan" && worksOn(r, day));
-    this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
+    this.dogs = this.residents.map((r) => pet(r, day) === "Dog");
     this.travelCache.fill(null);
     this.tripStore = this.residents.map(() => new Map());
     if (this.traffic) { this.traffic.busRequests = new Map(); this.traffic.stopRiders = new Map(); } // yolculuklar yeniden kurulurken duraklar yeniden bildirilir

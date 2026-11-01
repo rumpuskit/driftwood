@@ -1,31 +1,36 @@
 // Ekrandaki paneller: saat ve nüfus, zaman hızı, "Kendini bul" araması, sakin kartı ve ev içi görünümü.
 import * as sim from "./sim.js";
 import { HOME_LABELS, homeActivity } from "./world/life.js";
-import { TIKTOK, TIKTOK_URL, ZEPLIN_REKLAM, nextMove } from "./config.js";
+import { TIKTOK, TIKTOK_URL, ZEPLIN_REKLAM, hourText, nextMove } from "./config.js";
+import { DAYS, clockText, feet, mph, num, ordinal, plural } from "./fmt.js";
 import { svg, BINA_SIMGE, ARAC_SIMGE } from "./icons.js";
 import { ETKINLIK } from "./world/etkinlik.js";
 import { residentCard, shareCanvas } from "./paylas.js";
 
-const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+// Yer adları: iş yeri olanlar katalogdan (isyerleri), diğerleri Driftwood'un sabit yer adları (CLAUDE.md §13).
+const yerAdi = (kind, yedek) => sim.cat()?.isyerleri?.[kind]?.[0] ?? yedek;
 const PLACE_NAMES = {
-  meydan: "Meydan", iskele: "Balık iskelesi", park: "Park", sahil_yolu: "Sahil yolu", plaj: "Plaj",
-  tepe: "Tepe", fener: "Fener", kahvehane: "Kahvehane", pazar: "Pazar", saha: "Futbol sahası",
+  meydan: "Town Green", iskele: "Town Dock", park: "Kettle Pond Park", sahil_yolu: "Harbor Walk", plaj: "Ocean Beach",
+  tepe: "Bluff Head", fener: "Gull Point Light", kahvehane: "Driftwood Diner", pazar: "Farmers Market", saha: "Gulls Field",
 };
+const OUT_LABELS = {
+  meydan: "On the Town Green", park: "Strolling in the park", sahil_yolu: "Walking the Harbor Walk",
+  kahvehane: "At the Diner", pazar: "Shopping at the Farmers Market", saha: "At Gulls Field",
+};
+const HOUSE_TYPES = { cottage: "Cottage", twofamily: "Two-family house", fourplex: "Fourplex", apartments: "Apartment building" };
+// Unvan cümle içinde küçük harfle ("a baker"); kısaltmalar (JV) olduğu gibi kalır.
+const lower = (t) => t.replace(/\b[A-Z](?=[a-z])/g, (c) => c.toLowerCase());
+const aOrAn = (t) => (/^[aeiou]/i.test(t) ? "an " : "a ") + t;
 // Buluşma yerinde ne yapıyor (yer anahtarına göre); yanında kimin olduğu ayrıca eklenir.
 // Etkinliklerin yeri (etkinlik.js yer anahtarları) kart ve "Bugün" listesinde.
-const EXTRA_PLACES = { iskele_vapur: "Vapur iskelesi", kiyi: "Kıyı", kapi: "Kapı önü", market: "Market", firin: "Fırın", cami: "Cami", sahil_yolu: "Sahil yolu", sinema: "Plaj sineması" };
-const OUT_LABELS = {
-  meydan: "Meydanda", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
-  kahvehane: "Kahvehanede", pazar: "Pazarda alışverişte", saha: "Futbol sahasında",
-};
+const EXTRA_PLACES = { iskele_vapur: "Ferry Landing", kiyi: "The shore", kapi: "Front porch", market: "The store", firin: "The bakery", cami: "The church", sahil_yolu: "Harbor Walk", sinema: "Beach movie night" };
 
 // İş yeri adı olmayan binaların kartta görünen adı.
-const BUILDING_NAMES = { cami: "Cami", liman: "Vapur iskelesi", ambar: "Liman ambarı", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe", carsi: "Çarşı dükkânı" };
+const BUILDING_NAMES = { cami: "Church", liman: "Ferry Landing", ambar: "Harbor warehouse", tersane: "Boatyard", kulube: "Fishing shack", ahir: "Farm", itfaiye: "Fire station", garaj: "Public works garage", bufe: "Snack bar", carsi: "Main Street shop" };
 
-const fmt = new Intl.NumberFormat("tr-TR");
 const $ = (id) => document.getElementById(id);
-// Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
-export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
+// Sakinin görünen adı: adını gizlemek isteyenler "Private neighbor" olarak görünür.
+export const at = (r) => (r.hidden ? "Private neighbor" : "@" + r.handle);
 
 export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, capture = null, claim = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
@@ -35,7 +40,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const btn = $("waiting");
     btn.hidden = false;
     btn.innerHTML = svg("valiz");
-    btn.append(`${fmt.format(waiting)} kişi iskelede · taşınma ${nextMove()}`);
+    btn.append(`${num(waiting)} waiting at the Ferry Landing · move-in ${nextMove()}`);
     btn.addEventListener("click", () => {
       const P0 = world.ferryPier;
       flyTo(0, P0.top, P0.z0 + 14, 45);
@@ -46,11 +51,11 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   if (secim?.durum === "acik") {
     const btn = $("secim");
     const kalan = Math.max(0, secim.bitis - Date.now() / 1000);
-    const sure = kalan > 86400 ? `${Math.ceil(kalan / 86400)} gün kaldı` : kalan > 3600 ? `${Math.ceil(kalan / 3600)} saat kaldı` : "son saat";
+    const sure = kalan > 86400 ? `${plural(Math.ceil(kalan / 86400), "day")} left` : kalan > 3600 ? `${plural(Math.ceil(kalan / 3600), "hour")} left` : "final hour";
     const lider = secim.adaylar?.find(([h]) => h);
     btn.hidden = false;
     btn.innerHTML = svg("sandik");
-    btn.append(`Başkanlık seçimi · ${sure}` + (lider ? ` · önde @${lider[0]}` : " · aday ol: “adayım” yaz"));
+    btn.append(`Mayoral election · ${sure}` + (lider ? ` · @${lider[0]} leads` : " · to run, comment “I'm running”"));
     btn.addEventListener("click", () => { const b = belediye(); if (b) openBuilding(b); });
   }
 
@@ -63,7 +68,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const prev = Math.max(0, ...sim.cat().gelisim.map((g) => g.nufus).filter((n) => n < ns.nufus));
     btn.hidden = false;
     $("next-name").textContent = ns.name;
-    $("next-need").textContent = waiting >= need ? `${nextMove()} taşınmasında` : `${fmt.format(need)} sakin daha`;
+    $("next-need").textContent = waiting >= need ? `at the ${nextMove()} move-in` : `${plural(need, "more resident")}`;
     // Adımın başında da çubuk görünsün (en az %4).
     $("next-bar").style.width = `${Math.round(Math.min(1, Math.max(0.04, (residents.length - prev) / (ns.nufus - prev))) * 100)}%`;
     if (ns.at) btn.addEventListener("click", () => flyTo(ns.at[0], world.groundY(ns.at[0], ns.at[1]), ns.at[1], 110));
@@ -89,12 +94,13 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   }
 
   function placeLabel(i, yer) {
-    if (yer === "ev") return "Ev";
+    if (yer === "ev") return "Home";
     if (yer === "is") return people.works[i].loc.name;
-    if (yer.startsWith("mahalle:")) return sim.isOpen(`cay:${yer.slice(8)}`) ? "Mahallesinin çay bahçesi" : "Mahallesi";
+    if (yer.startsWith("mahalle:")) return sim.isOpen(`cay:${yer.slice(8)}`) ? "Neighborhood ice cream parlor" : "Neighborhood";
     const key = yer.replace("hobi:", "");
-    if (key === "iskele" && !world.places.iskele) return "Kıyı"; // balık iskelesi açılana kadar kıyıdan balık tutulur
-    if (PLACE_NAMES[key] && !world.places[key]) return "Meydan"; // yeri henüz açılmamış hobi meydanda geçer
+    if (key === "iskele" && !world.places.iskele) return "The shore"; // balık iskelesi açılana kadar kıyıdan balık tutulur
+    if (PLACE_NAMES[key] && !world.places[key]) return PLACE_NAMES.meydan; // yeri henüz açılmamış hobi meydanda geçer
+    if (key === "kahvehane" || key === "saha" || key === "fener" || key === "plaj") return yerAdi(key, PLACE_NAMES[key]);
     return PLACE_NAMES[key] ?? EXTRA_PLACES[key] ?? yer;
   }
 
@@ -112,22 +118,22 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       case "uyku":
       case "ev": {
         const act = homeActivity(residents[i].seed, seg, minute(), today(), people.hobbies[i].id, people.homeWork?.[i]);
-        return (seg.ne === "ev" ? "Evde · " : "") + HOME_LABELS[act];
+        return (seg.ne === "ev" ? "At home · " : "") + HOME_LABELS[act];
       }
       case "is": {
         const j = people.works[i].job;
-        if (j === "ogrenci") return "Anakarada, üniversitede";
-        if (j === "anakara") return "Anakarada, işte";
-        if (j === "zeplin_pilotu") return zeplin?.pose.visible ? "Zeplini uçuruyor" : "Anakarada, zeplin üssünde";
-        return `İşte · ${people.works[i].loc.name}`;
+        if (j === "ogrenci") return "On the mainland, at college";
+        if (j === "anakara") return "On the mainland, at work";
+        if (j === "zeplin_pilotu") return zeplin?.pose.visible ? "Flying the blimp" : "On the mainland, at the blimp base";
+        return `At work · ${people.works[i].loc.name}`;
       }
       case "yol": {
         const d = destOf(i, seg);
         // Yolculuk varışa yetişecek saatte başlar; o ana kadar evinde bekler (görünmez).
         const leg = people.travelCache[i]?.legs.find((l) => minute() < l.t1);
-        if (!people.visible[i] && leg?.kind === "before" && seg.nereden === "ev") return `Evde, birazdan çıkacak → ${placeLabel(i, d)}`;
-        if (d === "is" && (people.works[i].wp.kind === "anakara" || people.works[i].wp.kind === "zeplin")) return seg.nereden === "ev" ? "Vapura yetişmeye gidiyor" : "Vapurdan indi, eve dönüyor";
-        return `Yolda → ${placeLabel(i, d)}`;
+        if (!people.visible[i] && leg?.kind === "before" && seg.nereden === "ev") return `At home, heading out soon → ${placeLabel(i, d)}`;
+        if (d === "is" && (people.works[i].wp.kind === "anakara" || people.works[i].wp.kind === "zeplin")) return seg.nereden === "ev" ? "Heading out to catch the ferry" : "Off the ferry, heading home";
+        return d === "ev" ? "Heading home" : `On the way → ${placeLabel(i, d)}`;
       }
       case "hobi":
       case "meydan": {
@@ -137,16 +143,16 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
           const near = company(i);
           const e = ETKINLIK[act];
           if (!e.sosyal) return e.ad;
-          return `${e.ad}, ${near.length === 0 ? "tek başına" : near.length === 1 ? `${at(residents[near[0]])} ile` : act === "kapi_onu" ? "komşularıyla" : "arkadaşlarıyla"}`;
+          return `${e.ad}, ${near.length === 0 ? "alone" : near.length === 1 ? `with ${at(residents[near[0]])}` : act === "kapi_onu" ? "with the neighbors" : "with friends"}`;
         }
         if (seg.ne === "hobi") return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
         const pl = people.currentPlace[i] ?? "meydan";
-        const yer = pl.startsWith("mahalle:") ? (sim.isOpen(`cay:${pl.slice(8)}`) ? "Mahallesinin çay bahçesinde" : "Mahallesinde")
-          : OUT_LABELS[pl] ?? "Çarşıda";
+        const yer = pl.startsWith("mahalle:") ? (sim.isOpen(`cay:${pl.slice(8)}`) ? "At the neighborhood ice cream parlor" : "Around the neighborhood")
+          : OUT_LABELS[pl] ?? "On Main Street";
         // Yalnız gerçekten yanında biri varsa "arkadaşlarıyla" (12 m içinde dışarıda vakit geçiren sakinler).
         const near = company(i);
-        const kim = pl.startsWith("mahalle:") ? "komşularıyla" : "arkadaşlarıyla";
-        return `${yer}, ${near.length === 0 ? "tek başına" : near.length === 1 ? `${at(residents[near[0]])} ile` : kim}`;
+        const kim = pl.startsWith("mahalle:") ? "with the neighbors" : "with friends";
+        return `${yer}, ${near.length === 0 ? "alone" : near.length === 1 ? `with ${at(residents[near[0]])}` : kim}`;
       }
       default: return seg.ne;
     }
@@ -176,11 +182,11 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   /** Kişinin kendisi için: yorumla seçtikleri ve henüz seçebilecekleri (istekler sonraki taşınmada işlenir). */
   function senMisin(r, unvan) {
     const o = r.overrides ?? {};
-    const secti = [o.meslek && `mesleğini (${unvan})`, o.hobi && "hobini", o.evcil && "evcilini"].filter(Boolean);
-    const oneri = [!o.meslek && "“meslek: balıkçı”", !o.hobi && "“hobi: tavla”", !o.evcil && "“evcil: kedi”"].filter(Boolean);
-    const bas = secti.length ? `${secti.join(", ").replace(/, ([^,]*)$/, " ve $1")} sen seçtin. ` : "";
-    const ne = oneri.length ? `Videomuza ${oneri.join(", ")} ya da “adımı gizle” yaz` : "Değiştirmek için videomuza yeniden yaz (ör. “meslek: polis”) ya da “adımı gizle” yaz";
-    return `${bas}${ne}; sonraki taşınmada işlenir.`.replace(/^./, (c) => c.toLocaleUpperCase("tr"));
+    const secti = [o.meslek && `your job (${unvan})`, o.hobi && "your hobby", o.evcil && "your pet"].filter(Boolean);
+    const oneri = [!o.meslek && "“job: fisherman”", !o.hobi && "“hobby: chess”", !o.evcil && "“pet: cat”"].filter(Boolean);
+    const bas = secti.length ? `You picked ${secti.join(", ").replace(/, ([^,]*)$/, " and $1")}. ` : "";
+    const ne = oneri.length ? `Comment ${oneri.join(", ")} or “hide my name” on one of our videos` : "To change it, comment again on one of our videos (e.g. “job: baker”) or “hide my name”";
+    return `${bas}${ne}; it takes effect at the next move-in.`;
   }
 
   function renderPerson() {
@@ -188,34 +194,37 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const day = today();
     const t = sim.tenure(r, day);
     $("card-handle").textContent = at(r);
-    icon(r.hidden ? "?" : r.handle[0].toLocaleUpperCase("tr"), `hsl(${r.seed % 360} 62% 58%)`);
+    icon(r.hidden ? "?" : r.handle[0].toUpperCase(), `hsl(${r.seed % 360} 62% 58%)`);
     // İş yerinin adı yalnızca gerçek bir iş yeri varsa (emekli ve evden çalışanlarda yok).
     const wk = people.works[selected];
     // Asıl mesleğinin iş yeri adada henüz yoksa mesleğini anakarada yapar (vapurla gidip gelir).
     const dream = sim.dreamJob(r);
     const dreamTitle = dream.kademeler[Math.min(sim.rank(r, day), dream.kademeler.length - 1)];
-    $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`)
-      : dream.id !== wk.job ? `${dreamTitle} · anakarada, vapurla` : `${sim.title(r, day)} · ${wk.loc.name}`;
+    $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Retired" : `${sim.title(r, day)} · works from home`)
+      : dream.id !== wk.job ? `${dreamTitle} · works on the mainland, takes the ferry`
+      : wk.job === "ogrenci" ? `${sim.title(r, day)} · takes the ferry to college`
+      : wk.wp.kind === "anakara" ? `${sim.title(r, day)} · works on the mainland, takes the ferry` : `${sim.title(r, day)} · ${wk.loc.name}`;
     $("card-dream").hidden = dream.id === wk.job;
     if (dream.id !== wk.job) {
       const opens = sim.cat().isyerleri[dream.yer].map((name, k) => [sim.stageOf(`${dream.yer}:${k}`), name]).sort((a, b) => a[0] - b[0])[0];
       $("card-dream").innerHTML = svg("vinc");
-      $("card-dream").append(dream.yer === "zeplin" ? `${opens[1]} ${fmt.format(opens[0])}. sakinde gelince uçmaya başlayacak`
-        : `${opens[1]} açılınca adada çalışacak (${fmt.format(opens[0])}. sakinde)`);
+      $("card-dream").append(dream.yer === "zeplin" ? `Will fly the ${opens[1]} when it arrives (${plural(opens[0], "resident")})`
+        : `Will be ${aOrAn(lower(dreamTitle))} when ${opens[1]} opens (${plural(opens[0], "resident")})`);
     }
     $("card-now").textContent = nowText(selected);
     $("card-tabs").hidden = false;
     $("card-traits").replaceChildren();
     const f = follow.get();
-    followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, ["goz", "Gözünden bak"]);
-    if (!r.hidden && capture) action(["paylas", "Paylaş"], () => shareResident(selected));
-    // Kendini bulan için davet: "Bu benim" doğrulamaya (Benim evim) adı dolu götürür; doğrulanmışsa "Evimi döşe".
-    if (!r.hidden && claim?.open) action(["ev", claim.me?.() === r.handle ? "Evimi döşe" : "Bu benim"], () => claim.open(r.handle));
+    followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, ["goz", "Over the shoulder"]);
+    // Kendini bulan için davet: "This is me" doğrulamaya (My home) adı dolu götürür; doğrulanmışsa "Decorate my home".
+    if (!r.hidden && claim?.open) action(["ev", claim.me?.() === r.handle ? "Decorate my home" : "This is me"], () => claim.open(r.handle));
+    // Paylaş en sonda: My home'daki "Share my card" son düğmeye basar.
+    if (!r.hidden && capture) action(["paylas", "Share"], () => shareResident(selected));
     if (tab === "bugun") {
       const homeLabel = (k) => {
         const seg = people.plans[selected][k];
         const act = homeActivity(r.seed, seg, seg.bas + 1, day, people.hobbies[selected].id, people.homeWork?.[selected]);
-        return "Evde · " + HOME_LABELS[act].toLocaleLowerCase("tr");
+        return "At home · " + HOME_LABELS[act].toLowerCase();
       };
       const placeName = (yer) => placeLabel(selected, yer);
       facts(stories.today(selected, placeName, homeLabel));
@@ -229,26 +238,26 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       }));
       const rows = [];
       const f = stories.friend[selected];
-      if (f >= 0) rows.push(["Can dostu", ...link(f)]);
+      if (f >= 0) rows.push(["Best friend", ...link(f)]);
       const pet = stories.petName(selected);
-      if (pet) rows.push(["Evcil", `${pet.kind} · ${pet.name}`]);
+      if (pet) rows.push(["Pet", `${pet.kind} · ${pet.name}`]);
       const nb = stories.neighbors(selected).slice(0, 3);
-      nb.forEach((j, n) => rows.push([n === 0 ? "Komşular" : "", ...link(j)]));
+      nb.forEach((j, n) => rows.push([n === 0 ? "Neighbors" : "", ...link(j)]));
       const cw = stories.coworkers(selected).slice(0, 3);
-      cw.forEach((j, n) => rows.push([n === 0 ? "İş arkadaşları" : "", ...link(j)]));
+      cw.forEach((j, n) => rows.push([n === 0 ? "Coworkers" : "", ...link(j)]));
       for (const e of stories.timeline(selected).slice(0, 8)) rows.push([e.date, e.text]);
       facts(rows);
       return;
     }
     const pet = sim.pet(r, day);
     facts([
-      ["Adres", sim.addressText(r.slot)],
-      ["Hobi", people.hobbies[selected].ad],
-      ["Evcil", pet || "Henüz yok"],
-      ["Adada", t === 0 ? "Bugün geldi" : t === 1 ? "Dün geldi" : `${fmt.format(t)} gündür`],
-      ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (["anakara", "zeplin"].includes(people.works[selected].wp.kind) ? " · işe vapurla" : "")],
+      ["Address", sim.addressText(r.slot)],
+      ["Hobby", people.hobbies[selected].ad],
+      ["Pet", pet || "None yet"],
+      ["On the island", t === 0 ? "Arrived today" : t === 1 ? "Arrived yesterday" : plural(t, "day")],
+      ["Getting around", (people.hasCar[selected] ? "Own car" : world.vehicles ? "Bus and on foot" : "On foot (no cars on the island yet)") + (["anakara", "zeplin"].includes(people.works[selected].wp.kind) ? " · ferry to work" : "")],
       // İstekler videolarımızın yorumlarından okunur (sunucuda istekler.py; biçim orada).
-      ...(!r.hidden ? [["Sen misin?", senMisin(r, dreamTitle)]] : []),
+      ...(!r.hidden ? [["Is this you?", senMisin(r, dreamTitle)]] : []),
     ]);
   }
 
@@ -259,8 +268,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const b = dollhouse.building;
     if (!b.daireler) {
       icon(svg(BINA_SIMGE[b.kind] ?? "bina"), null, true);
-      $("card-handle").textContent = dollhouse.workName ?? b.isim ?? (/Fener/.test(b.address ?? "") ? "Fener bekçisinin evi" : BUILDING_NAMES[b.kind] ?? "Dükkân");
-      $("card-title").textContent = `${b.address ?? ""} · ${dollhouse.floor + 1}. kat`;
+      $("card-handle").textContent = dollhouse.workName ?? b.isim ?? (/Fener|Gull Point/.test(b.address ?? "") ? "Lighthouse keeper's house" : BUILDING_NAMES[b.kind] ?? "Shop");
+      $("card-title").textContent = `${b.address ?? ""} · ${ordinal(dollhouse.floor + 1)} floor`;
       // Yalnızca şu an bu katta çalışanlar (izinli, yolda ya da evde olanlar listelenmez).
       const rows = [];
       let total = 0;
@@ -269,41 +278,42 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         if (people.activities[i]?.ne !== "is") continue;
         rows.push([sim.title(residents[i], today()), at(residents[i]), () => select(i)]);
       }
-      $("card-now").textContent = rows.length ? `Şu an ${rows.length} kişi çalışıyor (bu katın kadrosu ${total})` : total ? `Şu an kimse çalışmıyor (kadro ${total})`
-        : b.kind === "muhtarlik" ? "Mahallenin muhtarı yok. İlk isteyen muhtar olur: videomuza “meslek: muhtar” yaz." : "Bu katta çalışan yok";
+      $("card-now").textContent = rows.length ? `${plural(rows.length, "person", "people")} working now (staff of ${num(total)} on this floor)` : total ? `Nobody is working right now (staff of ${num(total)})`
+        : b.kind === "muhtarlik" ? "No association president yet. The first to ask gets the seat: comment “job: association president” on one of our videos." : "Nobody works on this floor";
       if (b.kind === "belediye" && secim) {
         // Seçim: açıkken adaylar ve oyları, bittiyse başkan. Adını gizleyenler "Gizli aday".
-        const ad = (h) => (h ? "@" + h : "Gizli aday");
+        const ad = (h) => (h ? "@" + h : "Private candidate");
         const sec = secim.durum === "acik"
-          ? [["Seçim", "Aday olmak için videomuza “adayım”, oy için “oy: @aday” yaz (yalnız adada oturanlar)"],
-             ...(secim.adaylar ?? []).map(([h, n], k) => [k === 0 ? "Adaylar" : "", `${ad(h)} · ${fmt.format(n)} oy`])]
-          : [["Başkan", secim.kazanan ? "@" + secim.kazanan : "Gizli komşu"]];
+          ? [["Election", "To run, comment “I'm running” on one of our videos; to vote, comment “vote: @handle” (island residents only)"],
+             ...(secim.adaylar ?? []).map(([h, n], k) => [k === 0 ? "Candidates" : "", `${ad(h)} · ${plural(n, "vote")}`])]
+          : [["Mayor", secim.kazanan ? "@" + secim.kazanan : "Private neighbor"]];
         facts([...sec, ...rows.slice(0, 10)]);
         return;
       }
       facts(rows.slice(0, 12));
-      if (rows.length > 12) facts([...rows.slice(0, 12), ["", `ve ${rows.length - 12} kişi daha`]]);
+      if (rows.length > 12) facts([...rows.slice(0, 12), ["", `and ${num(rows.length - 12)} more`]]);
       return;
     }
     icon(svg("ev"), null, true);
-    const p = sim.addressParts(b.slot0);
-    $("card-handle").textContent = `${sim.sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}`;
-    $("card-title").textContent = `${sim.mahalleName(p.mahalle)}, Driftwood · ${b.floors} katlı apartman`;
-    $("card-now").textContent = `${dollhouse.floor + 1}. kat`;
+    const p = sim.addressParts(b.slot0), house = sim.houseOf(b.slot0);
+    $("card-handle").textContent = `${house.ev + 1} ${sim.sokakName(p.mahalle, p.sokak)}`;
+    $("card-title").textContent = `${sim.mahalleName(p.mahalle)}, ${sim.adaName(p.ada)} · ${HOUSE_TYPES[house.tip] ?? "Home"}`;
+    $("card-now").textContent = `${ordinal(dollhouse.floor + 1)} floor`;
     const rows = [];
     for (let c = 0; c < b.perFloor; c++) {
       const k = dollhouse.floor * b.perFloor + c;
       if (k >= b.daireler) continue;
       const i = people.slotToIndex.get(b.slot0 + k);
-      if (i == null) rows.push([`Daire ${k + 1}`, "Boş, yeni sakinini bekliyor"]);
-      else rows.push([`Daire ${k + 1}`, `${at(residents[i])} · ${nowText(i)}`, () => select(i)]);
+      const h = sim.houseOf(b.slot0 + k), unit = h.apt ? `Apt ${h.apt}` : `No. ${h.ev + 1}`;
+      if (i == null) rows.push([unit, "Empty, waiting for a new resident"]);
+      else rows.push([unit, `${at(residents[i])} · ${nowText(i)}`, () => select(i)]);
     }
     facts(rows);
   }
 
   function render() {
     $("floorbar").hidden = !dollhouse.isOpen();
-    if (dollhouse.isOpen()) $("floor-label").textContent = `${dollhouse.floor + 1}. kat`;
+    if (dollhouse.isOpen()) $("floor-label").textContent = `${ordinal(dollhouse.floor + 1)} floor`;
     pending = [];
     if (mode === "sakin" && selected != null) renderPerson();
     else if (mode === "bina" && dollhouse.isOpen()) renderBuilding();
@@ -311,7 +321,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     flushActions();
   }
 
-  const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu", zeplin: "Zeplin" };
+  const KIND_NAMES = { car: "Car", taxi: "Taxi", bus: "Bus", ambulans: "Ambulance", itfaiye: "Fire truck", cop: "Garbage truck", zeplin: "Blimp" };
 
   // Kart birkaç karede bir yeniden çizilir; düğmeler değişmediyse yerinde kalır (yoksa basılırken
   // DOM'dan kopar ve dokunuş boşa gider). Yalnızca tıklama işlevleri tazelenir.
@@ -345,51 +355,51 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("card-traits").replaceChildren();
     const r = vehicle;
     const live = r.key ? traffic.active.get(r.key) : null;
-    $("card-handle").textContent = KIND_NAMES[r.kind] ?? "Araç";
+    $("card-handle").textContent = KIND_NAMES[r.kind] ?? "Vehicle";
     icon(svg(ARAC_SIMGE[r.kind] ?? "araba"), null, true);
     const rows = [];
     if (r.kind === "zeplin") {
       const z = zeplin.pose;
-      $("card-title").textContent = "Driftwood Blimp";
+      $("card-title").textContent = yerAdi("zeplin", "Driftwood Blimp");
       const m = minute();
       $("card-now").textContent = z.visible
-        ? { gelis: "Anakaradan adaya geliyor", tur: "Adanın üstünde tur atıyor", donus: "Anakaraya dönüyor" }[z.phase]
-        : m < 540 ? "Anakarada, 09:00'da adaya gelecek" : "Anakarada, yarın 09:00'da gelecek";
-      if (z.visible) rows.push(["Hız", `${Math.round(z.speed * 3.6)} km/sa`], ["Yükseklik", `${Math.round(z.y)} m`]);
-      rows.push(["Uçuş", "Her gün 09:00–22:00"]);
+        ? { gelis: "Flying in from the mainland", tur: "Circling over the island", donus: "Heading back to the mainland" }[z.phase]
+        : m < 540 ? `On the mainland, flies in at ${hourText(9)}` : `On the mainland, back tomorrow at ${hourText(9)}`;
+      if (z.visible) rows.push(["Speed", mph(z.speed)], ["Altitude", feet(z.y)]);
+      rows.push(["Flights", `Daily, ${hourText(9)}–${hourText(22)}`]);
       // Pilotlar: mesleği zeplin pilotu olan sakinler (kartından açılır).
       for (let i = 0; i < residents.length; i++) if (sim.dreamJob(residents[i]).id === "zeplin_pilotu") rows.push(["Pilot", at(residents[i]), () => select(i)]);
-      if (ZEPLIN_REKLAM.ad) rows.push(["Reklam", ZEPLIN_REKLAM.ad]);
+      if (ZEPLIN_REKLAM.ad) rows.push(["Sponsored", ZEPLIN_REKLAM.ad]);
       facts(rows);
       const f = follow.get();
-      if (z.visible) followActions(f?.kind === "zeplin" ? f.view : null, { kind: "zeplin" }, ["kamera", "Yanından izle"]);
+      if (z.visible) followActions(f?.kind === "zeplin" ? f.view : null, { kind: "zeplin" }, ["kamera", "Follow alongside"]);
       return;
     }
     if (r.kind === "bus") {
       const line = traffic.lines[r.line];
-      $("card-title").textContent = `${line.name} · ${r.dep + 1}. sefer`;
+      $("card-title").textContent = `${line.name} · trip ${r.dep + 1}`;
       const n = live ? people.busSeat.get(live) ?? 0 : 0;
-      $("card-now").textContent = live ? (live.v < 0.3 ? "Durakta / ışıkta bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : "Seferini tamamladı";
-      rows.push(["Yolcu", `${n} kişi`], ["Durak", `${line.stops.length} durak, ${line.headway} dakikada bir`]);
+      $("card-now").textContent = live ? (live.v < 0.3 ? "Waiting at a stop or a light" : mph(live.v)) : "Finished its run";
+      rows.push(["Riders", plural(n, "person", "people")], ["Stops", `${plural(line.stops.length, "stop")}, every ${line.headway} minutes`]);
     } else if (r.kind === "car" || r.kind === "taxi") {
       const owner = r.owner != null ? residents[r.owner] : null;
-      $("card-title").textContent = r.kind === "taxi" ? "Driftwood Taksi" : owner ? `${at(owner)} adlı sakinin arabası` : "Otomobil";
+      $("card-title").textContent = r.kind === "taxi" ? "Driftwood Taxi" : owner ? `${at(owner)}'s car` : "Car";
       const done = r.key && !live; // yolculuk bitti, araç park yerinde
-      $("card-now").textContent = r.parked ? "Park halinde" : live ? (live.parked ? "Park etti" : live.v < 0.3 ? "Bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : done ? (r.kind === "taxi" ? "Yolcusunu bıraktı" : "Park etti") : "Müşteri bekliyor";
-      if (owner) rows.push([r.kind === "taxi" ? "Yolcu" : "Sahibi", at(owner), () => select(r.owner)]);
+      $("card-now").textContent = r.parked ? "Parked" : live ? (live.parked ? "Just parked" : live.v < 0.3 ? "Waiting" : mph(live.v)) : done ? (r.kind === "taxi" ? "Dropped off a passenger" : "Just parked") : "Waiting for a fare";
+      if (owner) rows.push([r.kind === "taxi" ? "Passenger" : "Owner", at(owner), () => select(r.owner)]);
     } else {
-      $("card-title").textContent = { ambulans: "Driftwood Hastanesi", itfaiye: "Driftwood İtfaiyesi", cop: "Belediye temizlik işleri" }[r.kind] ?? "";
-      $("card-now").textContent = live ? ({ out: "Göreve gidiyor", wait: "Görevde", back: "Dönüyor" }[live.phase] ?? (live.v < 0.3 ? "Konteyner boşaltıyor" : "Toplama turunda")) : "Görevini tamamladı";
+      $("card-title").textContent = { ambulans: yerAdi("saglik", "Driftwood Medical Center"), itfaiye: "Driftwood Fire Department", cop: "Driftwood Public Works" }[r.kind] ?? "";
+      $("card-now").textContent = live ? ({ out: "Heading to a call", wait: "On a call", back: "Heading back" }[live.phase] ?? (live.v < 0.3 ? "Emptying a dumpster" : "On its pickup route")) : "Done for now";
     }
     facts(rows);
     const f = follow.get();
     const on = f?.kind === "arac" && f.key === r.key;
-    if (live && (!live.parked || on)) followActions(on ? f.view : null, { kind: "arac", key: r.key }, ["kamera", "Arkasından izle"]);
+    if (live && (!live.parked || on)) followActions(on ? f.view : null, { kind: "arac", key: r.key }, ["kamera", "Follow behind"]);
   }
 
   /** Dokununca takip kendiliğinden başlar; kartta yalnız bakış açısı seçilir (haritadan ya da gözünden). */
   function followActions(view, target, shoulderLabel) {
-    if (view === "omuz") action(["harita", "Haritaya dön"], () => { follow.set(target, "harita"); render(); });
+    if (view === "omuz") action(["harita", "Back to map"], () => { follow.set(target, "harita"); render(); });
     else action(shoulderLabel, () => { follow.set(target, "omuz"); render(); });
   }
 
@@ -459,20 +469,20 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const pet = stories.petName(i);
     const t = sim.tenure(r, day);
     const card = residentCard(shot, {
-      handle: at(r), letter: r.handle[0].toLocaleUpperCase("tr"), color: `hsl(${r.seed % 360} 62% 58%)`,
+      handle: at(r), letter: r.handle[0].toUpperCase(), color: `hsl(${r.seed % 360} 62% 58%)`,
       title: $("card-title").textContent, now: nowText(i),
       rows: [
-        ["Ev", sim.addressText(r.slot).replace(/, [^,]*Mahallesi, Driftwood$/, "")],
-        ["Mahalle", sim.addressText(r.slot).match(/([^,]*Mahallesi)/)?.[1] ?? "Driftwood"],
-        ["Hobi", people.hobbies[i].ad],
-        ["Evcil", pet ? `${pet.kind} · ${pet.name}` : "Henüz yok"],
-        ["Adada", t === 0 ? "Bugün geldi" : t === 1 ? "Dün geldi" : `${fmt.format(t)} gündür`],
+        ["Home", sim.streetAddress(r.slot)],
+        ["Neighborhood", sim.mahalleName(sim.addressParts(r.slot).mahalle)],
+        ["Hobby", people.hobbies[i].ad],
+        ["Pet", pet ? `${pet.kind} · ${pet.name}` : "None yet"],
+        ["On the island", t === 0 ? "Arrived today" : t === 1 ? "Arrived yesterday" : plural(t, "day")],
       ],
       link: `https://driftwood.rumpuskit.com/?bul=${encodeURIComponent(r.handle)}`,
     });
-    const res = await shareCanvas(card, { name: `driftwood-${r.handle}`, text: `Driftwood'da yaşıyorum: ${$("card-title").textContent}.`, url: `https://driftwood.rumpuskit.com/?bul=${encodeURIComponent(r.handle)}` });
-    if (res === "indirildi-kopyalandi") toast("Kart indirildi, bağlantı kopyalandı");
-    else if (res === "indirildi") toast("Kart indirildi");
+    const res = await shareCanvas(card, { name: `driftwood-${r.handle}`, text: `I live on Driftwood Island: ${$("card-title").textContent}.`, url: `https://driftwood.rumpuskit.com/?bul=${encodeURIComponent(r.handle)}` });
+    if (res === "indirildi-kopyalandi") toast("Card downloaded, link copied");
+    else if (res === "indirildi") toast("Card downloaded");
   }
 
   function showCard() {
@@ -554,9 +564,9 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       $("card").hidden = false;
       $("floorbar").hidden = true;
       $("card-handle").textContent = "@" + handle;
-      $("card-title").textContent = "Bu kullanıcı adı henüz adada değil.";
-      $("card-now").textContent = `TikTok'ta @${TIKTOK} hesabını takip ettiysen iskelede sıranı bekliyorsun: sıradaki taşınma ${nextMove()}. ` +
-        "Etmediysen takip et, sen de taşın. (Bazı hesapları, ör. gizli hesapları, TikTok takipçi listesinde göstermiyor; onlar taşınamıyor.)";
+      $("card-title").textContent = "This username isn't on the island yet.";
+      $("card-now").textContent = `If you follow @${TIKTOK} on TikTok, you're waiting at the Ferry Landing until the next move-in (${nextMove()}). ` +
+        "If not, follow and move in too. (TikTok leaves some accounts, such as private ones, out of the follower list; those can't move in.)";
       $("card-facts").replaceChildren();
       $("card-tabs").hidden = true;
       $("card-traits").replaceChildren();
@@ -592,8 +602,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     selectedVehicle: () => (mode === "arac" && !$("card").hidden ? vehicle : null),
     tick(unix, minuteNow, day, times) {
       // Gün doğumu/batımı sığarsa (uzun gün adlarında ve telefonda gizlenir; tam metin ipucunda).
-      const sunText = times?.rise != null ? ` · ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}` : "";
-      const clock = $("clock"), text = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}`;
+      const sunText = times?.rise != null ? ` · ${clockText(times.rise)}–${clockText(times.set)}` : "";
+      const clock = $("clock"), text = `${clockText(minuteNow)} · ${DAYS[sim.weekday(day)]}`;
       if (clock.dataset.text !== text + sunText) {
         clock.dataset.text = text + sunText;
         clock.title = text + sunText;
@@ -612,10 +622,10 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       // Toplam, dar ekranda gizlenir (satır kesilmesin).
       if (!residents.length) {
         $("stats").innerHTML = `<span class="bos"></span>`;
-        $("stats").firstChild.textContent = listError === "none" ? "Sakin listesi şu an alınamadı" : waiting ? "Ada ilk sakinlerini bekliyor" : "Ada ilk sakinini bekliyor";
+        $("stats").firstChild.textContent = listError === "none" ? "Couldn't load the resident list right now" : waiting ? "The island is waiting for its first residents" : "The island is waiting for its first resident";
       } else {
-        const chip = (ic, n, t, cls = "") => `<span class="chip ${cls}"><b>${svg(ic)}${fmt.format(n)}</b><small>${t}</small></span>`;
-        $("stats").innerHTML = chip("sakinler", residents.length, "sakin", "ana") + chip("is", work, "işte") + chip("ev", home, "evde") + chip("yurur", out, "dışarıda");
+        const chip = (ic, n, t, cls = "") => `<span class="chip ${cls}"><b>${svg(ic)}${num(n)}</b><small>${t}</small></span>`;
+        $("stats").innerHTML = chip("sakinler", residents.length, residents.length === 1 ? "resident" : "residents", "ana") + chip("is", work, "at work") + chip("ev", home, "at home") + chip("yurur", out, "out");
       }
       // Günün olayı (etkinlik.js): üst panelde tek satır; dokununca kamera olayın yerine gider.
       const th = people.theme, gun = $("gunun");
@@ -626,7 +636,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
           gun.dataset.key = key;
           const ic = { cuma: "cami", sinema: "kamera", pazar: "sepet", ucurtma: "dag", gunbatimi: "gunes", balik: "balik", temizlik: "dalga", yildiz: "ampul", tavla: "fincan", komsuluk: "mahalle" }[th.id] ?? "gunes";
           gun.innerHTML = svg(ic);
-          gun.append(`Bugün: ${th.ad}${th.bas != null ? ` · ${sim.formatMinute(th.bas)}` : ""}`);
+          gun.append(`Today: ${th.ad}${th.bas != null ? ` · ${clockText(th.bas)}` : ""}`);
           gun.title = gun.textContent;
         }
       }

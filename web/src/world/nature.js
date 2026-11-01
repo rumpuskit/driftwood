@@ -1,7 +1,7 @@
-// Ağaçlar (fıstık çamı, servi, çınar, zeytin, palmiye) ve bulutlar. Boylar gerçektir.
+// Ağaçlar (New England: akçaağaç, meşe, sahil çamı, ardıç) ve bulutlar. Boylar gerçektir. Akçaağaç ve meşenin
+// rengi mevsime göre (world.month): Ekim–Kasım sonbahar renkleri, kışın soluk.
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { CELL_D, CELL_W } from "./layout.js";
 import { fbm, hash2, rng } from "./noise.js";
 
 /** Birkaç yumruyu birleştirip doğal görünen bir taç yapar (merkez y'de). */
@@ -46,67 +46,7 @@ function branch(a, b, r0, r1, color) {
   return colored(g, color);
 }
 
-/** Palmiye gövdesi: hafif kavisli, halkalı (açık ve koyu bantlar). */
-function palmTrunk(H, bend) {
-  const parts = [];
-  const n = 14;
-  for (let i = 0; i < n; i++) {
-    const t0 = i / n, t1 = (i + 1) / n;
-    const x0 = bend * t0 * t0, x1 = bend * t1 * t1;
-    const r0 = 0.24 - 0.08 * t0, r1 = 0.24 - 0.08 * t1;
-    parts.push(branch([x0, t0 * H, 0], [x1, t1 * H, 0], r0 * (i % 2 ? 1 : 1.08), r1, i % 2 ? "#8c7458" : "#a38a6a"));
-  }
-  return mergeColored(parts);
-}
-
-/** Palmiye tacı: kavis yapıp sarkan yapraklar (orta damar ve iki yana inen yaprakçıklar) ve hindistan cevizleri. */
-function palmCrown(H, bend, seed) {
-  const rand = rng(seed);
-  const top = [bend, H, 0];
-  const pos = [], col = [];
-  const green = new THREE.Color("#5e8f3c"), tip = new THREE.Color("#8fae4f"), dark = new THREE.Color("#46702e");
-  const push = (p, c) => { pos.push(...p); col.push(c.r, c.g, c.b); };
-  const fronds = 11;
-  for (let f = 0; f < fronds; f++) {
-    const young = f >= fronds - 3;
-    const a = (f / fronds) * Math.PI * 2 + rand() * 0.4;
-    const L = young ? 2.2 : 3.4 + rand() * 0.8;
-    const lift = young ? 1.6 : 0.9 + rand() * 0.3, droop = young ? 0.6 : 2.0 + rand() * 0.6;
-    const ca = Math.cos(a), sa = Math.sin(a);
-    const seg = 7;
-    let prev = null;
-    for (let k = 0; k <= seg; k++) {
-      const t = k / seg;
-      const r = L * t, y = lift * t - droop * t * t;
-      const w = 0.7 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (young ? 0.6 : 1);
-      const c = [top[0] + ca * r, top[1] + y, top[2] + sa * r];
-      // Yaprakçıklar orta damardan iki yana ve aşağı iner (V kesit).
-      const l = [c[0] - sa * w, c[1] - w * 0.45, c[2] + ca * w];
-      const rr = [c[0] + sa * w, c[1] - w * 0.45, c[2] - ca * w];
-      if (prev) {
-        const cc = green.clone().lerp(tip, t), cd = dark.clone().lerp(tip, t * 0.7);
-        for (const [p, q] of [[prev.l, l], [prev.r, rr]]) {
-          push(prev.c, cc); push(c, cc); push(q, cd);
-          push(prev.c, cc); push(q, cd); push(p, cd);
-        }
-      }
-      prev = { c, l, r: rr };
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  const nuts = [];
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    nuts.push(colored(new THREE.IcosahedronGeometry(0.16, 0).translate(top[0] + Math.cos(a) * 0.25, top[1] - 0.3, Math.sin(a) * 0.25), "#6b4a2a"));
-  }
-  const crown = mergeGeometries([g, ...nuts.map((n) => { n.deleteAttribute("normal"); return n; })]);
-  crown.computeVertexNormals();
-  return crown;
-}
-
-/** Selvi: tabandan sivri uca daralan, hafif kabarık gövde. */
+/** Ardıç: tabandan sivri uca daralan, hafif kabarık gövde. */
 function cypress(H) {
   const pts = [];
   for (let i = 0; i <= 10; i++) {
@@ -119,71 +59,91 @@ function cypress(H) {
 
 // Her ağaç türü kendi referans boyunda tek parça kurulur (gövde + dallar + taç); örnekler yalnızca
 // döndürülüp orantılı ölçeklenir. Böylece taç hep gövdeye oturur.
-const REF = { cam: 11, servi: 11, cinar: 10, zeytin: 5, palmiye: 8.5 };
+const REF = { camk: 9, servi: 8, akcaagac: 10, mese: 11 };
+
+/** Mevsim renkleri (ay 0-11). Akçaağaç: yazın yeşil, Ekim–Kasım kırmızı-turuncu-sarı, kışın soluk kahve. */
+function seasonColors(kind, month) {
+  if (kind === "akcaagac") {
+    if (month >= 9 && month <= 10) return ["#c8452c", "#e07a2a", "#e9b23a", "#b8352f", "#d9662f", "#f0c24a"];
+    if (month === 8) return ["#7aa755", "#a8b04a", "#6f9d4c", "#c9a23a"];
+    if (month === 11 || month <= 2) return ["#8d7a66", "#9a8670", "#7f6e5c"];
+    return ["#6f9d4c", "#7aa755", "#64913f", "#86ad5c"];
+  }
+  if (kind === "mese") {
+    if (month >= 9 && month <= 10) return ["#9a6a35", "#a8743a", "#7f5a32", "#8f7a3a"];
+    if (month === 11 || month <= 2) return ["#7a6650", "#857058", "#6e5c48"];
+    return ["#567f3c", "#4f7536", "#5e8a42"];
+  }
+  return null;
+}
+
 const KINDS = {
-  cam: {
-    h: [9, 13], trunkR: 0.3, colors: ["#4f7a3e", "#5b8546", "#46703a"],
-    trunk: (v) => { const lean = [0.35, 0.9, -0.6][v]; return mergeColored([
-      branch([0, 0, 0], [lean, 8.6, 0], 0.32, 0.2, "#7a5b45"),
-      branch([lean * 0.85, 7.6, 0], [lean + 1.6, 9.2, 0.6], 0.14, 0.07, "#7a5b45"),
-      branch([lean * 0.85, 7.9, 0], [lean - 1.7, 9.3, -0.9], 0.14, 0.07, "#7a5b45"),
-      branch([lean * 0.95, 8.2, 0], [lean + 0.3, 9.3, 1.8], 0.12, 0.06, "#7a5b45"),
+  camk: {
+    // Sahil çamı (pitch pine): eğri gövde, katlı ve dağınık koyu taç.
+    h: [7, 11], trunkR: 0.26, colors: ["#3f6236", "#46693a", "#385a30"],
+    trunk: (v) => { const lean = [0.5, -0.7, 0.2][v]; return mergeColored([
+      branch([0, 0, 0], [lean, 7.4, 0.2], 0.28, 0.14, "#5e4a3a"),
+      branch([lean * 0.6, 4.6, 0.1], [lean + 1.5, 5.6, 0.5], 0.1, 0.05, "#5e4a3a"),
+      branch([lean * 0.7, 5.6, 0.1], [lean - 1.4, 6.5, -0.6], 0.1, 0.05, "#5e4a3a"),
     ]); },
-    crown: (v) => colored(clumps("cam" + v, 6 + v, 2.5 + v * 0.3, 2.3, 0.42, 9.7).translate([0.35, 0.9, -0.6][v], 0, 0), "#ffffff"),
+    crown: (v) => { const lean = [0.5, -0.7, 0.2][v]; return mergeColored([
+      colored(clumps("camk-a" + v, 4, 1.4, 1.3, 0.55, 5.5).translate(lean * 0.7 + 0.9, 0, 0.3), "#ffffff"),
+      colored(clumps("camk-b" + v, 4, 1.3, 1.2, 0.55, 6.4).translate(lean * 0.8 - 0.9, 0, -0.4), "#ffffff"),
+      colored(clumps("camk-c" + v, 5, 1.3, 1.4, 0.6, 7.6).translate(lean, 0, 0.2), "#ffffff"),
+    ]); },
   },
   servi: {
-    h: [9, 14], trunkR: 0.18, colors: ["#3c5e34", "#35552f", "#40633a"],
-    trunk: () => mergeColored([branch([0, 0, 0], [0, 1.6, 0], 0.17, 0.13, "#6b5040")]),
+    // Doğu kırmızı ardıcı (eastern red cedar): fundalık ve kumul kenarlarında dar, sivri.
+    h: [5, 9], trunkR: 0.16, colors: ["#3c5a34", "#35502f", "#43603a"],
+    trunk: () => mergeColored([branch([0, 0, 0], [0, 1.2, 0], 0.16, 0.12, "#6b5040")]),
     crown: (v) => cypress(REF.servi * [1, 0.92, 1.06][v]),
   },
-  cinar: {
-    h: [8, 12], trunkR: 0.38, colors: ["#6f9d4c", "#7aa755", "#64913f", "#86ad5c"],
-    trunk: (v) => { const t = [0.1, 0.5, -0.3][v]; return mergeColored([
-      branch([0, 0, 0], [t, 5.6, 0], 0.4, 0.26, "#8a7560"),
-      branch([t, 4.6, 0], [t + 1.6, 6.6, 0.5], 0.16, 0.08, "#8a7560"),
-      branch([t, 4.9, 0], [t - 1.3, 6.8, -0.8], 0.16, 0.08, "#8a7560"),
-      branch([t, 5.2, 0], [t + 0.2, 7.0, 1.5], 0.14, 0.07, "#8a7560"),
+  akcaagac: {
+    // Şeker akçaağacı: düz gövde, yuvarlak dolgun taç.
+    h: [8, 13], trunkR: 0.34, colors: ["#6f9d4c"],
+    trunk: (v) => { const t = [0.1, 0.35, -0.25][v]; return mergeColored([
+      branch([0, 0, 0], [t, 5.2, 0], 0.36, 0.24, "#6e6258"),
+      branch([t, 4.2, 0], [t + 1.4, 6.2, 0.5], 0.15, 0.08, "#6e6258"),
+      branch([t, 4.5, 0], [t - 1.2, 6.4, -0.7], 0.15, 0.08, "#6e6258"),
+      branch([t, 4.8, 0], [t + 0.2, 6.6, 1.3], 0.13, 0.07, "#6e6258"),
     ]); },
-    crown: (v) => colored(clumps("cinar" + v, 7 + v, 1.9 + v * 0.25, 2.2, [0.85, 0.75, 0.95][v], 7.2).translate([0.1, 0.5, -0.3][v], 0, 0), "#ffffff"),
+    crown: (v) => colored(clumps("akcaagac" + v, 8 + v, 1.7 + v * 0.2, 2.3, [0.95, 0.88, 1.0][v], 7.0).translate([0.1, 0.35, -0.25][v], 0, 0), "#ffffff"),
   },
-  zeytin: {
-    h: [4, 6], trunkR: 0.25, colors: ["#8a9c6d", "#7d9163", "#93a578"],
-    trunk: (v) => { const t = [0.4, -0.3, 0.7][v]; return mergeColored([
-      branch([0, 0, 0], [t, 1.6, 0.1], 0.26, 0.2, "#6e5a48"),
-      branch([t, 1.5, 0.1], [t - 0.6, 2.9, 0.3], 0.18, 0.12, "#6e5a48"),
-      branch([t, 1.6, 0.1], [t + 0.8, 2.8, -0.3], 0.14, 0.09, "#6e5a48"),
+  mese: {
+    // Ak meşe: kalın gövde, geniş ve basık, düzensiz taç.
+    h: [9, 14], trunkR: 0.45, colors: ["#567f3c"],
+    trunk: (v) => { const t = [0.2, -0.4, 0.5][v]; return mergeColored([
+      branch([0, 0, 0], [t, 4.4, 0], 0.48, 0.32, "#5f5348"),
+      branch([t, 3.8, 0], [t + 2.4, 5.8, 0.7], 0.2, 0.1, "#5f5348"),
+      branch([t, 4.0, 0], [t - 2.2, 6.0, -0.9], 0.2, 0.1, "#5f5348"),
+      branch([t, 4.2, 0], [t + 0.3, 6.4, 2.2], 0.18, 0.09, "#5f5348"),
     ]); },
-    crown: (v) => colored(clumps("zeytin" + v, 5 + v, 1.2 + v * 0.2, 1.35, 0.68, 3.4).translate([0.4, -0.3, 0.7][v] * 0.6, 0, 0), "#ffffff"),
-  },
-  palmiye: {
-    h: [7, 10], trunkR: 0.26, colors: ["#ffffff", "#f2f6ea", "#eef4e2"],
-    trunk: (v) => palmTrunk(REF.palmiye, [0.9, 1.6, 0.4][v]),
-    crown: (v) => palmCrown(REF.palmiye, [0.9, 1.6, 0.4][v], "palmiye" + v),
+    crown: (v) => colored(clumps("mese" + v, 9 + v, 2.6 + v * 0.3, 2.4, [0.7, 0.62, 0.75][v], 7.0).translate([0.2, -0.4, 0.5][v], 0, 0), "#ffffff"),
   },
 };
 
 function treeKind(world, x, z, h, roll) {
-  const d = world.sdf(x, z);
-  if (d > world.margin(x, z) - 45) return roll < 0.35 ? "palmiye" : "cam";
-  if (h > 9) return roll < 0.6 ? "cam" : "servi";
-  const cell = world.cellByKey.get(`${Math.round(x / CELL_W)},${Math.round(z / CELL_D)}`);
-  if (cell?.type === "kir") return roll < 0.7 ? "zeytin" : "servi";
-  if (cell?.type === "mahalle") return roll < 0.5 ? "cinar" : roll < 0.75 ? "servi" : "zeytin";
-  return roll < 0.45 ? "cam" : roll < 0.7 ? "cinar" : roll < 0.85 ? "servi" : "zeytin";
+  const zone = world.zoneAt(x, z);
+  if (world.sdf(x, z) > -45 || zone === "kumul") return roll < 0.75 ? "camk" : "servi";
+  if (zone === "tepe") return roll < 0.55 ? "servi" : "camk";
+  if (zone === "mahalle") return roll < 0.5 ? "akcaagac" : roll < 0.85 ? "mese" : "camk";
+  if (zone === "merkez") return roll < 0.7 ? "akcaagac" : "mese";
+  return roll < 0.42 ? "mese" : roll < 0.75 ? "camk" : "akcaagac";
 }
 
 function treeDensity(world, x, z, h) {
-  const cell = world.cellByKey.get(`${Math.round(x / CELL_W)},${Math.round(z / CELL_D)}`);
   const inPark = world.plazas.some((p) => p.kind === "park" && x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1);
   if (inPark) return 0.5;
   if (world.parks.some((p) => x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1)) return 0.35;
-  const d = world.sdf(x, z);
-  if (d > world.margin(x, z) - 35 && h < 1.6) return 0; // kumsal
-  if (!cell) return 0.18 + Math.max(0, fbm(x / 110, z / 110, 31)) * 1.3;
-  if (cell.type === "mahalle") return 0.22;
-  if (cell.type === "merkez") return 0.1;
-  if (cell.type === "tepe") return 0.25 + Math.max(0, fbm(x / 70, z / 70, 32)) * 1.2;
-  return 0.1;
+  if (world.sdf(x, z) > -35 && h < 1.6) return 0; // kumsal
+  const zone = world.zoneAt(x, z);
+  if (zone === "mahalle") return 0.22;
+  if (zone === "merkez") return 0.08;
+  if (zone === "tepe") return 0.03 + Math.max(0, fbm(x / 70, z / 70, 32)) * 0.25; // fundalık: seyrek ardıç
+  if (zone === "kumul") return 0.015;
+  if (zone === "tarla") return 0.03;
+  // Kır: korular ve açıklıklar.
+  return 0.02 + Math.max(0, fbm(x / 140, z / 140, 31)) * 0.9;
 }
 
 export function buildTrees(world) {
@@ -200,14 +160,8 @@ export function buildTrees(world) {
       spots.push({ x, z, y: h - 0.15, kind: treeKind(world, x, z, h, hash2(gx, gz, 46)), r: hash2(gx, gz, 44), t: hash2(gx, gz, 45) });
     }
   }
-  // Meydan çınarları ve sahil palmiyeleri.
-  for (const f of world.features) if (f.type === "agac") spots.push({ x: f.x, z: f.z, y: world.groundY(f.x, f.z) - 0.05, kind: "cinar", r: 0.6, t: 0.3 });
-  // Sahil yolu palmiyeleri: yolun kara tarafında, gezinti alanının dışında.
-  for (const [i, [x, z]] of (world.promenade ?? []).entries()) {
-    if (i % 2 !== 0) continue;
-    const pz = z - 5.2;
-    if (world.isLand(x, pz) && !world.roadIndex.at(x, pz)) spots.push({ x, z: pz, y: world.height(x, pz) - 0.1, kind: "palmiye", r: (i % 5) / 5, t: (i % 7) / 7 });
-  }
+  // Green'in akçaağaçları (sokak ağaçları).
+  for (const f of world.features) if (f.type === "agac") spots.push({ x: f.x, z: f.z, y: world.groundY(f.x, f.z) - 0.05, kind: f.tur ?? "akcaagac", r: 0.6, t: (Math.abs(f.x * 7 + f.z * 3) % 100) / 100 });
 
   const group = new THREE.Group();
   const crowns = [];
@@ -224,7 +178,7 @@ export function buildTrees(world) {
       const list = all.filter((t) => Math.floor(t.t * 1000) % VARIANTS === v);
       if (!list.length) continue;
       const trunk = new THREE.InstancedMesh(kind.trunk(v), bark, list.length);
-      const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1, side: name === "palmiye" ? THREE.DoubleSide : THREE.FrontSide });
+      const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1 });
       crowns.push(crownMat);
       const crown = new THREE.InstancedMesh(kind.crown(v), crownMat, list.length);
       list.forEach((t, i) => {
@@ -240,7 +194,8 @@ export function buildTrees(world) {
         m.compose(pos.set(t.x, t.y, t.z), q, sc.set(k * wide, k, k * deep));
         trunk.setMatrixAt(i, m);
         crown.setMatrixAt(i, m);
-        color.set(kind.colors[Math.floor(t.t * 97) % kind.colors.length]);
+        const palette = seasonColors(name, world.month ?? 9) ?? kind.colors;
+        color.set(palette[Math.floor((t.t * 97 + t.r * 31) % palette.length)]);
         color.offsetHSL((r2 - 0.5) * 0.04, (r3 - 0.5) * 0.12, (r2 - 0.5) * 0.08);
         crown.setColorAt(i, color);
         world.addObstacleCircle(t.x, t.z, kind.trunkR * k + 0.25);
