@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.driftwood.gunluk</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>__ROOT__/video/zamanlayici/gunluk.sh</string></array>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <!-- Her saat :12; gunluk.sh Türkiye saatine bakıp yalnız 09, 11 ve 21'de çalışır. -->
+  <key>StartCalendarInterval</key>
+  <dict><key>Minute</key><integer>12</integer></dict>
+  <key>StandardOutPath</key><string>/dev/null</string>
+  <key>StandardErrorPath</key><string>/dev/null</string>
+</dict>
+</plist>

@@ -1,0 +1,13 @@
+web/node_modules/
+web/dist/
+video/node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+assets-src/
+.wrangler/
+secret/
+CLAUDE.md
+.claude/
+video/cikti/
+sayac/.dev.vars

@@ -1,0 +1,34 @@
+# Çevrimiçi sayacı (Cloudflare Worker + Durable Object) ve sakin listesinin dağıtımı (KV).
+# Yayın: cd sayac && npx wrangler@4 deploy. Liste sunucudaki veritabanından gelir: sunucu her aktarımdan
+# sonra PUT /sakinler.json yollar (YAYIN_ANAHTARI: wrangler secret, sunucuda /opt/driftwood/secrets/yayin.json).
+name = "driftwood-sayac"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+# Site GitHub Pages'te, driftwood.rumpuskit.com (DNS: CNAME → rumpuskit.github.io, proxied). Worker'ın kendi alan adı
+# driftwood-data.rumpuskit.com (custom domain: DNS kaydını Cloudflare kendisi açar).
+routes = [
+  { pattern = "driftwood-data.rumpuskit.com", custom_domain = true },
+]
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "Presence"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Presence"]
+
+[[kv_namespaces]]
+binding = "SAKINLER"
+id = "KV_ID_BEKLIYOR"  # npx wrangler@4 kv namespace create SAKINLER çıktısındaki id
+
+# Kayıt: yorumla doğrulama, ev ve gün tercihleri, anketler, saklı nesne sayacı, siteden seçim oyları (kayit.js).
+[[durable_objects.bindings]]
+name = "KAYIT"
+class_name = "Kayit"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Kayit"]

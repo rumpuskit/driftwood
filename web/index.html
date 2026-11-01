@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#7ec4ea" />
+    <title>Driftwood</title>
+    <meta name="description" content="TikTok'ta takip eden herkesin evi, mesleği ve günü olan, takipçi geldikçe büyüyen bir ada." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Driftwood · takip eden herkes bu adada yaşıyor" />
+    <meta property="og:description" content="TikTok'ta takip et; adada evin, mesleğin ve kendi günün olsun." />
+    <meta property="og:image" content="https://driftwood.rumpuskit.com/og.jpg" />
+    <meta property="og:url" content="https://driftwood.rumpuskit.com/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+    <script>
+      // Yükleme ekranı adanın o anki saatiyle açılır (ABD Doğu saati): şafak, gündüz, akşam, gece.
+      (function () {
+        var h = 12;
+        try { h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" }).format(new Date())) % 24; } catch (e) {}
+        document.documentElement.dataset.vakit = h < 6 || h >= 20 ? "gece" : h < 8 ? "safak" : h < 17 ? "gun" : "aksam";
+      })();
+      if (location.protocol === "http:" && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+        location.replace("https:" + location.href.slice(5));
+      }
+    </script>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="speed" role="group" aria-label="Zaman hızı (geliştirme)" hidden>
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="60">60×</button>
+      <button data-speed="600">600×</button>
+    </div>
+
+    <div id="floorbar" hidden>
+      <button id="floor-down" aria-label="Alt kat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <span id="floor-label">1. kat</span>
+      <button id="floor-up" aria-label="Üst kat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button id="floor-exit">Dışarı çık</button>
+    </div>
+
+    <!-- Sol sütun: üst bilgi ve altında açılan kart aynı akışta (üst üste binmezler). -->
+    <div id="sol">
+      <header id="hud">
+        <div class="hud-top">
+          <div class="brand"><img src="/favicon.svg" alt="" width="22" height="22" />Driftwood</div>
+          <div class="clock" id="clock">--:--</div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="online" id="online" hidden><span class="dot"></span><span id="online-n">1</span> kişi şu an adada</div>
+        <button class="goal" id="next" hidden>
+          <span class="goal-head"><span class="goal-label"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V3.5"/><path d="M3 21h7"/><path d="M6 4h14.5"/><path d="M6 8.5 10.5 4"/><path d="M17.5 4v5"/><rect x="16" y="9" width="3" height="2.5" rx=".5"/></svg>Sıradaki</span><span class="goal-need" id="next-need"></span></span>
+          <span class="goal-name" id="next-name"></span>
+          <span class="bar"><i id="next-bar"></i></span>
+        </button>
+        <button class="waiting gunun" id="gunun" hidden></button>
+        <button class="waiting" id="waiting" hidden></button>
+        <button class="waiting secim" id="secim" hidden></button>
+        <div class="links"><a id="cta" class="cta" target="_blank" rel="noopener">TikTok'ta takip et, adaya taşın</a><a class="priv" href="/gizlilik.html">Gizlilik</a></div>
+      </header>
+      <div id="toast" role="status" aria-live="polite" hidden></div>
+      <div id="tur" hidden><div id="tur-yazi"></div><button id="tur-basla" hidden>Başla</button><button id="tur-bitir">Turu bitir</button></div>
+      <section id="card" hidden>
+        <div class="grip" aria-hidden="true"></div>
+        <button id="card-close" aria-label="Kapat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <div class="card-head">
+          <div class="avatar" id="card-icon" aria-hidden="true"></div>
+          <div class="card-names">
+            <div class="handle" id="card-handle"></div>
+            <div class="title" id="card-title"></div>
+          </div>
+        </div>
+        <div class="dream" id="card-dream" hidden></div>
+        <div class="now" id="card-now"></div>
+        <div id="card-tabs" role="tablist">
+          <button data-tab="simdi" class="on">Şimdi</button>
+          <button data-tab="bugun">Bugün</button>
+          <button data-tab="hikaye">Hikâye</button>
+        </div>
+        <div id="card-traits"></div>
+        <dl id="card-facts"></dl>
+        <div id="card-actions"></div>
+      </section>
+    </div>
+
+    <div id="navbtns">
+      <button id="sound" aria-label="Ortam sesleri"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+      <button id="compass" aria-label="Kuzeye çevir"><span id="compass-needle"><svg class="i pusula" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 16 12H8z" fill="#e0607a" stroke="none"/><path d="M12 21.5 8 12h8z" fill="currentColor" stroke="none" opacity=".4"/></svg></span></button>
+      <button id="zoom-in" aria-label="Yakınlaştır">+</button>
+      <button id="zoom-out" aria-label="Uzaklaştır">−</button>
+    </div>
+
+    <!-- Adada yapılacaklar: telefonda alt sekme çubuğu, masaüstünde aramanın üstünde etiketli şerit. -->
+    <nav id="dock" aria-label="Adada"></nav>
+
+    <!-- Gazete, Benim evim, Anket: ortak açılır sayfa (masaüstünde ortada, telefonda alttan). -->
+    <div id="sayfa" hidden role="dialog" aria-modal="true" aria-labelledby="sayfa-baslik">
+      <div class="sayfa-kutu">
+        <div class="sayfa-ust"><h2 id="sayfa-baslik"></h2><button id="sayfa-kapat" aria-label="Kapat"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="sayfa-govde" id="sayfa-govde"></div>
+      </div>
+    </div>
+
+    <!-- Fotoğraf modu: arayüz gizlenir; altta saat kaydırıcısı ve çekim düğmesi. -->
+    <div id="foto-bar" hidden>
+      <label class="foto-saat"><span id="foto-saat-yazi">--:--</span><input id="foto-saat" type="range" min="0" max="1439" step="5" aria-label="Günün saati" /></label>
+      <button id="foto-cek" class="primary" aria-label="Fotoğraf çek"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13" r="3.3"/></svg>Çek</button>
+      <button id="foto-kapat" aria-label="Fotoğraf modundan çık"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div id="foto-onizleme" hidden>
+      <img id="foto-img" alt="Çekilen fotoğraf" />
+      <div class="foto-dugmeler"><button id="foto-paylas" class="primary">Paylaş</button><button id="foto-yeniden">Yeniden çek</button></div>
+    </div>
+
+    <div id="minimap">
+      <button id="minimap-toggle" aria-label="Harita"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
+      <canvas id="minimap-canvas"></canvas>
+    </div>
+
+    <div id="arama">
+      <div id="yerler" hidden>
+        <div class="yerler-head">Yerler</div>
+        <div class="yerler-grid" id="yerler-grid"></div>
+      </div>
+      <ul id="oneriler" role="listbox" hidden></ul>
+      <form id="search" autocomplete="off">
+        <button type="button" id="yerler-btn" aria-expanded="false" aria-controls="yerler"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg><span class="lbl">Yerler</span></button>
+        <input id="search-input" type="search" inputmode="search" enterkeyhint="search" spellcheck="false" placeholder="@kullanıcıadı ya da yer ara" aria-label="Kullanıcı adı ya da yer" aria-controls="oneriler" />
+        <button type="submit" class="go">Bul</button>
+      </form>
+    </div>
+
+    <div id="loading">
+      <svg class="load-scene" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg-gok" x1="0" y1="0" x2="0" y2="1">
+            <stop class="s-gok1" offset="0" /><stop class="s-gok2" offset="0.62" /><stop class="s-gok3" offset="1" />
+          </linearGradient>
+          <linearGradient id="lg-deniz" x1="0" y1="0" x2="0" y2="1">
+            <stop class="s-deniz1" offset="0" /><stop class="s-deniz2" offset="1" />
+          </linearGradient>
+          <radialGradient id="lg-hale"><stop class="s-isik" offset="0" stop-opacity="0.75"/><stop class="s-isik" offset="1" stop-opacity="0"/></radialGradient>
+          <radialGradient id="lg-vinyet" cx="0.5" cy="0.45" r="0.75"><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#061a2e" stop-opacity="0.55"/></radialGradient>
+          <linearGradient id="lg-huzme" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff4c8" stop-opacity="0.55"/><stop offset="1" stop-color="#fff4c8" stop-opacity="0"/></linearGradient>
+        </defs>
+        <rect width="1600" height="575" fill="url(#lg-gok)"/>
+        <g class="yildizlar" fill="#fff"><circle cx="683" cy="97" r="2.2" style="animation-delay:2.60s"/><circle cx="168" cy="440" r="1.1" style="animation-delay:1.46s"/><circle cx="138" cy="279" r="1.4" style="animation-delay:0.15s"/><circle cx="908" cy="234" r="1.1" style="animation-delay:0.96s"/><circle cx="1148" cy="237" r="1.1" style="animation-delay:3.31s"/><circle cx="273" cy="134" r="1.1" style="animation-delay:2.31s"/><circle cx="832" cy="45" r="1.4" style="animation-delay:0.19s"/><circle cx="292" cy="168" r="2.2" style="animation-delay:0.58s"/><circle cx="261" cy="312" r="1.8" style="animation-delay:2.24s"/><circle cx="1416" cy="112" r="1.1" style="animation-delay:2.33s"/><circle cx="1328" cy="116" r="1.8" style="animation-delay:0.39s"/><circle cx="1478" cy="52" r="1.1" style="animation-delay:2.48s"/><circle cx="1036" cy="368" r="2.2" style="animation-delay:3.11s"/><circle cx="973" cy="319" r="2.2" style="animation-delay:1.45s"/><circle cx="528" cy="426" r="1.4" style="animation-delay:2.80s"/><circle cx="519" cy="61" r="1.8" style="animation-delay:2.10s"/><circle cx="723" cy="393" r="2.2" style="animation-delay:1.15s"/><circle cx="169" cy="80" r="2.2" style="animation-delay:0.66s"/><circle cx="720" cy="97" r="2.2" style="animation-delay:1.69s"/><circle cx="1388" cy="59" r="1.8" style="animation-delay:1.36s"/><circle cx="737" cy="324" r="2.2" style="animation-delay:2.32s"/><circle cx="954" cy="55" r="1.1" style="animation-delay:3.78s"/><circle cx="990" cy="376" r="1.1" style="animation-delay:0.24s"/><circle cx="1456" cy="178" r="2.2" style="animation-delay:1.14s"/><circle cx="810" cy="362" r="1.8" style="animation-delay:0.09s"/><circle cx="965" cy="201" r="1.4" style="animation-delay:2.44s"/><circle cx="1031" cy="50" r="1.4" style="animation-delay:3.07s"/><circle cx="284" cy="398" r="1.4" style="animation-delay:1.59s"/><circle cx="1036" cy="61" r="1.4" style="animation-delay:1.80s"/><circle cx="1145" cy="162" r="1.4" style="animation-delay:3.28s"/><circle cx="1146" cy="162" r="2.2" style="animation-delay:3.95s"/><circle cx="1418" cy="214" r="1.4" style="animation-delay:0.60s"/><circle cx="380" cy="97" r="1.4" style="animation-delay:2.63s"/><circle cx="44" cy="268" r="1.4" style="animation-delay:1.05s"/><circle cx="28" cy="94" r="2.2" style="animation-delay:2.14s"/><circle cx="1268" cy="309" r="1.8" style="animation-delay:3.81s"/><circle cx="1434" cy="459" r="1.1" style="animation-delay:1.83s"/><circle cx="1413" cy="428" r="2.2" style="animation-delay:1.59s"/><circle cx="827" cy="73" r="2.2" style="animation-delay:2.54s"/><circle cx="147" cy="117" r="1.1" style="animation-delay:3.94s"/><circle cx="922" cy="103" r="1.1" style="animation-delay:1.36s"/><circle cx="127" cy="72" r="1.1" style="animation-delay:2.27s"/><circle cx="1118" cy="71" r="1.8" style="animation-delay:2.45s"/><circle cx="164" cy="467" r="1.4" style="animation-delay:2.46s"/><circle cx="324" cy="344" r="1.8" style="animation-delay:3.82s"/><circle cx="1253" cy="206" r="2.2" style="animation-delay:0.49s"/><circle cx="1019" cy="258" r="2.2" style="animation-delay:1.94s"/><circle cx="195" cy="93" r="1.1" style="animation-delay:3.00s"/><circle cx="1536" cy="155" r="2.2" style="animation-delay:3.32s"/><circle cx="350" cy="284" r="1.1" style="animation-delay:0.82s"/><circle cx="1101" cy="205" r="1.4" style="animation-delay:2.76s"/><circle cx="75" cy="408" r="1.8" style="animation-delay:3.91s"/><circle cx="206" cy="376" r="1.8" style="animation-delay:2.07s"/><circle cx="362" cy="202" r="1.4" style="animation-delay:2.13s"/><circle cx="1049" cy="188" r="1.4" style="animation-delay:2.45s"/><circle cx="1573" cy="456" r="1.4" style="animation-delay:3.22s"/><circle cx="840" cy="398" r="1.4" style="animation-delay:0.80s"/><circle cx="1029" cy="202" r="1.1" style="animation-delay:3.96s"/><circle cx="592" cy="261" r="1.8" style="animation-delay:0.77s"/><circle cx="1259" cy="196" r="2.2" style="animation-delay:3.23s"/><circle cx="1500" cy="198" r="1.8" style="animation-delay:0.32s"/><circle cx="229" cy="136" r="2.2" style="animation-delay:0.79s"/><circle cx="438" cy="267" r="1.1" style="animation-delay:1.92s"/><circle cx="1357" cy="196" r="1.1" style="animation-delay:3.34s"/><circle cx="265" cy="218" r="1.4" style="animation-delay:1.91s"/><circle cx="385" cy="242" r="1.8" style="animation-delay:0.35s"/><circle cx="1498" cy="222" r="2.2" style="animation-delay:1.61s"/><circle cx="193" cy="391" r="1.4" style="animation-delay:0.68s"/><circle cx="280" cy="34" r="1.4" style="animation-delay:2.36s"/><circle cx="973" cy="432" r="1.4" style="animation-delay:2.45s"/></g>
+        <circle class="hale" cx="1060" cy="250" r="230" fill="url(#lg-hale)"/>
+        <circle class="f-gunes gunes" cx="1060" cy="250" r="54" />
+        <g class="f-bulut bulutlar">
+          <g class="bulut b1"><ellipse cx="300" cy="200" rx="90" ry="26"/><ellipse cx="350" cy="184" rx="60" ry="30"/><ellipse cx="250" cy="192" rx="48" ry="22"/></g>
+          <g class="bulut b2"><ellipse cx="1300" cy="140" rx="110" ry="24"/><ellipse cx="1250" cy="126" rx="56" ry="26"/><ellipse cx="1360" cy="130" rx="44" ry="20"/></g>
+          <g class="bulut b3"><ellipse cx="720" cy="300" rx="80" ry="16"/><ellipse cx="760" cy="290" rx="44" ry="18"/></g>
+        </g>
+        <path class="f-anakara" d="M0 575V532c90-22 190-18 280 2s150 26 230 41z" />
+        <path class="f-anakara" d="M1600 575v-30c-80-14-170-12-260 6-50 10-90 18-130 24z" opacity="0.8"/>
+        <rect y="575" width="1600" height="425" fill="url(#lg-deniz)"/>
+        <rect class="f-ufuk" y="573" width="1600" height="4" opacity="0.7"/>
+        <g class="f-isik parilti"><rect x="1066" y="580" width="90" height="2.4" rx="1.2" style="animation-delay:1.97s"/><rect x="1034" y="594" width="49" height="2.4" rx="1.2" style="animation-delay:1.65s"/><rect x="1006" y="608" width="32" height="2.4" rx="1.2" style="animation-delay:0.04s"/><rect x="1082" y="622" width="43" height="2.4" rx="1.2" style="animation-delay:1.58s"/><rect x="1109" y="636" width="47" height="2.4" rx="1.2" style="animation-delay:1.30s"/><rect x="1101" y="650" width="54" height="2.4" rx="1.2" style="animation-delay:2.48s"/><rect x="1017" y="664" width="33" height="2.4" rx="1.2" style="animation-delay:0.76s"/><rect x="1027" y="678" width="94" height="2.4" rx="1.2" style="animation-delay:0.72s"/><rect x="1065" y="692" width="71" height="2.4" rx="1.2" style="animation-delay:0.78s"/><rect x="1043" y="706" width="46" height="2.4" rx="1.2" style="animation-delay:0.18s"/><rect x="1084" y="720" width="75" height="2.4" rx="1.2" style="animation-delay:2.69s"/><rect x="1074" y="734" width="104" height="2.4" rx="1.2" style="animation-delay:2.45s"/><rect x="1056" y="748" width="83" height="2.4" rx="1.2" style="animation-delay:2.48s"/><rect x="1102" y="762" width="94" height="2.4" rx="1.2" style="animation-delay:0.39s"/><rect x="1009" y="776" width="97" height="2.4" rx="1.2" style="animation-delay:1.53s"/><rect x="1101" y="790" width="86" height="2.4" rx="1.2" style="animation-delay:2.33s"/><rect x="1067" y="804" width="30" height="2.4" rx="1.2" style="animation-delay:2.33s"/><rect x="1009" y="818" width="52" height="2.4" rx="1.2" style="animation-delay:0.42s"/><rect x="1069" y="832" width="45" height="2.4" rx="1.2" style="animation-delay:1.67s"/><rect x="1031" y="846" width="96" height="2.4" rx="1.2" style="animation-delay:1.59s"/><rect x="1051" y="860" width="43" height="2.4" rx="1.2" style="animation-delay:2.65s"/><rect x="997" y="874" width="61" height="2.4" rx="1.2" style="animation-delay:0.57s"/></g>
+        <g class="isiltilar" fill="#fff"><rect x="86" y="650" width="32" height="2" rx="1" style="animation-delay:2.26s"/><rect x="57" y="989" width="44" height="2" rx="1" style="animation-delay:4.56s"/><rect x="907" y="766" width="35" height="2" rx="1" style="animation-delay:4.87s"/><rect x="1241" y="862" width="22" height="2" rx="1" style="animation-delay:3.46s"/><rect x="926" y="860" width="33" height="2" rx="1" style="animation-delay:4.04s"/><rect x="1039" y="726" width="38" height="2" rx="1" style="animation-delay:2.62s"/><rect x="531" y="886" width="44" height="2" rx="1" style="animation-delay:4.72s"/><rect x="916" y="670" width="29" height="2" rx="1" style="animation-delay:0.61s"/><rect x="905" y="761" width="18" height="2" rx="1" style="animation-delay:3.36s"/><rect x="877" y="637" width="22" height="2" rx="1" style="animation-delay:3.35s"/><rect x="250" y="679" width="46" height="2" rx="1" style="animation-delay:3.58s"/><rect x="1352" y="787" width="20" height="2" rx="1" style="animation-delay:1.27s"/><rect x="281" y="839" width="23" height="2" rx="1" style="animation-delay:3.73s"/><rect x="192" y="803" width="44" height="2" rx="1" style="animation-delay:2.44s"/><rect x="1367" y="714" width="21" height="2" rx="1" style="animation-delay:3.53s"/><rect x="1055" y="806" width="26" height="2" rx="1" style="animation-delay:2.11s"/><rect x="730" y="763" width="18" height="2" rx="1" style="animation-delay:3.61s"/><rect x="39" y="773" width="33" height="2" rx="1" style="animation-delay:2.29s"/><rect x="1440" y="609" width="28" height="2" rx="1" style="animation-delay:1.66s"/><rect x="1277" y="751" width="32" height="2" rx="1" style="animation-delay:4.80s"/><rect x="231" y="717" width="44" height="2" rx="1" style="animation-delay:0.52s"/><rect x="543" y="739" width="17" height="2" rx="1" style="animation-delay:4.53s"/><rect x="371" y="738" width="40" height="2" rx="1" style="animation-delay:0.65s"/><rect x="864" y="946" width="42" height="2" rx="1" style="animation-delay:4.73s"/><rect x="831" y="676" width="33" height="2" rx="1" style="animation-delay:4.60s"/><rect x="1168" y="853" width="38" height="2" rx="1" style="animation-delay:1.64s"/><rect x="571" y="629" width="41" height="2" rx="1" style="animation-delay:3.44s"/><rect x="871" y="637" width="24" height="2" rx="1" style="animation-delay:4.69s"/><rect x="1299" y="645" width="41" height="2" rx="1" style="animation-delay:1.30s"/><rect x="1245" y="713" width="18" height="2" rx="1" style="animation-delay:1.32s"/><rect x="249" y="832" width="16" height="2" rx="1" style="animation-delay:1.70s"/><rect x="1132" y="813" width="45" height="2" rx="1" style="animation-delay:4.58s"/><rect x="1273" y="666" width="17" height="2" rx="1" style="animation-delay:2.63s"/><rect x="488" y="656" width="21" height="2" rx="1" style="animation-delay:1.31s"/><rect x="370" y="703" width="45" height="2" rx="1" style="animation-delay:1.56s"/><rect x="624" y="871" width="40" height="2" rx="1" style="animation-delay:1.03s"/><rect x="912" y="856" width="37" height="2" rx="1" style="animation-delay:0.89s"/><rect x="710" y="609" width="24" height="2" rx="1" style="animation-delay:0.18s"/><rect x="37" y="975" width="32" height="2" rx="1" style="animation-delay:2.76s"/><rect x="388" y="863" width="31" height="2" rx="1" style="animation-delay:1.23s"/></g>
+        <g class="vapur"><path d="M-70 0h140l-16 18H-56z" fill="#f7f5f0"/><path d="M-70 0h140l-3 4H-67z" fill="#d8433d"/><rect x="-44" y="-16" width="70" height="16" rx="2" fill="#f7f5f0"/><rect x="-38" y="-11" width="58" height="5" fill="#2d3e4f"/><rect x="-10" y="-30" width="12" height="15" fill="#d8433d"/><rect x="-10" y="-30" width="12" height="4" fill="#2d3e4f"/></g>
+        <g class="ada">
+          <path class="f-kum" d="M430 586c120-14 250-20 370-20s250 6 370 20c-110 14-240 20-370 20s-260-6-370-20z" />
+          <path class="f-tepe2" d="M470 584c70-110 190-160 290-152 100 8 140-34 200-24 90 16 150 96 190 176z" />
+          <path class="f-tepe1" d="M452 586c70-62 150-82 248-78 100 4 160-40 240-30 92 12 160 56 218 108z" />
+          <g><rect x="558.5" y="520" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="560" cy="516" rx="9" ry="11.25" /></g><g><rect x="698.5" y="486" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="700" cy="482" rx="8" ry="10.0" /></g><g><rect x="716.5" y="492" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="718" cy="488" rx="7" ry="8.75" /></g><g><rect x="903.5" y="474" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="905" cy="470" rx="9" ry="11.25" /></g><g><rect x="1008.5" y="500" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="1010" cy="496" rx="10" ry="12.5" /></g><g><rect x="1033.5" y="507" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="1035" cy="503" rx="8" ry="10.0" /></g><g><rect x="528.5" y="540" width="3" height="12" fill="#6b4a35"/><ellipse class="f-agac" cx="530" cy="536" rx="7" ry="8.75" /></g>
+          <g><rect class="f-duvar" x="742" y="470" width="44" height="22" /><path d="M746 470a18 18 0 0 1 36 0z" fill="#9aa7b2"/><rect class="f-duvar" x="790" y="430" width="6" height="62" /><path d="M789 430l4-12 4 12z" fill="#9aa7b2"/></g>
+          <g><rect class="f-duvar" x="585" y="512" width="26" height="19" /><path d="M583 512l15.0 -9 15.0 9z" fill="#b5563f"/><rect class="pencere" x="589" y="517" width="5" height="5"/><rect class="pencere" x="602" y="517" width="5" height="5"/></g><g><rect class="f-duvar" x="612" y="503" width="22" height="15" /><path d="M610 503l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="616" y="508" width="5" height="5"/><rect class="pencere" x="625" y="508" width="5" height="5"/></g><g><rect class="f-duvar" x="640" y="497" width="22" height="19" /><path d="M638 497l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="644" y="502" width="5" height="5"/><rect class="pencere" x="653" y="502" width="5" height="5"/></g><g><rect class="f-duvar" x="668" y="500" width="26" height="15" /><path d="M666 500l15.0 -9 15.0 9z" fill="#b5563f"/><rect class="pencere" x="672" y="505" width="5" height="5"/><rect class="pencere" x="685" y="505" width="5" height="5"/></g><g><rect class="f-duvar" x="735" y="488" width="22" height="19" /><path d="M733 488l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="739" y="493" width="5" height="5"/><rect class="pencere" x="748" y="493" width="5" height="5"/></g><g><rect class="f-duvar" x="765" y="493" width="22" height="15" /><path d="M763 493l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="769" y="498" width="5" height="5"/><rect class="pencere" x="778" y="498" width="5" height="5"/></g><g><rect class="f-duvar" x="795" y="489" width="26" height="19" /><path d="M793 489l15.0 -9 15.0 9z" fill="#b5563f"/><rect class="pencere" x="799" y="494" width="5" height="5"/><rect class="pencere" x="812" y="494" width="5" height="5"/></g><g><rect class="f-duvar" x="828" y="497" width="22" height="15" /><path d="M826 497l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="832" y="502" width="5" height="5"/><rect class="pencere" x="841" y="502" width="5" height="5"/></g><g><rect class="f-duvar" x="858" y="486" width="22" height="19" /><path d="M856 486l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="862" y="491" width="5" height="5"/><rect class="pencere" x="871" y="491" width="5" height="5"/></g><g><rect class="f-duvar" x="890" y="492" width="26" height="15" /><path d="M888 492l15.0 -9 15.0 9z" fill="#b5563f"/><rect class="pencere" x="894" y="497" width="5" height="5"/><rect class="pencere" x="907" y="497" width="5" height="5"/></g><g><rect class="f-duvar" x="925" y="498" width="22" height="19" /><path d="M923 498l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="929" y="503" width="5" height="5"/><rect class="pencere" x="938" y="503" width="5" height="5"/></g><g><rect class="f-duvar" x="960" y="505" width="22" height="15" /><path d="M958 505l13.0 -9 13.0 9z" fill="#c0573f"/><rect class="pencere" x="964" y="510" width="5" height="5"/><rect class="pencere" x="973" y="510" width="5" height="5"/></g>
+          <g class="fener"><path d="M1102 586l8-96h18l8 96z" fill="#f7f5f0"/><path d="M1105 552h28l1 14h-30zM1108 515h22l1 13h-24z" fill="#d8433d"/><rect x="1106" y="476" width="26" height="14" rx="2" fill="#2d3e4f"/><rect class="lamba" x="1110" y="479" width="18" height="8" fill="#fff4c8"/><path d="M1104 476h30l-15-12z" fill="#2d3e4f"/></g>
+          <g class="huzme"><path d="M1119 483 1560 430v106z" fill="url(#lg-huzme)"/></g>
+          <path d="M1060 590h120v6h-120z" fill="#8a6a4a" opacity="0.9"/>
+        </g>
+        <g class="martilar" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path class="m1" d="M0 0q9-9 18 0q9-9 18 0"/><path class="m2" d="M0 0q7-7 14 0q7-7 14 0"/>
+        </g>
+        <rect width="1600" height="1000" fill="url(#lg-vinyet)"/>
+      </svg>
+      <div class="load-head">
+        <h1 class="load-logo">Driftwood</h1>
+        <p class="load-sub">TikTok'ta takip eden herkesin evi, mesleği ve günü olan ada</p>
+      </div>
+      <div class="load-box">
+        <div class="load-panel">
+          <div class="load-row"><span class="load-step" id="load-step">Sakin listesi alınıyor…</span><span class="load-pct" id="load-pct">%0</span></div>
+          <div class="load-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="load-fill"></i></div>
+          <button id="enter" hidden>Adaya gir<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <p class="load-tip" id="load-tip"></p>
+        </div>
+        <p class="load-foot">@driftwoodlive · TikTok</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

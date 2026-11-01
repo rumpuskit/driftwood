@@ -1,0 +1,12 @@
+{
+  "name": "driftwood-video",
+  "private": true,
+  "type": "module",
+  "description": "Senaryodan dikey video üretir (sistemdeki Chrome + ffmpeg).",
+  "scripts": {
+    "kaydet": "node kaydet.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.56.1"
+  }
+}

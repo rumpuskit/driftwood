@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>TikTok bağlantısı</title>
+<style>
+  :root { --ink: #2f3b52; --bg: #f4f7fb; --card: #fff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink: #eef2fa; --bg: #1b2440; --card: #26304d; } }
+  :root[data-theme="dark"] { --ink: #eef2fa; --bg: #1b2440; --card: #26304d; }
+  body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; background: var(--card); border-radius: 14px; padding: 20px; }
+  code { display: block; word-break: break-all; padding: 12px; border-radius: 8px; background: rgba(127,127,127,.15); margin: 12px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TikTok bağlantısı</h1>
+  <p id="msg">Bu sayfa yalnızca Driftwood'nın video yükleme aracının kendi TikTok hesabımıza bağlanması içindir.</p>
+  <code id="code" hidden></code>
+</main>
+<script>
+  // TikTok izin ekranından dönüşte gelen kod: video yükleme aracına (Mac) bir kez verilir, karşılığında belirteç alınır.
+  const q = new URLSearchParams(location.search);
+  if (q.get("code")) {
+    document.getElementById("msg").textContent = "İzin verildi. Bu kodu kopyalayıp yükleme aracına ver (kod birkaç dakika içinde geçersiz olur):";
+    const c = document.getElementById("code");
+    c.hidden = false;
+    c.textContent = q.get("code");
+  } else if (q.get("error")) {
+    document.getElementById("msg").textContent = "TikTok izni verilmedi: " + q.get("error");
+  }
+</script>
+</body>
+</html>
