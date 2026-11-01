@@ -22,7 +22,7 @@ new_sqlite_classes = ["Presence"]
 
 [[kv_namespaces]]
 binding = "SAKINLER"
-id = "KV_ID_BEKLIYOR"  # npx wrangler@4 kv namespace create SAKINLER çıktısındaki id
+id = "a8ce1642931640bb8893e69f1eb45c09"  # başlık DRIFTWOOD_SAKINLER (SAKINLER başlıklısı Mercanada'nın)
 
 # Kayıt: yorumla doğrulama, ev ve gün tercihleri, anketler, saklı nesne sayacı, siteden seçim oyları (kayit.js).
 [[durable_objects.bindings]]
