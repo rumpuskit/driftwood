@@ -31,8 +31,8 @@ export const ROADS = {
   cadde: { width: 14, carriage: 8, surface: "asfalt" },
   sokak: { width: 13, carriage: 8, surface: "asfalt" }, // iki şerit + iki yanda kenar parkı
   koy: { width: 6.5, carriage: 6.5, surface: "asfalt" },
-  yaya: { width: 6, carriage: 0, surface: "tas" }, // tuğla yaya yolu (Green patikaları)
-  sahil: { width: 7, carriage: 0, surface: "tas" }, // Harbor Walk, boardwalk
+  yaya: { width: 6, carriage: 0, surface: "tugla" }, // tuğla yaya yolu (Green patikaları)
+  sahil: { width: 7, carriage: 0, surface: "tugla" }, // Harbor Walk; boardwalk tahta (surface: "tahta")
   patika: { width: 2.6, carriage: 0, surface: "toprak" }, // patika; geniş verilirse asfaltlanmamış kum yol
   giris: { width: 6, carriage: 6, surface: "asfalt" }, // otopark, hastane ve garaj girişi
 };
@@ -202,6 +202,9 @@ export class World {
     I.setFlatAreas([
       box({ x0: -780, x1: 760, z0: -160, z1: 420 }), box(R.bog), box(R.field), box(R.services),
       { poly: [[580, -40], [580, 140], [760, 140], [760, -40]] }, // hastane ve pazar tarafı
+      // Boardwalk ve eğlence iskelesi, Ocean Beach tesisleri: kumul tepecikleri yolları ve iskeleyi gömmesin.
+      { poly: [[140, I.northShoreZ(140) - 10], [140, I.northShoreZ(140) + 130], [740, I.northShoreZ(740) + 130], [740, I.northShoreZ(740) - 10]] },
+      { poly: [[-200, I.northShoreZ(-200) - 10], [-200, I.northShoreZ(-200) + 110], [40, I.northShoreZ(40) + 110], [40, I.northShoreZ(40) - 10]] },
       ...this.zones.map((z) => ({ poly: [[-z.hw, -12], [-z.hw, I.ZONE.depth], [z.hw, I.ZONE.depth], [z.hw, -12]].map(([u, v]) => I.zoneToWorld(z, u, v)) })),
     ]);
 
@@ -241,6 +244,12 @@ export class World {
     this.obstacles = new Set();
     this._markObstacles();
     if (import.meta.env?.DEV || globalThis.location?.search.includes("denetle")) this._validate();
+  }
+
+  /** Kumul şeridi mi (dış kıyının 25–160 m içi; arazi rengi ve ağaç seyrekliği için)? */
+  isDune(x, z) {
+    const dn = z - I.northShoreZ(x);
+    return dn > 18 && dn < 160 && this.zoneAt(x, z) !== "mahalle";
   }
 
   /** Bir noktanın yer türü: merkez (kasaba), mahalle, tepe (Bluff Head), kumul, kir. */
@@ -700,10 +709,10 @@ export class World {
     const walk = this.has("carsi_yol") ? "yaya" : "patika";
     for (const [cx, cz] of corners) {
       const d = Math.hypot(cx, cz);
-      this.addRoad([[cx, cz], [cx * (11 / d), cz * (11 / d)]], walk, walk === "patika" ? { width: 2.2 } : { width: 3.6 });
+      this.addRoad([[cx, cz], [cx * (11 / d), cz * (11 / d)]], walk, walk === "patika" ? { width: 2.2, noLamps: true } : { width: 3.6, noLamps: true });
     }
     // Green'in güney kenarından Main Street'e ve çardağa giden orta patika (bayrak direğinin yanından).
-    this.addRoad([[0, 11], [0, g.z1]], walk, walk === "patika" ? { width: 2.2 } : { width: 3.6 });
+    this.addRoad([[0, 11], [0, g.z1]], walk, walk === "patika" ? { width: 2.2, noLamps: true } : { width: 3.6, noLamps: true });
     this._tag("meydan_duzen", () => {
       // Banklar patikaların iki yanında, çardağa bakar; akçaağaçlar Green'in kenarlarında.
       for (const [cx, cz] of corners) {
@@ -1368,12 +1377,12 @@ export class World {
     const x0 = 180, x1 = 700, back = 34;
     const pts = [];
     for (let x = x0; x <= x1; x += 20) pts.push([x, I.northShoreZ(x) + 60 + back]);
-    this.addRoad(pts, "sahil", { width: 8, tahta: true });
-    const px = 430, sz = I.northShoreZ(px) + 40, len = 150;
-    const pier = { x0: px - 9, x1: px + 9, z0: sz - len, z1: sz + 6, top: 2.6 };
+    this.addRoad(pts, "sahil", { width: 8, surface: "tahta" });
+    // İskele boardwalk'tan başlar (güverte kumsalın üstünden geçer, denize 150 m uzanır).
+    const px = 430, bw = I.northShoreZ(px) + 60 + back, len = 150;
+    const pier = { x0: px - 9, x1: px + 9, z0: I.northShoreZ(px) - len, z1: bw - 4, top: 1.9 };
     this.piers.push(pier);
     this.features.push({ type: "lunapark", x: px, z0: pier.z0, z1: pier.z1, wheel: [px, pier.z0 + 26] });
-    this.addRoad([[px, I.northShoreZ(px) + 60 + back], [px, sz + 6]], "sahil", { width: 6, tahta: true });
     const arcade = this.addBuilding({ kind: "lunapark", x: px + 26, z: I.northShoreZ(px + 26) + 60 + back + 12, rot: Math.PI, w: 22, d: 12, floors: 1, roofType: "flat", wall: "#f4f1ea", roof: "#c9c4bb", workplace: true, style: { shop: true, awning: "#c43a3a" }, address: "Driftwood Pier Amusements" });
     const door = [arcade.x, arcade.z - 6.35];
     this._addWorkplace("lunapark", 0, { door, path: [door, HUB], anchor: [px, pier.z0 + 40], spread: 6, building: arcade });

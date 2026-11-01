@@ -87,7 +87,7 @@ function pier(f, top, kopru = null) {
   return group;
 }
 
-/** Şehir hatları vapuru (50 m): siyah gövde, beyaz iki katlı üst yapı, pencere sıraları, baca, can simitleri. */
+/** Ada feribotu (50 m): lacivert alt gövde, beyaz iki katlı üst yapı ve kaptan köşkü, pencere sıraları, alçak baca, can simitleri. */
 function ferry() {
   const parts = [];
   // Gövde: pruva ve kıçta daralan.
@@ -95,11 +95,11 @@ function ferry() {
   hullShape.moveTo(-5.5, -24); hullShape.lineTo(5.5, -24); hullShape.lineTo(5.6, 18); hullShape.quadraticCurveTo(5, 24, 0, 26);
   hullShape.quadraticCurveTo(-5, 24, -5.6, 18); hullShape.lineTo(-5.5, -24);
   const hull = new THREE.ExtrudeGeometry(hullShape, { depth: 3.2, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -1.6, 0);
-  parts.push(colored(hull, "#1f2226"));
+  parts.push(colored(hull, "#1f3354"));
   const deckShape = new THREE.Shape(hullShape.getPoints(24));
   parts.push(colored(new THREE.ExtrudeGeometry(deckShape, { depth: 1.6, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, 1.6, 0), "#f4f4f1"));
-  // Kırmızı şerit gövdenin birkaç santim dışında (aynı yüzeyde titreşmesin).
-  parts.push(colored(new THREE.ExtrudeGeometry(deckShape, { depth: 0.35, bevelEnabled: false }).rotateX(-Math.PI / 2).scale(1.012, 1, 1.003).translate(0, 1.25, 0), "#b8312f"));
+  // Altın şerit gövdenin birkaç santim dışında (aynı yüzeyde titreşmesin).
+  parts.push(colored(new THREE.ExtrudeGeometry(deckShape, { depth: 0.35, bevelEnabled: false }).rotateX(-Math.PI / 2).scale(1.012, 1, 1.003).translate(0, 1.25, 0), "#c8a24a"));
   // Üst yapı: iki kat.
   parts.push(box(9.4, 2.6, 34, 0, 4.5, -1, "#f6f6f3"));
   parts.push(box(8.2, 2.3, 18, 0, 7.0, 0, "#f6f6f3"));
@@ -112,9 +112,9 @@ function ferry() {
   }
   parts.push(box(7.6, 0.9, 0.05, 0, 7.3, 9.02, "#28323e"));
   // Baca ve direk.
-  parts.push(cyl(1.15, 1.3, 4.2, 0, 10.2, -3, "#f2f2ef", 14));
-  parts.push(cyl(1.17, 1.17, 0.9, 0, 11.6, -3, "#1f2226", 14));
-  parts.push(cyl(1.17, 1.17, 0.35, 0, 10.9, -3, "#e8b93a", 14));
+  parts.push(cyl(1.0, 1.15, 2.6, 0, 9.4, -3, "#f2f2ef", 14));
+  parts.push(cyl(1.02, 1.02, 0.7, 0, 10.4, -3, "#1f3354", 14));
+  parts.push(cyl(1.02, 1.02, 0.3, 0, 9.9, -3, "#c8a24a", 14));
   parts.push(cyl(0.08, 0.1, 6, 0, 11.2, 7, "#2f3540", 6));
   // Can simitleri.
   for (const side of [-1, 1]) for (const z of [-10, 0, 10]) parts.push(colored(new THREE.TorusGeometry(0.38, 0.1, 6, 12).rotateY(Math.PI / 2).translate(side * 4.75, 4.2, z + 1.1), "#f07a2a"));

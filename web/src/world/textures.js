@@ -350,6 +350,40 @@ export function shingles() {
   }));
 }
 
+/** Boardwalk tahtaları: enine kalaslar, aralarında koyu derz, tahta tonları farklı. v ekseni yol boyunca. */
+export function planks() {
+  return (cache.planks ??= canvasTexture(256, (ctx, sz) => {
+    const rand = rng("tahta");
+    const n = 16, h = sz / n;
+    for (let i = 0; i < n; i++) {
+      const v = 150 + Math.floor(rand() * 40);
+      ctx.fillStyle = `rgb(${v + 20},${v - 5},${v - 40})`;
+      ctx.fillRect(0, i * h, sz, h - 2);
+      ctx.fillStyle = "rgba(40,28,18,0.6)";
+      ctx.fillRect(0, i * h + h - 2, sz, 2);
+      for (const x of [rand() * sz, rand() * sz]) { ctx.fillStyle = "rgba(60,40,25,0.5)"; ctx.fillRect(x, i * h + h / 2 - 1, 3, 2); }
+    }
+    speckle(ctx, sz, rand, 3000, ["rgba(0,0,0,0.08)", "rgba(255,240,220,0.08)"], 1.2);
+  }));
+}
+
+/** Tuğla döşeme (Main Street kaldırımları, Green patikaları, Harbor Walk): balıksırtı yerine düz dizi, sıcak kırmızı. */
+export function brickPaving() {
+  return (cache.brickPaving ??= canvasTexture(256, (ctx, sz) => {
+    const rand = rng("tugla-doseme");
+    ctx.fillStyle = "#8a6a5a";
+    ctx.fillRect(0, 0, sz, sz);
+    const rows = 16, cols = 8, rh = sz / rows, cw = sz / cols;
+    for (let r = 0; r < rows; r++) for (let c = -1; c < cols; c++) {
+      const x = c * cw + (r % 2) * (cw / 2), y = r * rh;
+      const v = rand();
+      ctx.fillStyle = `rgb(${160 + Math.floor(v * 30)},${78 + Math.floor(v * 20)},${62 + Math.floor(v * 16)})`;
+      ctx.fillRect(x + 1.5, y + 1.5, cw - 3, rh - 3);
+    }
+    speckle(ctx, sz, rand, 3500, ["rgba(0,0,0,0.08)", "rgba(255,255,255,0.06)"], 1.2);
+  }));
+}
+
 /** Kauçuk güvenlik zemini: ince granüller (gri tonlu; renkle çarpılır). */
 export function rubber() {
   return (cache.rubber ??= canvasTexture(128, (ctx, sz) => {

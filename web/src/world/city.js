@@ -1215,12 +1215,12 @@ function buildFeatures(world) {
       }
       case "lunapark": {
         // Eğlence iskelesi: kazıklar üstünde ahşap güverte, korkuluklar, oyun tezgâhları, atlıkarınca ve dönme dolap.
-        const top = world.lunapark?.pier.top ?? 2.6;
+        const top = world.lunapark?.pier.top ?? 1.9;
         const x0 = f.x - 9, x1 = f.x + 9, z0 = f.z0, z1 = f.z1, L = z1 - z0;
         const planks = std("#a5835e", { roughness: 0.95 });
         add(new THREE.BoxGeometry(18, 0.3, L), planks, f.x, top - 0.15, (z0 + z1) / 2);
         const pile = new Batch(new THREE.CylinderGeometry(0.22, 0.22, 1, 6).translate(0, 0.5, 0), std("#6b5a48"), { shadow: false });
-        for (let z = z0 + 2; z < z1; z += 6) for (const x of [x0 + 0.5, f.x, x1 - 0.5]) pile.add(v.set(x, -6, z), 0, s.set(1, top + 6, 1));
+        for (let z = z0 + 2; z < z1; z += 6) for (const x of [x0 + 0.5, f.x, x1 - 0.5]) pile.add(v.set(x, -6, z), 0, s.set(1, top + 6 - 0.15, 1));
         group.add(pile.build());
         for (const x of [x0 + 0.1, x1 - 0.1]) {
           add(new THREE.BoxGeometry(0.1, 0.08, L), white, x, top + 1.0, (z0 + z1) / 2, 0, false);

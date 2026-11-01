@@ -13,6 +13,11 @@ function terrainColor(world, x, z, h, ny) {
   if (coastal && h < 1.15) return tmp.copy(P.SAND);
   if (ny < 0.62) return tmp.copy(P.ROCK);
   const v = fbm(x / 45, z / 45, 21) + 0.5;
+  // Kumullar (dış kıyı): kum, üstünde kumul otu lekeleri.
+  if (world.isDune?.(x, z)) {
+    const grass = Math.min(1, Math.max(0, (fbm(x / 14, z / 9, 23) + 0.5) * 1.6 - 0.55));
+    return tmp.copy(P.SAND).lerp(P.GRASS_DARK, grass * 0.45);
+  }
   tmp.copy(P.GRASS).lerp(P.GRASS_DARK, Math.min(1, Math.max(0, v * 1.4 - 0.35)));
   if (h > 8) tmp.lerp(P.HILL, Math.min(1, (h - 8) / 20));
   return tmp;

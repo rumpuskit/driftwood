@@ -268,8 +268,8 @@ export function stations(pts, d0, d1, piece = PIECE) {
 export function buildRoads(world) {
   const net = world.network;
   const ground = (x, z) => world.surfaceY(x, z);
-  const M = { asfalt: new Mesh(), parke: new Mesh(), toprak: new Mesh(), tas: new Mesh(), walk: new Mesh(), curb: new Mesh(), mark: new Mesh() };
-  const TILE = { asfalt: 8, parke: 4, toprak: 6, tas: 5 };
+  const M = { asfalt: new Mesh(), parke: new Mesh(), toprak: new Mesh(), tas: new Mesh(), tahta: new Mesh(), tugla: new Mesh(), walk: new Mesh(), walkBrick: new Mesh(), curb: new Mesh(), mark: new Mesh() };
+  const TILE = { asfalt: 8, parke: 4, toprak: 6, tas: 5, tahta: 3, tugla: 3 };
   const lampSpots = [];
   const doors = world.buildings.map((b) => [b.x + Math.sin(b.rot) * (b.d / 2), b.z + Math.cos(b.rot) * (b.d / 2)]);
   const nearDoor = (x, z) => doors.some(([dx, dz]) => Math.abs(dx - x) < 3 && Math.abs(dz - z) < 3);
@@ -293,7 +293,7 @@ export function buildRoads(world) {
       if (hw - hc > 0.3) {
         for (const side of [-1, 1]) {
           const o0 = side * hc, o1 = side * hw;
-          M.walk.quad(P(a, o0, ga + H.walk), P(b, o0, gb + H.walk), P(b, o1, gb + H.walk), P(a, o1, ga + H.walk),
+          (road.main ? M.walkBrick : M.walk).quad(P(a, o0, ga + H.walk), P(b, o0, gb + H.walk), P(b, o1, gb + H.walk), P(a, o1, ga + H.walk),
             [o0 / 2.4, a.d / 2.4], [o0 / 2.4, b.d / 2.4], [o1 / 2.4, b.d / 2.4], [o1 / 2.4, a.d / 2.4]);
           const ca = [a.p[0] + a.n[0] * o0, a.p[1] + a.n[1] * o0], cb = [b.p[0] + b.n[0] * o0, b.p[1] + b.n[1] * o0];
           M.curb.wall(ca, cb, ga + H.carriage, ga + H.walk, gb + H.carriage, gb + H.walk);
@@ -306,7 +306,7 @@ export function buildRoads(world) {
       }
     }
     // Sokak lambaları: iki yanda şaşırtmalı; kavşak ve kapı önlerinde, kısa giriş yollarında yok.
-    if ((isCar(road) && road.type !== "giris") || road.type === "yaya" || road.type === "sahil") {
+    if (((isCar(road) && road.type !== "giris") || road.type === "yaya" || road.type === "sahil") && !road.noLamps) {
       const total = st[st.length - 1].d;
       const step = road.type === "yaya" ? 22 : road.type === "sahil" ? 24 : 30;
       const sides = road.type === "sahil" ? [1] : [-1, 1];
@@ -318,6 +318,8 @@ export function buildRoads(world) {
           const off = side * (hw - 0.5);
           const x = s.p[0] + s.n[0] * off, z = s.p[1] + s.n[1] * off;
           if (nearDoor(x, z) || !world.isLand(x, z)) continue;
+          // Ana yollar kırda karanlık: lamba yalnız kasaba ve mahalle içinde.
+          if (road.trunk && !["merkez", "mahalle"].includes(world.zoneAt?.(x, z))) continue;
           const y = ground(x, z) + (isCar(road) ? H.walk : hTop);
           lampSpots.push({ x, z, y, dir: Math.atan2(-s.n[0] * side, -s.n[1] * side), deco: !isCar(road) });
         }
@@ -426,12 +428,15 @@ export function buildRoads(world) {
     parke: M.parke.build(mat(T.cobble())),
     toprak: M.toprak.build(mat(T.dirt())),
     tas: M.tas.build(mat(T.slabs())),
+    tahta: M.tahta.build(mat(T.planks(), { roughness: 0.95 })),
+    tugla: M.tugla.build(mat(T.brickPaving())),
     walk: M.walk.build(mat(T.paving())),
+    walkBrick: M.walkBrick.build(mat(T.brickPaving())),
     curb: M.curb.build(mat(T.curb(), { side: THREE.DoubleSide })),
     mark: M.mark.build(new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.6 })),
   };
   for (const m of Object.values(meshes)) group.add(m);
-  group.userData.groundMaterials = [meshes.asfalt, meshes.parke, meshes.toprak, meshes.tas, meshes.walk, meshes.mark].map((m) => m.material);
+  group.userData.groundMaterials = [meshes.asfalt, meshes.parke, meshes.toprak, meshes.tas, meshes.tahta, meshes.tugla, meshes.walk, meshes.walkBrick, meshes.mark].map((m) => m.material);
   const lamps = buildLamps(lampSpots);
   group.add(lamps);
   group.userData.lampHeads = lamps.userData.heads;
