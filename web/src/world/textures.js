@@ -384,6 +384,18 @@ export function brickPaving() {
   }));
 }
 
+/** Biçilmiş çim (Town Green): açık ve koyu biçme şeritleri, ince çim lekesi. Alana bir kez gerilir. */
+export function lawn() {
+  return (cache.lawn ??= canvasTexture(512, (ctx, s) => {
+    const rand = rng("cimen");
+    for (let i = 0; i < 12; i++) {
+      ctx.fillStyle = i % 2 ? "#7fb35e" : "#8cc06a";
+      ctx.fillRect((i * s) / 12, 0, s / 12 + 1, s);
+    }
+    speckle(ctx, s, rand, 14000, ["rgba(40,80,30,0.12)", "rgba(255,255,220,0.08)"], 1.4);
+  }, false));
+}
+
 /** Kauçuk güvenlik zemini: ince granüller (gri tonlu; renkle çarpılır). */
 export function rubber() {
   return (cache.rubber ??= canvasTexture(128, (ctx, sz) => {

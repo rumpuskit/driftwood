@@ -514,6 +514,7 @@ export function buildGrounds(world) {
     const w = p.rot != null ? p.w : p.x1 - p.x0, d = p.rot != null ? p.d : p.z1 - p.z0;
     const cx = p.rot != null ? p.cx : (p.x0 + p.x1) / 2, cz = p.rot != null ? p.cz : (p.z0 + p.z1) / 2;
     if (p.kind === "tarla") slab(w, d, cx, cz, T.crops(CROPS[p.crop]), 2.4, 0.08);
+    else if (p.kind === "cimen") slab(w, d, cx, cz, T.lawn(), 0, 0.03);
     else if (p.kind === "saha") {
       slab(w + 8, d + 8, cx, cz, T.paving(), 2.4, 0.06);
       const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: world.pitch?.football ? T.footballField() : T.pitch(), roughness: 0.95 }));

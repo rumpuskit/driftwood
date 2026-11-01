@@ -382,8 +382,8 @@ export class Zeplin {
     if (reklam) {
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onload = () => { this._custom = true; try { this._paint(img); } catch (e) { console.warn("zeplin reklamı basılamadı", e); this._custom = false; drawDefault(); } };
-      img.onerror = () => console.warn("zeplin reklamı yüklenemedi:", reklam);
+      img.onload = () => { this._custom = true; try { this._paint(img); } catch (e) { console.warn("blimp ad could not be paintedadı", e); this._custom = false; drawDefault(); } };
+      img.onerror = () => console.warn("blimp ad could not be loaded:", reklam);
       img.src = reklam;
     }
     const body = new THREE.Group();

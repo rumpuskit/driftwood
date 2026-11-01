@@ -80,13 +80,15 @@ progress(0.06, "Getting the resident list…");
 // yollanır, site oradan okur. ?nufus=N örnek sakinlerle N kişilik ada kurar (video ve testler için),
 // ?bekleyen=N iskelede N bekleyen gösterir.
 const today = sim.dayOf(nowUnix());
+// ?nufus=0 de geçerli: boş ada (ilk videolar, liste yokken deneme).
+const hasSample = (params.get("nufus") ?? "") !== "" && Number.isFinite(Number(params.get("nufus")));
 const sample = Number(params.get("nufus"));
-const { residents, waiting, listError, peak = 0, secim = null } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
+const { residents, waiting, listError, peak = 0, secim = null } = hasSample ? sampleTown(Math.min(60000, Math.max(0, sample))) : await loadResidents();
 // Doğrulanmış sakinlerin tercihleri ve anket sonuçları (Worker): evler, evcil adları, günün olayı ve sinema
 // filmi bunlara göre. Alınamazsa ada varsayılanlarla kurulur (bekletmez: en çok 4 sn).
 const prefsData = {};
 const oylarim = {}; // açılıştaki anket durumu (bu cihaz oy verdi mi): sekmedeki "yeni" noktası için
-if (!(sample > 0)) {
+if (!hasSample) {
   const within = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 4000))]);
   const [t, a] = await Promise.allSettled([within(api.tercihler()), within(api.anket([`tema:${dateKey(today)}`, `tema:${dateKey(today + 1)}`, `film:${weekKey(today)}`])), within(api.ping())]);
   if (t.status === "fulfilled") Object.assign(prefsData, t.value.tercih ?? {});

@@ -339,7 +339,11 @@ export class World {
       this.nextStage = { nufus: next, keys: open, name: entry?.ad ?? stageName(open[0]), at: this._stageSpot(open) };
       this._before = null;
       const at = this.nextStage.at;
-      if (at) this.labels.push({ text: `${this.nextStage.name} · at ${next} residents`, x: at[0], z: at[1], h: 22, site: true });
+      // Etiket başka bir etiketin üstüne düşmesin (ör. Town Green): yakında etiket varsa biraz güneye kayar.
+      if (at) {
+        const near = this.labels.some((l) => Math.hypot(l.x - at[0], l.z - at[1]) < 30);
+        this.labels.push({ text: `${this.nextStage.name} · at ${next} residents`, x: at[0], z: at[1] + (near ? 34 : 0), h: 22, site: true });
+      }
     }
   }
 
@@ -702,6 +706,7 @@ export class World {
     const g = GREEN;
     // Town Green: çim, köşegen tuğla patikalar, ortada beyaz çardak (bandstand) ve bayrak direği. Boş adada da var.
     this.block(g.x0, g.z0, g.x1, g.z1, 0);
+    this.plazas.push({ ...g, kind: "cimen" }); // biçilmiş çim (çevresindeki çayırdan açık, şeritli)
     this.plazas.push({ x: 0, z: 0, r: 11, kind: "meydan" }); // çardağın çevresindeki tuğla daire
     this.features.push({ type: "bandstand", x: 0, z: 0 });
     this.features.push({ type: "gonder", x: 0, z: g.z1 - 6, abd: true });
