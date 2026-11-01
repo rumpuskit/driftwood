@@ -362,17 +362,25 @@ export function flatness(x, z) {
 
 /** Kasaba kıyısı rıhtım mı (0..1)? Koy boyunca x −1000…800: kumsal yerine taş rıhtım duvarı. */
 export function quay(x, z) {
-  return quiet(x, z) * smooth((x + 1000) / 60) * smooth((800 - x) / 60);
+  return quiet(x, z) * smooth((x + 1000) / 30) * smooth((800 - x) / 30);
 }
 
 /** Doğal arazi (tesviyesiz): kıyıda denize iner, Bluff Head kıyısı sarp (kaya), kasaba önünde rıhtım duvarı. */
 export function terrainHeight(x, z) {
   const L = land(x, z);
   const f = flatness(x, z);
-  let h = FLAT_Y + naturalHeight(x, z) * (1 - f);
-  const bluff = Math.exp(-((x - 1680) ** 2 + (z - 120) ** 2) / (2 * 330 * 330));
   const q = quay(x, z);
-  const band = (40 - 26 * bluff) * (1 - q) + 1.5 * q; // Bluff'ta kıyı şeridi dar; rıhtımda dik duvar
+  // Rıhtımın arkası düz (duvar başlığı arazinin hemen üstünde kalsın): doğal tümsekler kıyıdan 20–45 m içeride söner.
+  let h = FLAT_Y + naturalHeight(x, z) * (1 - f) * (1 - q * smooth((45 - L) / 25));
+  const bluff = Math.exp(-((x - 1680) ** 2 + (z - 120) ** 2) / (2 * 330 * 330));
+  // Bluff'ta kıyı şeridi dar; rıhtımda arazi kıyı çizgisinin 0,5 m içinde, duvarın (1 m kalınlık, kıyı çizgisinde)
+  // altında iner: duvarın kara yüzü açıkta kalmaz.
+  const band = (40 - 26 * bluff) * (1 - q) + 0.5 * q;
+  if (q > 0.9) {
+    // Rıhtım: kıyı çizgisinin 0,5 m içine (duvarın kara yüzü) kadar tam yükseklik, sonra 0,2 m'de duvarın dibine.
+    const t = clamp((0.5 - L) / 0.2, 0, 1);
+    return L >= 0.5 ? h : h * (1 - t) - 2.5 * t + Math.min(0, L) * 0.06;
+  }
   if (L >= band) return h;
   if (L >= 0) {
     const t = 1 - L / band;

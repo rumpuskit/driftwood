@@ -1147,7 +1147,7 @@ function buildFeatures(world) {
       }
       case "rihtim": {
         // Rıhtım duvarı: kıyı çizgisi boyunca granit bloklar (sudan rıhtım üstüne), üstte açık renk başlık taşı.
-        const granite = std("#8f8a82", { roughness: 0.9 }), cap = std("#bdb7ad", { roughness: 0.8 });
+        const granite = std("#8f8a82", { roughness: 0.9 }), cap = std("#bdb7ad", { roughness: 0.8 }), coping = std("#a59f95", { roughness: 0.9 });
         const pts = f.pts;
         for (let i = 1; i < pts.length; i++) {
           const a = pts[i - 1], b2 = pts[i];
@@ -1157,6 +1157,37 @@ function buildFeatures(world) {
           const rot = Math.atan2(b2[0] - a[0], b2[1] - a[1]), mx = (a[0] + b2[0]) / 2, mz = (a[1] + b2[1]) / 2;
           add(new THREE.BoxGeometry(1.0, FLAT_Y + 3.2, len + 0.3), granite, mx, (FLAT_Y + 3.2) / 2 - 3.05, mz, rot, false);
           add(new THREE.BoxGeometry(1.3, 0.25, len + 0.3), cap, mx, FLAT_Y + 0.25, mz, rot, false);
+        }
+        // Kara tarafında granit kaplama şeridi (duvardan 0,65–5,05 m): duvarın dibindeki arazi inişini örter (arazi
+        // ağı rıhtımda 4 m; iniş bir hücreden geniş olamaz).
+        // Kesintisiz şerit (köşelerde ortalama normal): kutu parçaları kıvrımlarda dişli görünüyordu. Kara -z yönünde.
+        const runs = [];
+        let run = [];
+        for (let i = 0; i < pts.length; i++) {
+          const pt = pts[i], prev = run.at(-1);
+          if (!pt || (prev && Math.hypot(pt[0] - prev[0], pt[1] - prev[1]) > 12)) { if (run.length > 1) runs.push(run); run = pt ? [pt] : []; }
+          else run.push(pt);
+        }
+        if (run.length > 1) runs.push(run);
+        for (const r of runs) {
+          const P = [], I = [], yTop = FLAT_Y + 0.07, yBot = FLAT_Y - 0.3;
+          for (let i = 0; i < r.length; i++) {
+            const a = r[Math.max(0, i - 3)], b2 = r[Math.min(r.length - 1, i + 3)]; // ±3 nokta: kenar duvarın kırıklarını izleyip dalgalanmasın
+            const L = Math.hypot(b2[0] - a[0], b2[1] - a[1]), nx = (b2[1] - a[1]) / L, nz = -(b2[0] - a[0]) / L;
+            const [x, z] = r[i];
+            P.push(x + nx * 0.65, yTop, z + nz * 0.65, x + nx * 5.05, yTop, z + nz * 5.05, x + nx * 5.05, yBot, z + nz * 5.05);
+            if (i) {
+              const o = (i - 1) * 3, n = i * 3;
+              I.push(o, n, o + 1, o + 1, n, n + 1); // üst yüz
+              I.push(o + 1, n + 1, o + 2, o + 2, n + 1, n + 2); // kara yönündeki yan yüz
+            }
+          }
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+          geo.setIndex(I);
+          geo.computeVertexNormals();
+          const m = add(geo, coping, 0, 0, 0, 0, false);
+          m.material.side = THREE.DoubleSide;
         }
         break;
       }

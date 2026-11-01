@@ -86,6 +86,7 @@ export class NameTags {
     let k = 0;
     for (const [d2, i] of near) {
       if (k >= MAX_TAGS) break;
+      if (globalThis.__yalnizEtiket && i !== selected) continue; // video: yalnız izlenen sakinin etiketi
       const { tex, aspect } = this._texture(residents[i].hidden ? null : residents[i].handle, i === selected);
       const d = Math.sqrt(d2);
       const h = Math.max(0.28, d * 0.022);

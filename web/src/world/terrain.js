@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { fbm } from "./noise.js";
 import * as P from "./palette.js";
 import { grassDetail } from "./textures.js";
+import { quay } from "./island.js";
 
 const tmp = new THREE.Color();
 
@@ -10,7 +11,7 @@ function terrainColor(world, x, z, h, ny) {
   if (h < -0.2) return tmp.copy(P.WET_SAND).lerp(P.SEABED, Math.min(1, -h / 7));
   const d = world.sdf(x, z);
   const coastal = d > world.margin(x, z) - 30;
-  if (coastal && h < 1.15) return tmp.copy(P.SAND);
+  if (coastal && h < 1.0) return tmp.copy(P.SAND); // tesviye omzu (FLAT_Y − 0,12) çimen kalır
   if (ny < 0.62) return tmp.copy(P.ROCK);
   const v = fbm(x / 45, z / 45, 21) + 0.5;
   // Kumullar (dış kıyı): kum, üstünde kumul otu lekeleri.
@@ -23,50 +24,157 @@ function terrainColor(world, x, z, h, ny) {
   return tmp;
 }
 
+/**
+ * Arazi ağı, 64 m'lik karolar hâlinde ve yerel çözünürlükle: yol/meydan tesviyesi olan karolar 4 m, kıyı
+ * karoları 8 m, gerisi 16 m (kıyıdan uzak derin deniz 32 m). Ada büyük (6,6 km): tek
+ * düzgün ızgara ya çok kaba (yol ve patikaların içinden çim çıkıyordu) ya da telefona ağır olurdu.
+ * Farklı çözünürlükteki komşu karolar dikişle birleşir (ince karonun kenarı kaba komşunun kenar doğrusuna oturur).
+ * Normaller yükseklik farklarından hesaplanır (karo sınırında aynı adımlı komşular birebir aynı normali verir).
+ */
 export function buildTerrain(world) {
-  const pad = 220;
+  const pad = 220, T = 64;
   const { x0, x1, z0, z1 } = world.bounds;
-  const area = (x1 - x0 + 2 * pad) * (z1 - z0 + 2 * pad);
-  const step = Math.max(4, Math.sqrt(area / 90000));
-  const nx = Math.ceil((x1 - x0 + 2 * pad) / step), nz = Math.ceil((z1 - z0 + 2 * pad) / step);
-  const count = (nx + 1) * (nz + 1);
-  const pos = new Float32Array(count * 3), col = new Float32Array(count * 3), uv = new Float32Array(count * 2);
-  for (let j = 0; j <= nz; j++) {
-    for (let i = 0; i <= nx; i++) {
-      const k = j * (nx + 1) + i;
-      const x = x0 - pad + i * step, z = z0 - pad + j * step;
-      pos[k * 3] = x; pos[k * 3 + 1] = world.height(x, z); pos[k * 3 + 2] = z;
+  const X0 = Math.floor((x0 - pad) / T) * T, Z0 = Math.floor((z0 - pad) / T) * T;
+  const NX = Math.ceil((x1 + pad - X0) / T), NZ = Math.ceil((z1 + pad - Z0) / T);
+  const steps = new Uint8Array(NX * NZ).fill(16);
+  const quayTile = new Uint8Array(NX * NZ); // rıhtım karoları kabalaştırılmaz (duvar dibindeki iniş kaplamanın altında kalsın)
+  const mark = (x, z, s) => {
+    const i = Math.floor((x - X0) / T), j = Math.floor((z - Z0) / T);
+    if (i < 0 || j < 0 || i >= NX || j >= NZ) return;
+    const k = j * NX + i;
+    if (s < steps[k]) steps[k] = s;
+  };
+  // Tesviyeli hücreler (yollar, meydanlar ve çevreleri: layout.js _gradeRoads), 2 m hücrenin dört köşesi.
+  for (const key of world.grade?.keys() ?? []) {
+    const gx = Math.round(key / 100003), gz = key - gx * 100003;
+    for (const dx of [0, 2]) for (const dz of [0, 2]) mark(gx * 2 + dx, gz * 2 + dz, 4);
+  }
+  for (const p of world.piers) for (const x of [p.x0, p.x1]) for (const z of [p.z0, p.z1]) mark(x, z, 4);
+  // Kıyı: 16 m'lik örneklerle 8 m, rıhtım boyunca 4 m (duvarın arkasındaki iniş
+  // kaplama şeridinin altında kalır: city.js rihtim). Kıyıdan uzak derin deniz 32 m.
+  for (let j = 0; j < NZ; j++) {
+    for (let i = 0; i < NX; i++) {
+      let deep = true;
+      for (let a = 0; a <= T; a += 16) {
+        for (let b = 0; b <= T; b += 16) {
+          const x = X0 + i * T + a, z = Z0 + j * T + b;
+          const L = -world.sdf(x, z);
+          if (L > -40) deep = false;
+          if (Math.abs(L) > 30) continue;
+          if (quay(x, z) > 0.02) {
+            mark(x, z, 4);
+            const ti = Math.floor((x - X0) / T), tj = Math.floor((z - Z0) / T);
+            if (ti >= 0 && tj >= 0 && ti < NX && tj < NZ) quayTile[tj * NX + ti] = 1;
+          } else mark(x, z, 8);
+        }
+      }
+      if (deep && steps[j * NX + i] === 16) steps[j * NX + i] = 32;
     }
   }
-  const hAt = (i, j) => pos[(Math.min(nz, Math.max(0, j)) * (nx + 1) + Math.min(nx, Math.max(0, i))) * 3 + 1];
-  for (let j = 0; j <= nz; j++) {
-    for (let i = 0; i <= nx; i++) {
-      const k = j * (nx + 1) + i;
-      const x = pos[k * 3], h = pos[k * 3 + 1], z = pos[k * 3 + 2];
-      // Eğim: komşu yüksekliklerden.
-      const gx = hAt(i + 1, j) - hAt(i - 1, j), gz = hAt(i, j + 1) - hAt(i, j - 1);
-      const ny = (2 * step) / Math.hypot(gx, gz, 2 * step);
-      const c = terrainColor(world, x, z, h, ny);
-      col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
-      uv[k * 2] = x / 7; uv[k * 2 + 1] = z / 7;
+  // İnce işaretli karo gerçekten engebeli mi? Kaba ağ ince yüzeyin 6 cm'den fazla üstüne çıkmıyor ve 15 cm'den
+  // fazla altına inmiyorsa kaba adım yeter. Üst pay dar: patika yüzeyi tesviyenin yalnız 15,5 cm üstünde
+  // (−0,12 + 0,035); 13 cm'lik payla alçak açıdan patikaların içinden çim görünüyordu.
+  const hs = (x, z) => world.height(x, z);
+  for (let k = 0; k < steps.length; k++) {
+    if ((steps[k] !== 4 && steps[k] !== 8) || quayTile[k]) continue;
+    const ox = X0 + (k % NX) * T, oz = Z0 + Math.floor(k / NX) * T, n = T / 4;
+    const F = new Float32Array((n + 1) * (n + 1));
+    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) F[j * (n + 1) + i] = hs(ox + i * 4, oz + j * 4);
+    const fits = (c) => {
+      const r = c / 4;
+      for (let j = 0; j <= n; j++) {
+        for (let i = 0; i <= n; i++) {
+          const ci = Math.min(n - r, Math.floor(i / r) * r), cj = Math.min(n - r, Math.floor(j / r) * r);
+          const u = (i - ci) / r, w = (j - cj) / r;
+          const a = F[cj * (n + 1) + ci], b = F[cj * (n + 1) + ci + r], c2 = F[(cj + r) * (n + 1) + ci], d = F[(cj + r) * (n + 1) + ci + r];
+          // Izgaranın üçgenlemesiyle aynı: a-c-b ve b-c-d.
+          const y = u + w <= 1 ? a + (b - a) * u + (c2 - a) * w : d + (c2 - d) * (1 - u) + (b - d) * (1 - w);
+          const f = F[j * (n + 1) + i];
+          if (y - f > 0.06 || f - y > 0.15) return false;
+        }
+      }
+      return true;
+    };
+    if (fits(16)) steps[k] = 16;
+    else if (steps[k] === 4 && fits(8)) steps[k] = 8;
+  }
+  const stepAt = (i, j) => (i < 0 || j < 0 || i >= NX || j >= NZ ? 0 : steps[j * NX + i]);
+
+  // Parçalar: 8 × 8 karo (512 m) bir mesh; görüş dışındaki parçalar çizilmez (sokak seviyesinde çoğu).
+  const C = 8, material = new THREE.MeshStandardMaterial({ vertexColors: true, map: grassDetail(), roughness: 0.97 });
+  const group = new THREE.Group();
+  let tv = 0, tq = 0;
+  for (let cj = 0; cj < NZ; cj += C) {
+    for (let ci = 0; ci < NX; ci += C) {
+      let nv = 0, ni = 0;
+      for (let tj = cj; tj < Math.min(NZ, cj + C); tj++) for (let ti = ci; ti < Math.min(NX, ci + C); ti++) {
+        const n = T / steps[tj * NX + ti]; nv += (n + 1) * (n + 1); ni += 6 * n * n;
+      }
+      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), uv = new Float32Array(nv * 2);
+      const index = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+      let v = 0, q = 0;
+      for (let tj = cj; tj < Math.min(NZ, cj + C); tj++) {
+        for (let ti = ci; ti < Math.min(NX, ci + C); ti++) {
+          const s = steps[tj * NX + ti], n = T / s, m = n + 3;
+          const ox = X0 + ti * T, oz = Z0 + tj * T;
+          // Bir halka fazlasıyla yükseklikler (normaller için).
+          const H = new Float32Array(m * m);
+          for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) H[j * m + i] = world.height(ox + (i - 1) * s, oz + (j - 1) * s);
+          // Dikiş: daha kaba komşuya bakan kenarda, komşunun köşeleri arasındaki köşeler onun kenar doğrusuna
+          // oturtulur (T-birleşiminde çatlak kalmaz; komşu kaba olduğuna göre o kenar zaten düz sayılmış).
+          const seam = (di, dj, cell) => {
+            const c = stepAt(ti + di, tj + dj);
+            if (!c || c <= s) return;
+            const r = c / s;
+            for (let k = 0; k <= n; k++) {
+              if (k % r === 0) continue;
+              const k0 = k - (k % r), u = (k % r) / r;
+              const [i, j] = cell(k), [i0, j0] = cell(k0), [i1, j1] = cell(k0 + r);
+              H[(j + 1) * m + i + 1] = H[(j0 + 1) * m + i0 + 1] * (1 - u) + H[(j1 + 1) * m + i1 + 1] * u;
+            }
+          };
+          seam(0, -1, (k) => [k, 0]);
+          seam(0, 1, (k) => [k, n]);
+          seam(-1, 0, (k) => [0, k]);
+          seam(1, 0, (k) => [n, k]);
+          const base = v;
+          for (let j = 0; j <= n; j++) {
+            for (let i = 0; i <= n; i++) {
+              const x = ox + i * s, z = oz + j * s, h = H[(j + 1) * m + i + 1];
+              const gx = (H[(j + 1) * m + i + 2] - H[(j + 1) * m + i]) / (2 * s), gz = (H[(j + 2) * m + i + 1] - H[j * m + i + 1]) / (2 * s);
+              const L = Math.hypot(gx, gz, 1);
+              pos[v * 3] = x; pos[v * 3 + 1] = h; pos[v * 3 + 2] = z;
+              nor[v * 3] = -gx / L; nor[v * 3 + 1] = 1 / L; nor[v * 3 + 2] = -gz / L;
+              const c = terrainColor(world, x, z, h, 1 / L);
+              col[v * 3] = c.r; col[v * 3 + 1] = c.g; col[v * 3 + 2] = c.b;
+              uv[v * 2] = x / 7; uv[v * 2 + 1] = z / 7;
+              v++;
+            }
+          }
+          for (let j = 0; j < n; j++) {
+            for (let i = 0; i < n; i++) {
+              const a = base + j * (n + 1) + i, b = a + 1, c = a + n + 1, d = c + 1;
+              index[q++] = a; index[q++] = c; index[q++] = b; index[q++] = b; index[q++] = c; index[q++] = d;
+            }
+          }
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(new THREE.BufferAttribute(index, 1));
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      tv += v; tq += q;
     }
   }
-  const index = [];
-  for (let j = 0; j < nz; j++) {
-    for (let i = 0; i < nx; i++) {
-      const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
-      index.push(a, c, b, b, c, d);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  geo.setIndex(index);
-  geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: grassDetail(), roughness: 0.97 }));
-  mesh.receiveShadow = true;
-  return mesh;
+  group.material = material; // lamba ışığı (main.js) zemin malzemesini buradan alır
+  group.userData.stats = { verts: tv, tris: tq / 3, parca: group.children.length, adim: Object.fromEntries([2, 4, 8, 16, 32].map((a) => [a, steps.filter((s) => s === a).length])) };
+  return group;
 }
 
 /**

@@ -18,6 +18,10 @@ import * as I from "./island.js";
 export const CELL_W = 560;
 export const CELL_D = 270;
 export const FLAT_Y = I.FLAT_Y;
+// Tesviye: yüzey kenarından sonra düz omuz ve doğal araziye geçiş (m). Omuz ≥ arazi ağının ince adımının köşegeni.
+const GRADE_SHOULDER = 6, GRADE_BLEND = 6;
+// roads.js'in FLAT_Y'de döşeme çizdiği meydan türleri (park, göl çevresi gibi çizilmeyenler tesviye edilmez).
+const PLAZA_GRADE = new Set(["meydan", "cimen", "tarla", "saha", "pazar", "avlu", "oyun", "basket", "otopark"]);
 export const FLOOR_H = 3.2;
 
 const HUB = I.HUB;
@@ -379,20 +383,67 @@ export class World {
     return this.roadH(x, z);
   }
 
+  /**
+   * Tesviye haritası (2 m hücre): yolların ve meydanların altı yüzeyin hemen altında düz, kenardan sonra
+   * GRADE_SHOULDER kadar düz omuz, ardından GRADE_BLEND boyunca doğal araziye yumuşak geçiş. Omuz, arazi ağının
+   * en ince adımının (terrain.js, 4 m) köşegeninden geniş: yolu kesen hiçbir üçgen yüzeyin üstüne çıkamaz.
+   * Hücre: { h: yüzey yüksekliği, e: yüzey kenarından uzaklık (içeride ≤ 0) }.
+   */
   _gradeRoads() {
     this.grade = new Map();
+    const put = (x, z, h, e) => {
+      const key = Math.floor(x / 2) * 100003 + Math.floor(z / 2);
+      const cur = this.grade.get(key);
+      if (!cur || e < cur.e) this.grade.set(key, { h, e });
+    };
+    const reach = GRADE_SHOULDER + GRADE_BLEND + 1;
     for (const e of this.network.edges) {
       const hw = e.road.width / 2;
-      for (const st of stations(e.pts, 0, 0, 2)) {
+      for (const st of stations(e.pts, 0, 0, 1)) {
         const h = this.roadH(st.p[0], st.p[1]);
-        const reach = hw + 4;
-        for (let o = -reach; o <= reach; o += 1) {
-          const x = st.p[0] + st.n[0] * o, z = st.p[1] + st.n[1] * o;
-          const key = Math.floor(x / 2) * 100003 + Math.floor(z / 2);
-          const d = Math.abs(o);
-          const cur = this.grade.get(key);
-          if (!cur || d < cur.d) this.grade.set(key, { h, d, hw });
+        for (let o = -(hw + reach); o <= hw + reach; o += 1) put(st.p[0] + st.n[0] * o, st.p[1] + st.n[1] * o, h, Math.abs(o) - hw);
+      }
+    }
+    // İskele ve dolgu rıhtım (yük terminali) döşemeleri: altlarındaki doğal arazi döşemenin altına indirilir
+    // (yalnız indirilir; sudaki iskelenin altına kara çıkmaz).
+    for (const p of this.piers) {
+      for (let x = p.x0; x <= p.x1 + 1; x += 2) for (let z = p.z0; z <= p.z1 + 1; z += 2) {
+        const key = Math.floor(x / 2) * 100003 + Math.floor(z / 2);
+        if (!this.grade.has(key)) this.grade.set(key, { h: p.top - 0.08, e: 0, low: true });
+      }
+    }
+    // Binalar FLAT_Y'de oturur: tabanlarının (1 m payla) altı ve çevresi de tesviye.
+    for (const b of this.buildings) {
+      if (!Number.isFinite(b.x) || !b.w || !b.d) continue;
+      this._gradeRect(put, b.x, b.z, b.w / 2 + 1, b.d / 2 + 1, Math.cos(b.rot ?? 0), Math.sin(b.rot ?? 0), reach);
+    }
+    // Meydanlar (çim, avlu, oyun, saha, tarla...) sabit FLAT_Y'de çizilir: altları ve çevreleri ona tesviye.
+    for (const pl of this.plazas) {
+      if (!PLAZA_GRADE.has(pl.kind)) continue;
+      const pad = pl.kind === "saha" ? 4 : pl.kind === "oyun" ? 0.5 : 0;
+      let cx, cz, hx, hz, c = 1, sn = 0;
+      if (pl.r) { cx = pl.x; cz = pl.z; hx = hz = pl.r; }
+      else if (pl.rot != null) { cx = pl.cx; cz = pl.cz; hx = pl.w / 2 + pad; hz = pl.d / 2 + pad; c = Math.cos(pl.rot); sn = Math.sin(pl.rot); }
+      else { cx = (pl.x0 + pl.x1) / 2; cz = (pl.z0 + pl.z1) / 2; hx = (pl.x1 - pl.x0) / 2 + pad; hz = (pl.z1 - pl.z0) / 2 + pad; }
+      if (pl.r) this._gradeRect(put, cx, cz, hx, hz, 1, 0, reach, true);
+      else this._gradeRect(put, cx, cz, hx, hz, c, sn, reach);
+    }
+  }
+
+  /** Merkezi (cx, cz), yarı boyutları hx × hz, dönüşü (c = cos, sn = sin) olan dikdörtgen (ya da daire) çevresini FLAT_Y'ye tesviye eder. */
+  _gradeRect(put, cx, cz, hx, hz, c, sn, reach, circle = false) {
+    const R = Math.hypot(hx, hz) + reach;
+    for (let x = cx - R; x <= cx + R; x += 2) {
+      for (let z = cz - R; z <= cz + R; z += 2) {
+        const dx = x + 1 - cx, dz = z + 1 - cz;
+        let e;
+        if (circle) e = Math.hypot(dx, dz) - hx;
+        else {
+          // Döndürülmüş dikdörtgene uzaklık (yerel eksenlerde).
+          const lx = Math.abs(dx * c - dz * sn) - hx, lz = Math.abs(dx * sn + dz * c) - hz;
+          e = lx > 0 || lz > 0 ? Math.hypot(Math.max(lx, 0), Math.max(lz, 0)) : Math.max(lx, lz);
         }
+        if (e <= reach) put(x + 1, z + 1, FLAT_Y, e);
       }
     }
   }
@@ -584,14 +635,20 @@ export class World {
     return 0;
   }
 
-  /** Arazi: yolların altı ve yanı tesviye edilmiş. */
+  /** Arazi: yolların ve meydanların altı ve çevresi tesviye edilmiş (_gradeRoads). */
   height(x, z) {
     const raw = this.rawHeight(x, z);
     const g = this.grade?.get(Math.floor(x / 2) * 100003 + Math.floor(z / 2));
     if (!g) return raw;
-    if (g.d <= g.hw) return g.h - 0.12; // yolun altı: yüzeyin hemen altında
-    const t = Math.min(1, (g.d - g.hw) / 4);
-    return g.h + (raw - g.h) * t * t * (3 - 2 * t);
+    if (g.low) return Math.min(raw, g.h - 0.12);
+    if (g.e <= 0) return g.h - 0.12; // yüzeyin hemen altında
+    if (Math.abs(raw - g.h) < 0.12) return raw; // düz kasabada omuz gerekmez (arazi zaten yüzey düzeyinde)
+    const t = Math.max(0, Math.min(1, (g.e - GRADE_SHOULDER) / GRADE_BLEND));
+    const y = g.h - 0.12 + (raw - g.h + 0.12) * t * t * (3 - 2 * t);
+    // Omuz denize taşmasın: kıyıda (doğal arazi suya inerken) omuz doğal araziye bırakılır.
+    if (raw >= 0.6 || y <= raw) return y;
+    const k = Math.max(0, raw) / 0.6;
+    return raw + (y - raw) * k * k;
   }
 
   /** Doğal arazi (tesviyesiz): island.js. */
@@ -1064,9 +1121,11 @@ export class World {
     this.labels.push({ text: "Harbor Bay", x: 120, z: 520, h: 40 });
     // Rıhtım duvarı: kasaba önünde kıyı boyunca granit (island.js quay); iskeleler ve dolgular dahil.
     const wall = [];
+    // Duvar kıyı çizgisinin (land = 0) üstünde; yalnız rıhtımın tam olduğu yerde (uçlarda kumsala geçiş).
     for (let x = -1000; x <= 800; x += 5) {
-      const [cx, cz] = this.coastPoint(x, Math.min(I.mainZ(Math.max(-700, Math.min(700, x))), I.shoreZ(x) - 60), 0, 1, 0);
-      if (I.quay(cx, cz - 2) > 0.5) wall.push([cx, cz]);
+      let cz = Math.min(I.mainZ(Math.max(-700, Math.min(700, x))), I.shoreZ(x) - 60);
+      while (cz < I.shoreZ(x) + 400 && I.land(x, cz) > 0) cz += 0.25;
+      if (I.quay(x, cz - 2) > 0.9) wall.push([x, cz]);
       else if (wall.length && wall.at(-1) !== null) wall.push(null);
     }
     this.features.push({ type: "rihtim", pts: wall });

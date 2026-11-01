@@ -11,7 +11,7 @@
 //   (video/ klasörüne göre), konuşmanın 14 dB altına ayarlanır.
 //   adres:   sitenin sorgu parametreleri (ör. "saat=08:10&hiz=20&nufus=3200")
 //   kamera:  [[t, kx, ky, kz, bx, by, bz], ...] kamera konumu ve bakılan nokta (çekim başından saniye)
-//   takip:   { yakin: true, secim } yürüyen bir sakini yakından izler (kamera yerine); secim görünüş
+//   takip:   { yakin: true, secim, yalniz } yürüyen bir sakini yakından izler (kamera yerine); secim görünüş
 //            koşulları (kel değil vb.)
 //   yazilar: [{ metin, alt?, bas, son, yer: "ust" | "orta" | "alt" }]
 //   arayuz:  true ise sitenin üst bilgisi görünür (diğer paneller hep gizli); kart: true ise sakin kartı da
@@ -192,6 +192,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
       if (best < 0) return;
       if (takip.ad) A.residents[best].handle = takip.ad;
       globalThis.__etiket = best; // etiketi hep önde ve vurgulu (işaret yok)
+      globalThis.__yalnizEtiket = !!takip.yalniz; // yalniz: başka sakinlerin etiketleri gizli
       const i = best, st = {};
       globalThis.__yonetmen = (dt) => {
         const x = P.positions[i * 3], y = P.positions[i * 3 + 1], z = P.positions[i * 3 + 2];

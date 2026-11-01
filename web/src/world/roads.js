@@ -327,6 +327,21 @@ export function buildRoads(world) {
     }
   }
 
+  // Yaya yolu ve patika birleşimleri: açılı birleşen şeritlerin köşelerinde çim üçgenleri kalıyordu; düğüme en
+  // geniş kolun yüzeyiyle çokgen yama (taşıt yolu olan düğümler aşağıda kendi yamasını alır).
+  for (const node of net.nodes) {
+    if (node.ends.length < 2 || node.ends.some((e) => isCar(e.edge.road))) continue;
+    const r = node.ends.map((e) => e.edge.road).reduce((m, x) => (x.width > m.width ? x : m));
+    const hTop = r.type === "patika" ? H.trail : H.ped, mesh = M[r.surface], tile = TILE[r.surface];
+    const y = ground(...node.p) + hTop + 0.004, R = r.width / 2, N = 16;
+    const c = [node.p[0], y, node.p[1]];
+    for (let k = 0; k < N; k++) {
+      const a0 = (k / N) * Math.PI * 2, a1 = ((k + 1) / N) * Math.PI * 2;
+      const A = [node.p[0] + Math.cos(a0) * R, y, node.p[1] + Math.sin(a0) * R], B = [node.p[0] + Math.cos(a1) * R, y, node.p[1] + Math.sin(a1) * R];
+      mesh.tri(c, B, A, [c[0] / tile, c[2] / tile], [B[0] / tile, B[2] / tile], [A[0] / tile, A[2] / tile]);
+    }
+  }
+
   // Düğümler: taşıt yolu yaması, kaldırım köşeleri, yaya geçitleri.
   for (const node of net.nodes) {
     const cars = node.ends.filter((e) => isCar(e.edge.road) && e.trim > 0);
@@ -514,7 +529,7 @@ export function buildGrounds(world) {
     const w = p.rot != null ? p.w : p.x1 - p.x0, d = p.rot != null ? p.d : p.z1 - p.z0;
     const cx = p.rot != null ? p.cx : (p.x0 + p.x1) / 2, cz = p.rot != null ? p.cz : (p.z0 + p.z1) / 2;
     if (p.kind === "tarla") slab(w, d, cx, cz, T.crops(CROPS[p.crop]), 2.4, 0.08);
-    else if (p.kind === "cimen") slab(w, d, cx, cz, T.lawn(), 0, 0.03);
+    else if (p.kind === "cimen") slab(w, d, cx, cz, T.lawn(), 0, -0.02); // patikaların (+0,035) belirgin altında: alçak açıdan çim patikanın üstüne binmesin
     else if (p.kind === "saha") {
       slab(w + 8, d + 8, cx, cz, T.paving(), 2.4, 0.06);
       const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: world.pitch?.football ? T.footballField() : T.pitch(), roughness: 0.95 }));
