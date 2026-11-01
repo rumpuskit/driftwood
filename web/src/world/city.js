@@ -1137,6 +1137,25 @@ function buildFeatures(world) {
         }
         break;
       }
+      case "okul_otobusu": {
+        // Sarı okul otobüsü (park hâlinde): sarı gövde, siyah şeritler, pencere sırası, STOP kolu, siyah tampon.
+        const y0 = world.groundY(f.x, f.z);
+        const g = new THREE.Group();
+        g.position.set(f.x, y0, f.z);
+        g.rotation.y = f.rot;
+        group.add(g);
+        const put = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+        const yellow = std("#f2b51e", { roughness: 0.5 }), black = std("#1d1d20"), glassM = std("#33414f", { roughness: 0.2, metalness: 0.4 });
+        put(new THREE.BoxGeometry(2.4, 2.3, 9.6), yellow, 0, 1.75, -0.4);
+        put(new THREE.BoxGeometry(2.3, 1.2, 1.6), yellow, 0, 1.2, 5.1);
+        put(new THREE.BoxGeometry(2.44, 0.75, 8.2), glassM, 0, 2.3, -0.8);
+        put(new THREE.BoxGeometry(2.2, 0.8, 0.06), glassM, 0, 2.3, 4.32);
+        for (const y of [1.25, 1.6]) put(new THREE.BoxGeometry(2.45, 0.07, 9.6), black, 0, y, -0.4);
+        put(new THREE.BoxGeometry(2.5, 0.3, 0.3), black, 0, 0.55, 5.95);
+        put(new THREE.BoxGeometry(0.05, 0.45, 0.45), std("#c8231f"), -1.25, 1.9, 3.4);
+        for (const z of [-3.6, 3.9]) for (const x of [-1.05, 1.05]) put(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12).rotateZ(Math.PI / 2), black, x, 0.5, z);
+        break;
+      }
       case "bandstand": {
         // Town Green çardağı: sekizgen beyaz ahşap, yüksek döşeme, ince direkler, korkuluk ve sekizgen külah.
         const y0 = world.groundY(f.x, f.z);

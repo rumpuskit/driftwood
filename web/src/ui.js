@@ -634,7 +634,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         const key = `${th.id}|${th.ad}`;
         if (gun.dataset.key !== key) {
           gun.dataset.key = key;
-          const ic = { cuma: "cami", sinema: "kamera", pazar: "sepet", ucurtma: "dag", gunbatimi: "gunes", balik: "balik", temizlik: "dalga", yildiz: "ampul", tavla: "fincan", komsuluk: "mahalle" }[th.id] ?? "gunes";
+          const ic = { kilise: "cami", mac: "top", konser: "nota", "4temmuz": "yildizli", cadilar: "kabak", sukran: "ev", noel: "agac", yilbasi: "yildizli", sinema: "kamera", pazar: "sepet", ucurtma: "dag", gunbatimi: "gunes", balik: "balik", temizlik: "dalga", yildiz: "ampul", tavla: "fincan", komsuluk: "mahalle" }[th.id] ?? "gunes";
           gun.innerHTML = svg(ic);
           gun.append(`Today: ${th.ad}${th.bas != null ? ` · ${clockText(th.bas)}` : ""}`);
           gun.title = gun.textContent;

@@ -773,6 +773,10 @@ export class World {
     const f = [Math.sin(rot), Math.cos(rot)];
     this.features.push({ type: "kilise_kule", x: x + f[0] * (d / 2 + 2.2), z: z + f[1] * (d / 2 + 2.2), rot });
     if (m != null) b.mahalle = m;
+    // Pazar ayini için kapı (kulenin önü); katalogda iş yeri türü değil, yalnız dünyada.
+    const door = [x + f[0] * (d / 2 + 4.6), z + f[1] * (d / 2 + 4.6)];
+    (this.workplaces.cami ??= []).push({ name, door, anchor: door, spread: 3, path: [door, HUB], building: b, _k: this._key });
+    b.isim = name;
     return b;
   }
 
@@ -1531,6 +1535,9 @@ export class World {
             const [dx, dz] = this._zw(zone, side * su, v - 6.85);
             const door = [dx, dz];
             this._addWorkplace("okul", m, { door, path: [door, HUB], anchor: door, spread: 2, building: b });
+            // Sarı okul otobüsü: okulun önünde, giriş caddesine paralel park etmiş.
+            const [ox, oz] = this._zw(zone, side * (su - 8), this._rowV(r) + 9.5);
+            this.features.push({ type: "okul_otobusu", x: ox, z: oz, rot: Math.atan2(zone.t[0], zone.t[1]) });
             (this.schools ??= []).push({ x0: cx - 12, x1: cx + 12, z0: cz - 12, z1: cz + 12, x: cx, building: b, _k: this._key });
             break;
           }

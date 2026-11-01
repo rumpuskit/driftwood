@@ -39,18 +39,20 @@ const UNIFORMS = {
   avukat: { top: "#2b2b30", bottom: "#2b2b30", sleeves: true },
   liman_iscisi: { top: "#f28c28", bottom: "#2c3a52", hat: "kask", hatColor: "#f2c230" },
   gemi_ustasi: { top: "#33507a", bottom: "#33507a", sleeves: true, hat: "kask", hatColor: "#f4f4f2" },
-  balikci: { top: "#f2c230", bottom: "#2c3a52", sleeves: true, hat: "bere", hatColor: "#2f3f5f" },
+  balikci: { top: "#2c3a52", bottom: "#f28c28", sleeves: true, hat: "bere", hatColor: "#2f3f5f" }, // ıstakozcu: turuncu tulum, bere
   fener_bekcisi: { top: "#2f3f5f", bottom: "#2c3a52", sleeves: true, hat: "bere", hatColor: "#8a2f2f" },
   cankurtaran: { top: "#e0463c", bottom: "#e0463c", shorts: true, sleeves: false, hat: "sapka", hatColor: "#e0463c" },
   bahcivan: { top: "#6a8f3c", bottom: "#5a4636", hat: "sapka", hatColor: "#4f6d2c" },
-  zeytinci: { top: "#7d8a4e", bottom: "#5a4636", hat: "hasir", hatColor: "#e3c77e" },
+  ciftci: { top: "#8e3a32", bottom: "#2f3f2a", sleeves: true, hat: "sapka", hatColor: "#5a4636" }, // kızılcık çiftçisi: ekose gömlek, çizmeli tulum
+  yelkenci: { top: "#e9e4d6", bottom: "#4a6589" },
+  lunapark: { top: "#c43a3a", bottom: "#c8b48a", hat: "kep", hatColor: "#c43a3a" }, // eğlence iskelesi: kırmızı polo
   marangoz: { top: "#8a6a4a", bottom: "#4a6589" },
   seramikci: { top: "#bfb3a2" },
   rehber: { top: "#3e8a86", sleeves: true },
   muhtar: { top: "#3a3f4a", bottom: "#3a3f4a", sleeves: true },
   okul_muduru: { top: "#2c3a52", bottom: "#2c3a52", sleeves: true },
-  kahveci: { top: "#f4f4f2", bottom: "#1d1d22", sleeves: true },
-  futbolcu: { top: "#c8312f", bottom: "#f4f4f2", shorts: true, sleeves: false }, // Driftwood Gulls forması
+  kahveci: { top: "#f4f4f2", bottom: "#1d1d22", sleeves: true, hat: "asci", hatColor: "#f4f4f2" }, // diner aşçısı: beyaz kâğıt şapka
+  futbolcu: { top: "#1f3354", bottom: "#c8a24a", sleeves: true, hat: "kask", hatColor: "#1f3354" }, // Driftwood Gulls: lacivert forma, altın pantolon, kask
   zeplin_pilotu: { top: "#f4f4f2", bottom: "#1d3156", sleeves: true, hat: "kep", hatColor: "#1d3156" }, // pilot gömleği ve kepi
   hakim: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true }, // cübbe
   savci: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true },
@@ -69,8 +71,8 @@ export function keepExtra(lively, seed) {
   return lively >= 1 || (Math.imul((seed ^ 0x9e3779b9) | 0, 2654435761) >>> 0) / 4294967296 < lively;
 }
 const SUITCASES = [new Color("#3d5a80"), new Color("#9c2f3c"), new Color("#2f5d50"), new Color("#7a5c3a"), new Color("#4a4a52")];
-const SCHOOL_TOPS = [new Color("#2f4a6d"), new Color("#2f4a6d"), new Color("#f4f1ea")]; // okul forması
-const DRIVER_TOP = new Color("#3b5a7a"), FIRE_TOP = new Color("#b8231f"), MEDIC_TOP = new Color("#e9eef2"), COP_TOP = new Color("#f28c28");
+const SCHOOL_TOPS = ["#2f4a6d", "#c43a3a", "#3e7a5a", "#e9b23a", "#7d8e9e"].map((c) => new Color(c)); // okulda forma yok: günlük kıyafet
+const DRIVER_TOP = new Color("#3b5a7a"), FIRE_TOP = new Color("#b8231f"), MEDIC_TOP = new Color("#e9eef2"), COP_TOP = new Color("#1f3f73");
 const DOG_COLORS = ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f", "#6b6b6b"].map((c) => new Color(c));
 const HUB = [0, 0]; // Town Green
 const POSE_KEYS = ["y", "lie", "drop", "lean", "twist", "headYaw", "headPitch", "hipL", "hipR", "kneeL", "kneeR", "shL", "shR", "abL", "abR", "elL", "elR"];
@@ -2124,7 +2126,7 @@ export class People {
             v.heading = Math.atan2(gx - v.x, gz - v.z);
             idleGesture(v, time, ph, true);
           }
-          Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % 3], bottom: P.BOTTOMS[1], sleeves: true, beard: false, glasses: seed % 9 === 0 });
+          Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % SCHOOL_TOPS.length], bottom: P.BOTTOMS[1], sleeves: true, beard: false, glasses: seed % 9 === 0 });
           crowd.add(-1, v);
         }
       }

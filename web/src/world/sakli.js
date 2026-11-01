@@ -1,15 +1,15 @@
 // Günün saklı nesnesi: her gün adanın bir köşesinde küçük bir nesne (şişede mektup, kayıp kedi, eski pusula,
-// kırmızı balon, deniz kabuğu). Yeri ve türü günden türetilir: herkes aynı yerde görür. Bulan dokunur; bulunan
+// kırmızı balon, deniz kabuğu). Metinler İngilizce (gazete: "Hidden on the island today: a lost cat. Look on the beach"). Yeri ve türü günden türetilir: herkes aynı yerde görür. Bulan dokunur; bulunan
 // günler bu cihazda tutulur (seri), bulanların sayısı Worker'da (anonim) sayılır.
 import * as THREE from "three";
 import { roll } from "../sim.js";
 
 const ITEMS = [
-  { id: "sise", ad: "şişede bir mektup", make: bottle },
-  { id: "kedi", ad: "kayıp bir kedi", make: cat },
-  { id: "pusula", ad: "eski bir pusula", make: compass },
-  { id: "balon", ad: "kırmızı bir balon", make: balloon },
-  { id: "kabuk", ad: "dev bir deniz kabuğu", make: shell },
+  { id: "sise", ad: "a message in a bottle", make: bottle },
+  { id: "kedi", ad: "a lost cat", make: cat },
+  { id: "pusula", ad: "an old compass", make: compass },
+  { id: "balon", ad: "a red balloon", make: balloon },
+  { id: "kabuk", ad: "a giant seashell", make: shell },
 ];
 
 function mat(color, extra = {}) { return new THREE.MeshStandardMaterial({ color, roughness: 0.5, ...extra }); }
@@ -59,15 +59,15 @@ function shell() {
 function spots(world) {
   const out = [];
   const add = (x, z, area) => { if (world.isWalkable(x, z)) out.push({ x, z, area }); };
-  for (const [x, z] of world.places.plaj?.anchors ?? []) add(x + 3, z + 2, "plajda");
+  for (const [x, z] of world.places.plaj?.anchors ?? []) add(x + 3, z - 2, "on the beach");
   const top = world.places.tepe?.anchors[0];
-  if (top) for (let k = 0; k < 6; k++) { const a = k * 1.05; add(top[0] + Math.cos(a) * 22, top[1] + Math.sin(a) * 22, "tepede"); }
-  if (world.fener) for (let k = 0; k < 3; k++) add(world.fener.x + 8 * Math.cos(k * 2), world.fener.z + 8 * Math.sin(k * 2), "fenerin yanında");
+  if (top) for (let k = 0; k < 6; k++) { const a = k * 1.05; add(top[0] + Math.cos(a) * 22, top[1] + Math.sin(a) * 22, "up on Bluff Head"); }
+  if (world.fener) for (let k = 0; k < 3; k++) add(world.fener.x + 8 * Math.cos(k * 2), world.fener.z + 8 * Math.sin(k * 2), "by the lighthouse");
   const pier = world.ferryPier;
-  if (pier) add(-8, pier.z0 - 4, "vapur iskelesinin girişinde");
-  for (const s of world.places.iskele?.spots ?? []) add(s.x, s.z - 2, "balık iskelesinde");
-  for (let k = 0; k < 6; k++) { const a = k * 1.05 + 0.4; add(Math.cos(a) * 31, Math.sin(a) * 31, "meydanın kenarında"); }
-  for (const b of world.buildings.filter((q) => q.daireler).slice(0, 12)) add(b.x - Math.sin(b.rot) * (b.d / 2 + 2.5), b.z - Math.cos(b.rot) * (b.d / 2 + 2.5), "evlerin arkasında");
+  if (pier) add(pier.x0 - 8, pier.z0 - 6, "by the ferry landing");
+  for (const s of world.places.iskele?.spots ?? []) add(s.x, s.z - 2, "on the town dock");
+  for (let k = 0; k < 6; k++) { const a = k * 1.05 + 0.4; add(Math.cos(a) * 60, Math.sin(a) * 36, "around the Town Green"); }
+  for (const b of world.buildings.filter((q) => q.daireler).slice(0, 12)) add(b.x - Math.sin(b.rot) * (b.d / 2 + 2.5), b.z - Math.cos(b.rot) * (b.d / 2 + 2.5), "behind the houses");
   return out;
 }
 

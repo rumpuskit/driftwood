@@ -28,7 +28,11 @@ const P = {
   basak: '<path d="M12 21V8"/><path d="M12 12c-2.5 0-4-1.5-4-4 2.5 0 4 1.5 4 4zM12 12c2.5 0 4-1.5 4-4-2.5 0-4 1.5-4 4zM12 8c-2 0-3.3-1.3-3.3-3.3 2 0 3.3 1.3 3.3 3.3zM12 8c2 0 3.3-1.3 3.3-3.3-2 0-3.3 1.3-3.3 3.3z"/>',
   mahalle: '<path d="M3 20v-9l5-4 5 4v9"/><path d="M13 20v-6l4-3 4 3v6"/><path d="M2 20h20"/>',
   bina: '<rect x="5" y="3.5" width="14" height="17" rx="1"/><path d="M9 7.5h2M13 7.5h2M9 11h2M13 11h2M9 14.5h2M13 14.5h2M10.5 20.5v-3h3v3"/>',
-  cami: '<path d="M5 21v-7a7 7 0 0 1 14 0v7"/><path d="M3 21h18"/><path d="M12 7V4"/><path d="M10 21v-4a2 2 0 0 1 4 0v4"/>',
+  cami: '<path d="M12 2.5V6"/><path d="M9 10l3-4 3 4"/><path d="M9 10v3"/><path d="M15 10v3"/><path d="M5 21v-7l7-3.5 7 3.5v7"/><path d="M3 21h18"/><path d="M10 21v-3.5a2 2 0 0 1 4 0V21"/>',
+  top: '<ellipse cx="12" cy="12" rx="9" ry="5.5" transform="rotate(-35 12 12)"/><path d="M9.5 14.5l5-5"/><path d="M10.8 11.4l1.8 1.8M12.4 9.8l1.8 1.8"/>',
+  nota: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  yildizli: '<path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.6-.8z"/>',
+  kabak: '<path d="M12 7c-5 0-8 2.6-8 6.5S7 20 12 20s8-2.6 8-6.5S17 7 12 7z"/><path d="M12 7c-1.6 2-1.6 11 0 13M12 7c1.6 2 1.6 11 0 13"/><path d="M12 7c0-2 1-3 2.5-3.5"/>',
   ambar: '<path d="M3 8l9-4.5L21 8v12H3z"/><path d="M7 20v-7h10v7M7 16.5h10"/>',
   capa: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M5 13a7 7 0 0 0 14 0"/><path d="M9 10h6"/>',
   balik: '<path d="M3 12c3-4.5 9-6 14-2l4-3v10l-4-3c-5 4-11 2.5-14-2z"/><circle cx="8" cy="11" r=".6"/>',
@@ -70,6 +74,6 @@ export const BINA_SIMGE = {
 export const ARAC_SIMGE = { zeplin: "zeplin", car: "araba", taxi: "taksi", bus: "otobus", ambulans: "ambulans", itfaiye: "kamyon", cop: "kamyon" };
 /** Haritadaki yerler → simge. */
 export const YER_SIMGE = {
-  "Town Green": "cesme", "Ferry Landing": "vapur", "Harbor Walk": "dalga", "Kettle Pond Park": "agac", "Ocean Beach": "semsiye",
+  "Town Green": "agac", "Ferry Landing": "vapur", "Harbor Walk": "dalga", "Kettle Pond Park": "agac", "Ocean Beach": "semsiye",
   "Bluff Head": "dag", "Gull Point Light": "fener", "Cranberry Bog": "basak", "Apple Orchard": "basak", "Driftwood Blimp": "zeplin",
 };

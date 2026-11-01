@@ -866,6 +866,15 @@ const MODELS = {
     head: merged([box(0.32, 0.12, 0.06, -0.6, 0.72, 2.16, "#fff6d8"), box(0.32, 0.12, 0.06, 0.6, 0.72, 2.16, "#fff6d8")]),
     tail: merged([box(0.32, 0.12, 0.06, -0.6, 0.72, -2.16, "#d8302c"), box(0.32, 0.12, 0.06, 0.6, 0.72, -2.16, "#d8302c")]),
   }),
+  // Pikap: yüksek kabin, açık kasa (Amerikan kasabasında arabaların üçte biri).
+  pickup: () => ({
+    body: merged([box(1.95, 0.75, 5.5, 0, 0.42, 0), box(1.9, 0.12, 1.6, 0, 1.12, 1.95)]),
+    glass: merged([box(1.78, 0.58, 1.75, 0, 1.18, 0.55, "#3a4a5c")]),
+    roof: merged([box(1.72, 0.08, 1.6, 0, 1.76, 0.45)]),
+    fixed: merged([...wheels(3.4, 1.7, 0.4), box(1.75, 0.5, 2.25, 0, 0.75, -1.45, "#1d1d20"), box(1.97, 0.16, 0.22, 0, 0.42, 2.78, "#b9bcc0"), box(1.97, 0.16, 0.22, 0, 0.42, -2.78, "#2a2a2e")]),
+    head: merged([box(0.34, 0.16, 0.06, -0.62, 0.92, 2.76, "#fff6d8"), box(0.34, 0.16, 0.06, 0.62, 0.92, 2.76, "#fff6d8")]),
+    tail: merged([box(0.16, 0.34, 0.06, -0.88, 0.9, -2.76, "#d8302c"), box(0.16, 0.34, 0.06, 0.88, 0.9, -2.76, "#d8302c")]),
+  }),
   bus: () => ({
     body: merged([box(2.5, 2.55, 12, 0, 0.4, 0)]),
     glass: merged([box(2.52, 1.0, 10.2, 0, 1.6, -0.5, "#30404f"), box(2.3, 1.3, 0.06, 0, 1.35, 6.0, "#30404f")]),
@@ -911,7 +920,7 @@ export class Vehicles {
     const lightMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
     this.group = new THREE.Group();
     this.types = {};
-    const caps = { car: capacity, bus: 40, ambulans: 6, itfaiye: 3, cop: 3 };
+    const caps = { car: capacity, pickup: capacity, bus: 40, ambulans: 6, itfaiye: 3, cop: 3 };
     for (const [type, f] of Object.entries(MODELS)) {
       const meshes = {};
       for (const [name, geo] of Object.entries(f())) {
@@ -967,7 +976,9 @@ export class Vehicles {
   }
 
   addCar(x, y, z, heading, colorIndex, opts = {}) {
-    this.add("car", x, y, z, heading, { ...opts, color: opts.taxi ? TAXI_COLOR : CAR_COLORS[colorIndex % CAR_COLORS.length] });
+    // Aynı renk sırası hep aynı araç: üçte biri pikap.
+    const type = !opts.taxi && colorIndex % 3 === 1 ? "pickup" : "car";
+    this.add(type, x, y, z, heading, { ...opts, color: opts.taxi ? TAXI_COLOR : CAR_COLORS[colorIndex % CAR_COLORS.length] });
   }
 
   end() {

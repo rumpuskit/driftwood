@@ -18,7 +18,7 @@ export const SECENEK = {
 export const CICEK_AD = { yok: "None", sardunya: "Geraniums", lavanta: "Lavender", papatya: "Daisies", begonvil: "Petunias", kaktus: "Succulents" };
 const CICEK_RENK = { sardunya: ["#d8343f", "#e85a64"], lavanta: ["#8e6fc9", "#a98bd9"], papatya: ["#ffffff", "#f6d24a"], begonvil: ["#d6328f", "#e85aa8"], kaktus: ["#4f8a4a", "#6aa35e"] };
 export const TEMA_SECENEK = ["ucurtma", "gunbatimi", "balik", "temizlik", "yildiz", "tavla", "komsuluk"];
-export const TEMA_AD = { ucurtma: "Kite day", gunbatimi: "Sunset watch", balik: "Fishing day", temizlik: "Beach cleanup", yildiz: "Stargazing night", tavla: "Checkers tournament", komsuluk: "Neighbor day" };
+export const TEMA_AD = { ucurtma: "Kite day", gunbatimi: "Bonfire night", balik: "Lobster bake", temizlik: "Beach cleanup", yildiz: "Stargazing night", tavla: "Trivia night at the Diner", komsuluk: "Block party" };
 export const FILM_SECENEK = ["komedi", "macera", "korku", "animasyon"];
 export const FILM_AD = { komedi: "Comedy", macera: "Adventure", korku: "Classic", animasyon: "Animation" };
 

@@ -48,7 +48,7 @@ export class NameTags {
       if (this.cache.size > 300) {
         for (const [k, v] of this.cache) { v.tex.dispose(); this.cache.delete(k); if (this.cache.size < 200) break; }
       }
-      t = makeTexture(handle ? "@" + handle : "Gizli komşu", selected);
+      t = makeTexture(handle ? "@" + handle : "Private neighbor", selected);
       this.cache.set(key, t);
     } else {
       this.cache.delete(key);

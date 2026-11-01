@@ -6,7 +6,7 @@
 // Günün olayı (dayTheme): her gün adaya bir hava verir (pazar keyfi, uçurtma günü, plajda sinema...); seçimde
 // ilgili etkinliklerin ağırlığı artar ve üst panelde "Bugün" satırında görünür.
 import * as THREE from "three";
-import { roll, weekday } from "../sim.js";
+import { civilFromDays, holidayOf, roll, weekday } from "../sim.js";
 import { moonPhase, sunTimes } from "./sky.js";
 import { votedFilm, votedTheme } from "../tercih.js";
 import { clockText } from "../fmt.js";
@@ -42,7 +42,8 @@ export const ETKINLIK = {
   yildiz: { ad: "Stargazing on Bluff Head", mode: "stars", yer: "tepe", w: 1.5, gerek: (c) => c.pools.stars?.length, saat: (s, c) => s.bas >= c.sun.set + 75 && s.son - s.bas >= 45 },
   market: { ad: "Shopping at the store", mode: "inside:market", yer: "market", w: 3, gerek: (c) => !!c.workplace("market"), saat: (s) => s.bas >= 480 && s.bas < 1320 && s.son - s.bas <= 80 },
   firin: { ad: "Picking up bread at the bakery", mode: "inside:firin", yer: "firin", w: 2, gerek: (c) => !!c.workplace("firin"), saat: (s) => s.bas >= 420 && s.bas < 1200 && s.son - s.bas <= 70 },
-  cami: { ad: "At church", mode: "inside:cami", yer: "cami", w: 1.2, gerek: (c) => !!c.workplace("cami"), saat: (s) => s.son - s.bas <= 90 },
+  cami: { ad: "At the Sunday service", mode: "inside:cami", yer: "cami", w: 0, gerek: (c) => !!c.workplace("cami"), saat: (s, c) => c.theme?.id === "kilise" && s.bas < c.theme.son && s.son > c.theme.bas },
+  mac: { ad: "Watching the Gulls game", mode: "seat:tribun", yer: "saha", w: 0, gerek: (c) => c.pools["seat:tribun"]?.length, saat: (s, c) => c.theme?.id === "mac" && s.bas < c.theme.son - 30 && s.son > c.theme.bas + 15 },
   ucurtma: { ad: "Flying a kite", mode: "kite", yer: "tepe", w: 0.4, gerek: (c) => c.pools.kite?.length, saat: (s, c) => s.bas >= c.sun.rise + 30 && s.bas <= c.sun.set - 30 },
   kopek: { ad: "Walking the dog", mode: "stroll", yer: "plaj", w: 0, kopek: 9, saat: (s, c) => s.bas >= c.sun.rise - 30 && s.bas < 1380 },
   sinema: { ad: "At movie night on the beach", mode: "seat:sinema", yer: "plaj", w: 0, gerek: (c) => c.pools["seat:sinema"]?.length, saat: (s, c) => c.theme?.id === "sinema" && s.bas < c.theme.son - 30 && s.son > c.theme.bas + 20 },
@@ -69,18 +70,29 @@ export function dayTheme(day, world) {
   const wd = weekday(day);
   const sun = sunTimes(day);
   const has = (kind) => world.workplaces[kind]?.some(Boolean);
-  if (wd === 4 && has("cami")) return { id: "cuma", ad: "Friday community lunch at the church hall", yer: "cami", bas: 750, son: 830, boost: { cami: 45 } };
-  if (wd === 5) return { id: "sinema", ad: "Beach movie night", yer: "plaj", bas: 1230, son: 1365, boost: { sinema: 1 } };
+  const [, mo, d] = civilFromDays(day);
+  const hol = holidayOf(day);
+  // Takvim günleri (tatiller ve Halloween) her şeyin önünde.
+  if (mo === 7 && d === 4) return { id: "4temmuz", ad: "Fourth of July: fireworks over the harbor at 9 PM", yer: "sahil_yolu", boost: { piknik: 5, plaj_yuruyus: 2, meydan_sohbet: 2, kapi_onu: 2 } };
+  if (mo === 10 && d === 31) return { id: "cadilar", ad: "Halloween: trick-or-treating after 6 PM", yer: "meydan", boost: { kapi_onu: 6, meydan_sohbet: 2 } };
+  if (hol === "thanksgiving") return { id: "sukran", ad: "Thanksgiving: everyone's home for dinner", yer: "meydan", boost: { kapi_onu: 3, piknik: 0.2 } };
+  if (mo === 12 && d === 25) return { id: "noel", ad: "Christmas Day: lights on the Town Green", yer: "meydan", boost: { meydan_sohbet: 3, kapi_onu: 2 } };
+  if (mo === 1 && d === 1) return { id: "yilbasi", ad: "New Year's Day: a slow morning on the island", yer: "meydan", boost: { plaj_yuruyus: 2, kafe: 2 } };
+  // Cuma akşamı lise maçı (Friday night lights); saha yoksa Green'de konser.
+  if (wd === 4 && has("saha")) return { id: "mac", ad: "Friday night lights: Gulls game at 7 PM", yer: "saha", bas: 1140, son: 1290, boost: { mac: 1 } };
+  if (wd === 4) return { id: "konser", ad: "Friday concert at the Town Green bandstand", yer: "meydan", bas: 1140, son: 1260, boost: { meydan_sohbet: 4, meydan_bank: 3 } };
+  if (wd === 5) return { id: "sinema", ad: "Movie night on the beach", yer: "plaj", bas: 1230, son: 1365, boost: { sinema: 1 } };
+  if (wd === 6 && has("cami")) return { id: "kilise", ad: "Sunday service at the white church, 10 AM", yer: "cami", bas: 600, son: 675, boost: { cami: 1, piknik: 4, tepe_yuruyus: 2, firin: 2 } };
   if (wd === 6) return { id: "pazar", ad: "Lazy Sunday: picnics and walks", yer: "tepe", boost: { piknik: 6, tepe_yuruyus: 2.5, plaj_yuruyus: 2, kosu: 2, firin: 2 } };
   const moon = moonPhase(day, 1320);
   const list = [
-    { id: "ucurtma", ad: "Windy day: kites on Bluff Head", yer: "tepe", boost: { ucurtma: 30, plaj_yuruyus: 1.5 } },
-    { id: "gunbatimi", ad: `Clear skies: sunset at ${clockText(sun.set)}`, yer: "fener", boost: { gun_batimi: 3, fotograf: 4, tepe_yuruyus: 1.5 } },
-    { id: "balik", ad: "The fish are biting: everyone's at the shore", yer: "iskele", boost: { kiyi_balik: 8, vapur: 2 } },
-    { id: "temizlik", ad: "Beach cleanup", yer: "plaj", bas: 600, son: 720, boost: { temizlik: 1 } },
-    ...(moon < 0.12 || moon > 0.88 ? [{ id: "yildiz", ad: "Moonless night: stars over Bluff Head", yer: "tepe", boost: { yildiz: 12 } }] : []),
-    ...(world.places.kahvehane ? [{ id: "tavla", ad: "Checkers tournament at the Diner", yer: "kahvehane", boost: { kahvehane: 3, kahvehane_bahce: 4 } }] : []),
-    { id: "komsuluk", ad: "Neighbor day: everyone's out on the porch", yer: "meydan", boost: { kapi_onu: 3, piknik: 1.5 } },
+    { id: "ucurtma", ad: "Kite day on Bluff Head", yer: "tepe", boost: { ucurtma: 30, plaj_yuruyus: 1.5 } },
+    { id: "gunbatimi", ad: `Bonfire night on Ocean Beach after sunset (${clockText(sun.set)})`, yer: "plaj", boost: { gun_batimi: 3, plaj_yuruyus: 3, fotograf: 2 } },
+    { id: "balik", ad: "Lobster bake at the Fishing Wharf", yer: "iskele", boost: { kiyi_balik: 6, vapur: 2, sahil_yolu: 2 } },
+    { id: "temizlik", ad: "Beach cleanup at 10 AM", yer: "plaj", bas: 600, son: 720, boost: { temizlik: 1 } },
+    ...(moon < 0.12 || moon > 0.88 ? [{ id: "yildiz", ad: "Moonless night: stargazing on Bluff Head", yer: "tepe", boost: { yildiz: 12 } }] : []),
+    ...(world.places.kahvehane ? [{ id: "tavla", ad: "Trivia night at the Diner", yer: "kahvehane", boost: { kahvehane: 3, kahvehane_bahce: 4 } }] : []),
+    { id: "komsuluk", ad: "Block party: everyone's out on the porch", yer: "meydan", boost: { kapi_onu: 3, piknik: 1.5 } },
   ];
   // Sitedeki ankette bir gün önceden oylanan olay (oy varsa) sıranın yerine geçer.
   const voted = votedTheme(day);
@@ -104,7 +116,7 @@ export function chooseActivity(seed, day, k, seg, c, fav) {
     if (e.kopek) w = c.dog ? e.kopek : 0;
     if (fav.includes(id)) w *= 3;
     w *= c.theme?.boost?.[id] ?? 1;
-    if (id === "sinema" || id === "temizlik") w = c.theme?.boost?.[id] ? 40 : 0; // olay saatindeki herkesin çoğu katılır
+    if (id === "sinema" || id === "temizlik" || id === "cami" || id === "mac") w = c.theme?.boost?.[id] ? 40 : 0; // olay saatindeki herkesin çoğu katılır
     if (w <= 0) continue;
     opts.push([id, w]);
     total += w;
@@ -130,11 +142,14 @@ const FILMS = {
 export function buildCinema(world) {
   const beach = world.places.plaj?.anchors ?? [];
   const sand = (x, z) => world.isWalkable(x, z) && world.height(x, z) > 0.25;
+  // Deniz hangi yanda (Ocean Beach kuzeyde: −z): perde denize yakın, sıralar kara tarafında.
+  const mid = beach[beach.length >> 1];
+  const sg = mid && world.height(mid[0], mid[1] + 20) < world.height(mid[0], mid[1] - 20) ? 1 : -1;
   let spot = null;
   for (const [bx, bz] of [...beach].sort((a, b) => Math.abs(a[0] - beach[beach.length >> 1][0]) - Math.abs(b[0] - beach[beach.length >> 1][0]))) {
     // Perde denize yakın (kıyıya bakarak), sıralar onun kara tarafında.
-    let ok = sand(bx, bz + 3);
-    for (let r = 0; r < 4 && ok; r++) for (let cI = -3; cI <= 3 && ok; cI++) ok = sand(bx + cI * 1.1, bz - 3 - r * 1.3);
+    let ok = sand(bx, bz + 3 * sg);
+    for (let r = 0; r < 4 && ok; r++) for (let cI = -3; cI <= 3 && ok; cI++) ok = sand(bx + cI * 1.1, bz - sg * (3 + r * 1.3));
     if (ok) { spot = [bx, bz]; break; }
   }
   if (!spot) return null;
@@ -149,16 +164,16 @@ export function buildCinema(world) {
   tex.colorSpace = THREE.SRGBColorSpace;
   const screenMat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
   const frame = new THREE.MeshStandardMaterial({ color: "#2a2d33", roughness: 0.7 });
-  const y0 = gy(sx, sz + 3);
+  const y0 = gy(sx, sz + 3 * sg);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.2), screenMat);
-  screen.position.set(sx, y0 + 3.0, sz + 3);
-  screen.rotation.y = Math.PI; // kara tarafına (-z) bakar
+  screen.position.set(sx, y0 + 3.0, sz + 3 * sg);
+  screen.rotation.y = sg > 0 ? Math.PI : 0; // kara tarafına bakar
   const back = new THREE.Mesh(new THREE.BoxGeometry(6.7, 3.5, 0.08), frame);
-  back.position.set(sx, y0 + 3.0, sz + 3.05);
+  back.position.set(sx, y0 + 3.0, sz + 3.05 * sg);
   group.add(screen, back);
   for (const dx of [-3.35, 3.35]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 4.8, 8), frame);
-    post.position.set(sx + dx, y0 + 2.4, sz + 3.08);
+    post.position.set(sx + dx, y0 + 2.4, sz + 3.08 * sg);
     group.add(post);
   }
   // Sandalyeler: 4 sıra × 7 (katlanır plaj sandalyesi).
@@ -172,14 +187,14 @@ export function buildCinema(world) {
   const colors = ["#e9667f", "#2f9c9a", "#f2c230", "#f6f4ef"].map((h) => new THREE.Color(h));
   let idx = 0;
   for (let r = 0; r < 4; r++) for (let cI = -3; cI <= 3; cI++) {
-    const x = sx + cI * 1.1 + (r % 2 ? 0.3 : 0), z = sz - 3 - r * 1.3;
+    const x = sx + cI * 1.1 + (r % 2 ? 0.3 : 0), z = sz - sg * (3 + r * 1.3);
     const y = gy(x, z);
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0); // perdeye (+z) bakar
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), sg > 0 ? 0 : Math.PI); // perdeye bakar
     m4.compose(pos.set(x, y, z), q, one);
     for (const mesh of meshes) mesh.setMatrixAt(idx, m4);
     meshes[0].setColorAt(idx, colors[(idx * 7) % 4]);
     meshes[1].setColorAt(idx, colors[(idx * 7) % 4]);
-    seats.push({ x, z, heading: 0, top: y + 0.45, place: "sinema" });
+    seats.push({ x, z, heading: sg > 0 ? 0 : Math.PI, top: y + 0.45, place: "sinema" });
     idx++;
   }
   for (const mesh of meshes) { mesh.castShadow = true; group.add(mesh); }
