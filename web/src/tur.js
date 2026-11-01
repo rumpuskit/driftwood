@@ -23,9 +23,9 @@ export function createTour({ world, people, residents, flyTo, cinema, vec }) {
       out.push({ at: [cx, cz], d: 120, t: lab?.text ?? "Homes", s: "Every follower has a home here. Type your @username in the search bar to find yours." });
     }
     const pier = world.ferryPier;
-    if (pier) out.push({ at: [0, pier.z0 + 30], d: 80, t: "Ferry Landing", s: `The ferry comes in every ${FERRY.period} minutes. Newcomers arrive here, and mainland commuters leave from here.` });
+    if (pier) out.push({ at: [(pier.x0 + pier.x1) / 2, pier.z0 + 30], d: 80, t: "Ferry Landing", s: `The ferry comes in every ${FERRY.period} minutes. Newcomers arrive here, and mainland commuters leave from here.` });
     if (world.places.tepe) out.push({ at: world.places.tepe.anchors[0], d: 110, t: "Bluff Head", s: "A hiking trail, picnic blankets and sunsets in the evening." });
-    if (world.fener) out.push({ at: [world.fener.x, world.fener.z], d: 70, t: yerAdi("fener", "Gull Point Light"), s: "The oldest building on the island. It shines all night." });
+    if (world.fener) out.push({ at: [world.fener.x, world.fener.z], d: 70, t: yerAdi("fener", "Gull Point Light"), s: "Gull Point Light, at the tip of the sandbar. It shines all night." });
     const plaj = world.places.plaj?.anchors;
     if (plaj?.length) out.push({ at: cinema?.spot ?? plaj[plaj.length >> 1], d: 90, t: yerAdi("plaj", "Ocean Beach"), s: "Beach walks and stone skipping; movie night on Saturday evenings." });
     const th = people.theme;

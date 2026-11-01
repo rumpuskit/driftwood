@@ -12,7 +12,7 @@ const yerAdi = (kind, yedek) => sim.cat()?.isyerleri?.[kind]?.[0] ?? yedek;
 export function createMapUI({ world, camera, controls, flyTo, ui, residents, zeplin = null }) {
   const { x0, x1, z0, z1 } = world.bounds;
   const pad = 140;
-  const wx0 = x0 - pad, wz0 = z0 - pad, ww = x1 - x0 + 2 * pad, wd = z1 - z0 + 2 * pad + 160;
+  const wx0 = x0 - pad, wz0 = z0 - pad, ww = x1 - x0 + 2 * pad, wd = z1 - z0 + 2 * pad;
 
   // Taban harita: kara, kumsal, yollar, binalar (bir kez çizilir).
   const base = document.createElement("canvas");
@@ -134,7 +134,10 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents, zep
   const mahalleler = new Set(sim.cat().mahalleler);
   const places = [
     ["Town Green", 0, 0, 90],
-    ["Ferry Landing", 0, world.coastPoint(0, 60, 0, 1)[1] + 10, 110],
+    world.ferryPier && ["Ferry Landing", (world.ferryPier.x0 + world.ferryPier.x1) / 2, world.ferryPier.z0 + 20, 110],
+    ["Main Street", -150, world.avenueZ(-150), 120],
+    world.lunapark && [yerAdi("lunapark", "Pier Amusements"), ...world.lunapark.wheel, 120],
+    world.pitch && ["Gulls Field", world.pitch.cx, world.pitch.cz, 110],
     prom && ["Harbor Walk", ...prom[Math.floor(prom.length / 2)], 90],
     park && ["Kettle Pond Park", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 120],
     [yerAdi("plaj", "Ocean Beach"), ...world.places.plaj.anchors[4], 110],

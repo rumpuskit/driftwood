@@ -1007,6 +1007,50 @@ export class Vehicles {
 }
 
 /** Trafik ışıkları: her ışıklı kavşak kolunda, dur çizgisinin sağ köşesinde direk ve üç lamba. */
+/** STOP levhaları: ışıksız kavşaklarda (en az üç taşıt kolu) mahalle sokaklarından gelenin sağında, kırmızı sekizgen. */
+function buildStopSigns(traffic, world) {
+  const spots = [];
+  for (const n of traffic.nodes) {
+    if (n.signal) continue;
+    const car = n.ends.filter((e) => e.edge.road.carriage > 0 && e.edge.road.type !== "giris");
+    if (car.length < 3) continue;
+    for (const e of car) {
+      const r = e.edge.road;
+      if (r.type !== "sokak" || !(e.trim > 0)) continue;
+      const inDir = [-e.dir[0], -e.dir[1]];
+      const p = add(add(n.p, mul(e.dir, e.trim + 1.2)), mul(right(inDir), r.width / 2 - 0.6));
+      if (!world.isLand(p[0], p[1])) continue;
+      spots.push({ x: p[0], z: p[1], y: world.surfaceY(p[0], p[1]) + 0.18, heading: Math.atan2(e.dir[0], e.dir[1]) });
+      world.addObstacleCircle(p[0], p[1], 0.15);
+    }
+  }
+  const N = Math.max(1, spots.length);
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 128;
+  const g = cv.getContext("2d");
+  g.fillStyle = "#c8231f";
+  g.beginPath();
+  for (let k = 0; k < 8; k++) { const a = Math.PI / 8 + (k * Math.PI) / 4; g.lineTo(64 + Math.cos(a) * 62, 64 + Math.sin(a) * 62); }
+  g.closePath(); g.fill();
+  g.strokeStyle = "#ffffff"; g.lineWidth = 5; g.stroke();
+  g.fillStyle = "#ffffff"; g.font = "900 38px Nunito, Arial, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("STOP", 64, 66);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.76, 0.76).translate(0, 2.2, 0.04), new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.3, roughness: 0.6 }), N);
+  const post = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 2.55, 0.06).translate(0, 1.27, 0), new THREE.MeshStandardMaterial({ color: "#9aa0a6", metalness: 0.5, roughness: 0.4 }), N);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+  spots.forEach((s, i) => {
+    m.compose(v.set(s.x, s.y, s.z), q.setFromAxisAngle(up, s.heading), one);
+    face.setMatrixAt(i, m); post.setMatrixAt(i, m);
+  });
+  face.count = post.count = spots.length;
+  post.castShadow = true;
+  const g2 = new THREE.Group();
+  g2.add(face, post);
+  return g2;
+}
+
 export function buildSignals(traffic, world) {
   const items = [], peds = [];
   for (const n of traffic.nodes) {
@@ -1018,7 +1062,10 @@ export function buildSignals(traffic, world) {
       const rr = right(inDir);
       const base = add(n.p, mul(e.dir, e.trim + STOP_INSET + 0.6));
       const p = add(base, mul(rr, r.width / 2 - 0.55));
-      items.push({ node: n, group: e.group, x: p[0], z: p[1], heading: Math.atan2(e.dir[0], e.dir[1]), y: world.surfaceY(p[0], p[1]) + 0.18 });
+      // Amerikan tipi: direkten yolun üstüne uzanan kol; lamba kolun ucunda, gelen şeridin ortasında sarkar.
+      const arm = Math.max(1.5, r.width / 2 - 0.55 - 2.0);
+      const hd = add(p, mul(rr, -arm));
+      items.push({ node: n, group: e.group, x: p[0], z: p[1], hx: hd[0], hz: hd[1], arm, armRot: Math.atan2(-rr[0], -rr[1]), heading: Math.atan2(e.dir[0], e.dir[1]), y: world.surfaceY(p[0], p[1]) + 0.18 });
       world.addObstacleCircle(p[0], p[1], 0.25);
       // Yaya lambaları: geçidin iki ucunda, karşı kaldırıma bakar. Sağdaki araç direğinde, soldakinin
       // kendi kısa direği var.
@@ -1032,23 +1079,31 @@ export function buildSignals(traffic, world) {
   }
   const N = Math.max(1, items.length);
   const metal = new THREE.MeshStandardMaterial({ color: "#2d3138", roughness: 0.5, metalness: 0.5 });
-  const pole = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 3.1, 8).translate(0, 1.55, 0), metal, N);
-  const head = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.95, 0.28).translate(0, 3.4, 0), metal, N);
-  const visor = new THREE.InstancedMesh(mergeGeometries([0, 1, 2].map((k) => new THREE.BoxGeometry(0.3, 0.04, 0.16).translate(0, 3.75 - k * 0.3, 0.2))), metal, N);
+  const yellowMat = new THREE.MeshStandardMaterial({ color: "#e2b322", roughness: 0.5, metalness: 0.2 });
+  const AH = 5.6; // kol yüksekliği
+  const pole = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.1, 0.13, AH + 0.3, 8).translate(0, (AH + 0.3) / 2, 0), metal, N);
+  const armMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.08, 1, 6).rotateX(Math.PI / 2).translate(0, 0, 0.5), metal, N);
+  // Sarkan lamba: sarı gövde (kolun altında), üç lamba ve siperlikler.
+  const head = new THREE.InstancedMesh(new THREE.BoxGeometry(0.36, 1.0, 0.3).translate(0, AH - 0.65, 0), yellowMat, N);
+  const visor = new THREE.InstancedMesh(mergeGeometries([0, 1, 2].map((k) => new THREE.BoxGeometry(0.3, 0.04, 0.18).translate(0, AH - 0.3 - k * 0.31, 0.22))), metal, N);
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-  const lamps = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 12).rotateX(Math.PI / 2), lampMat, N * 3);
+  const lamps = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 12).rotateX(Math.PI / 2), lampMat, N * 3);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
   items.forEach((it, i) => {
     q.setFromAxisAngle(up, it.heading);
     m.compose(v.set(it.x, it.y, it.z), q, one);
-    pole.setMatrixAt(i, m); head.setMatrixAt(i, m); visor.setMatrixAt(i, m);
+    pole.setMatrixAt(i, m);
+    m.compose(v.set(it.hx, it.y, it.hz), q, one);
+    head.setMatrixAt(i, m); visor.setMatrixAt(i, m);
+    m.compose(v.set(it.x, it.y + AH - 0.05, it.z), new THREE.Quaternion().setFromAxisAngle(up, it.armRot), new THREE.Vector3(1, 1, it.arm));
+    armMesh.setMatrixAt(i, m);
     for (let k = 0; k < 3; k++) {
-      const off = new THREE.Vector3(0, 3.7 - k * 0.3, 0.15).applyQuaternion(q);
-      m.compose(v.set(it.x + off.x, it.y + off.y, it.z + off.z), q, one);
+      const off = new THREE.Vector3(0, AH - 0.35 - k * 0.31, 0.16).applyQuaternion(q);
+      m.compose(v.set(it.hx + off.x, it.y + off.y, it.hz + off.z), q, one);
       lamps.setMatrixAt(i * 3 + k, m);
     }
   });
-  for (const mesh of [pole, head, visor]) { mesh.count = items.length; mesh.castShadow = true; }
+  for (const mesh of [pole, armMesh, head, visor]) { mesh.count = items.length; mesh.castShadow = true; }
   lamps.count = items.length * 3;
   // Yaya lambası: iki bölmeli kutu (üstte kırmızı duran adam, altta yeşil yürüyen adam), siperlikli.
   const P = Math.max(1, peds.length);
@@ -1074,7 +1129,8 @@ export function buildSignals(traffic, world) {
   pedPole.count = np; pedHead.count = pedLamps.count = pedWalk.count = peds.length;
   pedPole.castShadow = pedHead.castShadow = true;
   const group = new THREE.Group();
-  group.add(pole, head, visor, lamps, pedPole, pedHead, pedLamps, pedWalk);
+  group.add(pole, armMesh, head, visor, lamps, pedPole, pedHead, pedLamps, pedWalk);
+  group.add(buildStopSigns(traffic, world));
   const RED = new THREE.Color(2.2, 0.15, 0.1), YEL = new THREE.Color(2.2, 1.4, 0.1), GRN = new THREE.Color(0.2, 2.0, 0.6), DARK = new THREE.Color(0.08, 0.08, 0.08);
   const PRED = new THREE.Color(2.4, 0.25, 0.15), PGRN = new THREE.Color(0.3, 2.2, 1.0), PDARK = new THREE.Color(0.1, 0.1, 0.1);
   group.userData.update = (tSec) => {

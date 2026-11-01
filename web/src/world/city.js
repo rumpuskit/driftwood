@@ -828,8 +828,31 @@ function buildFrontPaths(world) {
       }
     }
   }
+  // Posta kutuları (ev önünde, kaldırım kenarında direkli) ve yangın muslukları (kaldırımda, birkaç evde bir).
+  const mailPost = new Batch(new THREE.BoxGeometry(0.1, 1.05, 0.1).translate(0, 0.52, 0), std("#6b5a48"), { shadow: false });
+  const mailBox = new Batch(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, 1.1, 0), std(0xffffff, { roughness: 0.4, metalness: 0.4 }));
+  const hydrant = new Batch(mergeGeometries([
+    new THREE.CylinderGeometry(0.14, 0.17, 0.6, 10).translate(0, 0.3, 0),
+    new THREE.SphereGeometry(0.15, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.6, 0),
+    new THREE.CylinderGeometry(0.06, 0.06, 0.36, 8).rotateZ(Math.PI / 2).translate(0, 0.42, 0),
+  ]), std("#c8231f", { roughness: 0.45 }));
+  const BOXES = ["#1d1d20", "#1d1d20", "#2f4256", "#8e2f2a", "#f4f1ea"];
+  for (const b of world.buildings) {
+    if (!b.house || b.house === "apartments") continue;
+    const seed = b.pathSeed ?? 1;
+    const lz = b.d / 2 + b.yard + 0.35, lx = b.w / 2 + 1.0;
+    mailPost.add(local(b, lx, -0.05, lz), b.rot, s.set(1, 1, 1));
+    mailBox.add(local(b, lx, -0.05, lz), b.rot, s.set(1, 1, 1), BOXES[seed % BOXES.length]);
+    if (seed % 5 === 0) {
+      const at = local(b, -b.w / 2 - 1.2, 0, b.d / 2 + b.yard + 1.9).clone();
+      hydrant.add(v.set(at.x, world.groundY(at.x, at.z) - 0.02, at.z), 0, s.set(1, 1, 1));
+      world.addObstacleCircle(at.x, at.z, 0.22);
+    }
+    const mp = local(b, lx, 0, lz);
+    world.addObstacleCircle(mp.x, mp.z, 0.15);
+  }
   const group = new THREE.Group();
-  for (const batch of [gravel, stone, hedge, flowers]) group.add(batch.build());
+  for (const batch of [gravel, stone, hedge, flowers, mailPost, mailBox, hydrant]) group.add(batch.build());
   return group;
 }
 

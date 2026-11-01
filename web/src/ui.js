@@ -43,7 +43,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     btn.append(`${num(waiting)} waiting at the Ferry Landing · move-in ${nextMove()}`);
     btn.addEventListener("click", () => {
       const P0 = world.ferryPier;
-      flyTo(0, P0.top, P0.z0 + 14, 45);
+      flyTo((P0.x0 + P0.x1) / 2, P0.top, P0.z0 + 14, 45);
     });
   }
   // Belediye başkanlığı seçimi (açıkken): kalan süre ve önde giden; dokununca belediyeye gider, kart adayları gösterir.
