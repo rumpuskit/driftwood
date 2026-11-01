@@ -122,8 +122,7 @@ const KINDS = {
   },
 };
 
-function treeKind(world, x, z, h, roll) {
-  const zone = world.zoneAt(x, z);
+function treeKind(world, x, z, h, roll, zone) {
   if (world.sdf(x, z) > -45 || zone === "kumul") return roll < 0.75 ? "camk" : "servi";
   if (zone === "tepe") return roll < 0.55 ? "servi" : "camk";
   if (zone === "mahalle") return roll < 0.5 ? "akcaagac" : roll < 0.85 ? "mese" : "camk";
@@ -131,19 +130,20 @@ function treeKind(world, x, z, h, roll) {
   return roll < 0.42 ? "mese" : roll < 0.75 ? "camk" : "akcaagac";
 }
 
-function treeDensity(world, x, z, h) {
-  const inPark = world.plazas.some((p) => p.kind === "park" && x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1);
-  if (inPark) return 0.5;
-  if (world.parks.some((p) => x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1)) return 0.35;
+function treeDensity(world, x, z, h, zone) {
   if (world.sdf(x, z) > -35 && h < 1.6) return 0; // kumsal
-  const zone = world.zoneAt(x, z);
-  if (zone === "mahalle") return 0.22;
-  if (zone === "merkez") return 0.08;
+  if (zone === "mahalle" || zone === "merkez") {
+    // Parklar yalnız yerleşik alanda: büyük park (göl) ve mahalle parkları.
+    if ((world._bigParks ??= world.plazas.filter((p) => p.kind === "park")).some((p) => x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1)) return 0.5;
+    if (world.parks.some((p) => x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1)) return 0.35;
+    return zone === "mahalle" ? 0.22 : 0.08;
+  }
+  if ((world._bigParks ??= world.plazas.filter((p) => p.kind === "park")).some((p) => x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1)) return 0.5;
   if (zone === "tepe") return 0.03 + Math.max(0, fbm(x / 70, z / 70, 32)) * 0.25; // fundalık: seyrek ardıç
   if (zone === "kumul") return 0.015;
   if (zone === "tarla") return 0.03;
   // Kır: korular ve açıklıklar.
-  return 0.02 + Math.max(0, fbm(x / 140, z / 140, 31)) * 0.9;
+  return 0.015 + Math.max(0, fbm(x / 140, z / 140, 31)) * 0.65;
 }
 
 export function buildTrees(world) {
@@ -152,12 +152,15 @@ export function buildTrees(world) {
   const step = 7;
   for (let gx = Math.floor((x0 - 150) / step); gx <= (x1 + 150) / step; gx++) {
     for (let gz = Math.floor((z0 - 150) / step); gz <= (z1 + 150) / step; gz++) {
+      const roll = hash2(gx, gz, 43);
+      if (roll > 0.5) continue; // yoğunluk hiçbir yerde 0,5'i geçmez: pahalı hesaplardan önce ele
       const x = (gx + hash2(gx, gz, 41)) * step, z = (gz + hash2(gx, gz, 42)) * step;
       if (world.isBlocked(x, z)) continue;
       const h = world.height(x, z);
       if (h < 1.0) continue;
-      if (hash2(gx, gz, 43) > treeDensity(world, x, z, h)) continue;
-      spots.push({ x, z, y: h - 0.15, kind: treeKind(world, x, z, h, hash2(gx, gz, 46)), r: hash2(gx, gz, 44), t: hash2(gx, gz, 45) });
+      const zone = world.zoneAt(x, z);
+      if (roll > treeDensity(world, x, z, h, zone)) continue;
+      spots.push({ x, z, y: h - 0.15, kind: treeKind(world, x, z, h, hash2(gx, gz, 46), zone), r: hash2(gx, gz, 44), t: hash2(gx, gz, 45) });
     }
   }
   // Green'in akçaağaçları (sokak ağaçları).

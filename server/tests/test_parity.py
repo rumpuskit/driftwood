@@ -155,6 +155,11 @@ class ParityTest(unittest.TestCase):
             self.assertEqual(sim.holiday_of(day), "", sim.civil_from_days(day))
         self.assertEqual(sim.weekday(DAY), 0)
 
+    def test_zones_json_fresh(self):
+        # Mahalle bölgelerinin kaydedilmiş kopyası (web/src/world/zones.json) island.js ile aynı olmalı.
+        result = subprocess.run(["node", str(VECTORS_JS.parent / "zones.mjs")], capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_known_hash_values(self):
         # FNV-1a referans değerleri
         self.assertEqual(sim.fnv1a(""), 0x811C9DC5)

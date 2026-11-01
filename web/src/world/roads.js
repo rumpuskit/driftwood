@@ -3,6 +3,7 @@
 // bir başkasının üstüne binmez: her katmanın kendi yüksekliği vardır, kaldırımlar bordürlü bloklardır.
 // Yollar eğimli arazide world.roadHeight ile tesviye edilmiş zemini izler.
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import * as T from "./textures.js";
 
 export const H = { carriage: 0.06, marking: 0.075, walk: 0.18, ped: 0.13, trail: 0.035 };
@@ -474,11 +475,14 @@ export function buildGrounds(world) {
   const FLAT = world.flatY;
   const materials = [];
   let rot = 0; // döndürülmüş alanlar (mahalle avluları, oyun parkları)
+  const mats = new Map(); // aynı doku ve renk aynı malzeme (çizimde paylaşılır)
   const slab = (w, d, x, z, tex, repeat, top, color = 0xffffff) => {
     const g = new THREE.BoxGeometry(w, top + 0.1, d).translate(0, (top - 0.1) / 2, 0);
     const uv = g.attributes.uv;
     if (repeat) for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / repeat, (uv.getY(i) * d) / repeat);
-    const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, color, roughness: 0.95 }));
+    const mk = tex.uuid + ":" + new THREE.Color(color).getHexString();
+    if (!mats.has(mk)) mats.set(mk, new THREE.MeshStandardMaterial({ map: tex, color, roughness: 0.95 }));
+    const mesh = new THREE.Mesh(g, mats.get(mk));
     mesh.position.set(x, FLAT, z);
     mesh.rotation.y = rot;
     mesh.receiveShadow = true;
@@ -537,6 +541,21 @@ export function buildGrounds(world) {
       m.material.map.wrapS = m.material.map.wrapT = THREE.RepeatWrapping;
     }
   }
-  group.userData.groundMaterials = materials;
+  // Aynı malzemeli zeminler tek mesh (50 mahallenin avlu, oyun ve basket zeminleri yüzlerce çizim çağrısıydı).
+  const byMat = new Map();
+  for (const o of [...group.children]) {
+    if (!o.isMesh) continue;
+    o.updateMatrix();
+    const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrix);
+    if (!byMat.has(o.material)) byMat.set(o.material, []);
+    byMat.get(o.material).push(g);
+    group.remove(o);
+  }
+  for (const [mat, geos] of byMat) {
+    const m = new THREE.Mesh(mergeGeometries(geos), mat);
+    m.receiveShadow = true;
+    group.add(m);
+  }
+  group.userData.groundMaterials = [...new Set(materials)];
   return group;
 }

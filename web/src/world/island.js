@@ -5,6 +5,7 @@
 // açık Harbor Bay (elips); doğu boynuzu Bluff Head (fundalık yamaç), batı boynuzu kum dili ve ucunda Gull Point Light.
 // Kasaba koyun kuzey kıyısında (Water Street, Main Street, Town Green); dış (kuzey) kıyıda Ocean Beach ve kumullar.
 import { fbm, hash2 } from "./noise.js";
+import SAVED_ZONES from "./zones.json" with { type: "json" };
 
 export const FLAT_Y = 1.2;
 
@@ -182,6 +183,35 @@ export function worldToZone(z, x, y) {
   return [dx * z.t[0] + dz * z.t[1], dx * z.n[0] + dz * z.n[1]];
 }
 
+/** Bölgenin dört köşesi (dünya), pad kadar büyütülmüş. */
+function corners(z, pad) {
+  const D = ZONE.depth;
+  return [[-z.hw - pad, -pad], [z.hw + pad, -pad], [z.hw + pad, D + pad], [-z.hw - pad, D + pad]].map(([u, v]) => zoneToWorld(z, u, v));
+}
+
+function rectsOverlap(a, b, pad) {
+  const A = corners(a, pad), B = corners(b, pad);
+  for (const ax of [a.t, a.n, b.t, b.n]) {
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const [x, z] of A) { const d = x * ax[0] + z * ax[1]; a0 = Math.min(a0, d); a1 = Math.max(a1, d); }
+    for (const [x, z] of B) { const d = x * ax[0] + z * ax[1]; b0 = Math.min(b0, d); b1 = Math.max(b1, d); }
+    if (a1 <= b0 || b1 <= a0) return false;
+  }
+  return true;
+}
+
+let trunkCache = null;
+function trunkSamples() {
+  if (!trunkCache) {
+    trunkCache = [];
+    for (const tr of TRUNKS) {
+      const L = polyLength(tr.pts);
+      for (let s = 0; s <= L; s += 8) trunkCache.push(along(tr.pts, s).p);
+    }
+  }
+  return trunkCache;
+}
+
 function zoneFits(c, placed) {
   const hw = c.hw, D = ZONE.depth;
   // Kenar örnekleri: karada (kıyıdan 55 m içeride), ayrılmış alanların dışında.
@@ -192,31 +222,17 @@ function zoneFits(c, placed) {
       if (inReserve(x, z, 12, c.m >= 25)) return false;
     }
   }
-  // Diğer bölgelerle çakışma: dikdörtgenler arasında en az 3 m (yollar bölgelerin içinde, kenara 7 m).
+  // Diğer bölgelerle çakışma: dikdörtgenler arasında en az 3 m (yollar bölgelerin içinde, kenara 7 m). Kesin test:
+  // döndürülmüş iki dikdörtgende ayırma ekseni (SAT), her biri 1,5 m büyütülmüş.
   for (const o of placed) {
     if (Math.hypot(o.cx - c.cx, o.cz - c.cz) > o.r + c.r + 10) continue;
-    for (let u = -hw; u <= hw + 0.1; u += 15) {
-      for (let v = 0; v <= D + 0.1; v += 15) {
-        const [x, z] = zoneToWorld(c, u, v);
-        const [ou, ov] = worldToZone(o, x, z);
-        if (Math.abs(ou) < o.hw + 3 && ov > -3 && ov < D + 3) return false;
-      }
-    }
-    // Köşe testi (öbürünün köşeleri bunun içinde mi?)
-    for (const [u, v] of [[-o.hw, 0], [o.hw, 0], [-o.hw, D], [o.hw, D]]) {
-      const [x, z] = zoneToWorld(o, u, v);
-      const [cu, cv] = worldToZone(c, x, z);
-      if (Math.abs(cu) < hw + 3 && cv > -3 && cv < D + 3) return false;
-    }
+    if (rectsOverlap(c, o, 1.5)) return false;
   }
   // Hiçbir ana yol bölgenin içinden geçmez (kendi giriş yolu dışarıda kalır).
-  for (const tr of TRUNKS) {
-    const L = polyLength(tr.pts);
-    for (let s = 0; s <= L; s += 8) {
-      const { p } = along(tr.pts, s);
-      const [u, v] = worldToZone(c, p[0], p[1]);
-      if (Math.abs(u) < hw + 4 && v > 4 && v < D + 4) return false;
-    }
+  for (const p of trunkSamples()) {
+    if (Math.abs(p[0] - c.cx) > c.r + 10 || Math.abs(p[1] - c.cz) > c.r + 10) continue;
+    const [u, v] = worldToZone(c, p[0], p[1]);
+    if (Math.abs(u) < hw + 4 && v > 4 && v < D + 4) return false;
   }
   return true;
 }
@@ -241,12 +257,20 @@ let zoneCache = null;
  */
 export function zones(count, typeOf) {
   if (zoneCache && zoneCache.length >= count) return zoneCache;
+  // Önceden hesaplanmış kopya (web/tests/zones.mjs ile üretilir ve CI'da doğrulanır).
+  if (SAVED_ZONES.length >= count && SAVED_ZONES.every((z) => z.tip === typeOf(z.m))) return (zoneCache = SAVED_ZONES);
+  return (zoneCache = computeZones(count, typeOf));
+}
+
+/** Bölgeleri sıfırdan hesaplar (zones.json'u üretmek ve doğrulamak için). */
+export function computeZones(count, typeOf) {
   const placed = [];
   for (let m = 0; m < count; m++) {
     const tip = typeOf(m), hw = zoneHalfWidth(tip);
     const roads = TRUNKS.map((tr) => ({ pts: tr.pts, sides: [-1, 1], id: tr.id }));
     for (const o of placed) for (const [k, e] of zoneEdges(o).entries()) roads.push({ pts: e.pts, out: e.out, id: `m${o.m}:${k}` });
-    let best = null;
+    // Adaylar maliyete göre (eşitlikte üretim sırasıyla) denenir; ilk sığan en ucuzdur.
+    const cands = [];
     for (const rd of roads) {
       const L = polyLength(rd.pts);
       for (let s = Math.min(hw + 10, L / 2); s <= L - Math.min(hw + 10, L / 2) + 0.1; s += 12) {
@@ -263,17 +287,18 @@ export function zones(count, typeOf) {
           [c.cx, c.cz] = zoneToWorld(c, 0, ZONE.depth / 2);
           c.r = Math.hypot(hw, ZONE.depth / 2);
           // Kasabaya yakınlık; kuzey-güney biraz ağır (önce koy boyu, sonra içeri).
-          const cost = Math.hypot(c.cx, c.cz * 1.15) + hash2(m, Math.round(s), 91) * 4;
-          if (best && cost >= best.cost) continue;
-          if (!zoneFits(c, placed)) continue;
-          best = { ...c, cost };
+          c.cost = Math.hypot(c.cx, c.cz * 1.15) + hash2(m, Math.round(s), 91) * 4;
+          c.i = cands.length;
+          cands.push(c);
         }
       }
     }
+    cands.sort((a, b) => a.cost - b.cost || a.i - b.i);
+    let best = null;
+    for (const c of cands) if (zoneFits(c, placed)) { best = c; break; }
     if (!best) break; // ada doldu (sonraki mahalleler: sonraki ada)
     placed.push(best);
   }
-  zoneCache = placed;
   return placed;
 }
 
@@ -308,16 +333,18 @@ export function setFlatAreas(rects) {
     }
     return d;
   };
-  for (let j = 0; j < NZ; j++) {
-    for (let i = 0; i < NX; i++) {
-      const x = X0 + i * S, z = Z0 + j * S;
-      let f = 0;
-      for (const r of rects) {
-        const d = inside(r.poly, x, z);
-        if (d > -40) f = Math.max(f, smooth((d + 40) / 40));
-        if (f >= 1) break;
+  // Her çokgen yalnız kendi sınır kutusundaki (+40 m) hücreleri günceller.
+  for (const r of rects) {
+    const xs = r.poly.map((q) => q[0]), zs = r.poly.map((q) => q[1]);
+    const i0 = clamp(Math.floor((Math.min(...xs) - 40 - X0) / S), 0, NX - 1), i1 = clamp(Math.ceil((Math.max(...xs) + 40 - X0) / S), 0, NX - 1);
+    const j0 = clamp(Math.floor((Math.min(...zs) - 40 - Z0) / S), 0, NZ - 1), j1 = clamp(Math.ceil((Math.max(...zs) + 40 - Z0) / S), 0, NZ - 1);
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const k = j * NX + i;
+        if (g[k] >= 1) continue;
+        const d = inside(r.poly, X0 + i * S, Z0 + j * S);
+        if (d > -40) g[k] = Math.max(g[k], smooth((d + 40) / 40));
       }
-      g[j * NX + i] = f;
     }
   }
   flatGrid = { g, S, X0, Z0, NX, NZ };

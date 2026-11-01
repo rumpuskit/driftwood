@@ -1250,6 +1250,7 @@ function buildFeatures(world) {
         }
         add(new THREE.CylinderGeometry(0.4, 0.4, 3.6, 10).rotateX(Math.PI / 2), legs, wx, hub, wz);
         const wheel = new THREE.Group();
+        wheel.userData.keep = true; // döner
         wheel.position.set(wx, hub, wz);
         group.add(wheel);
         const rim = std("#f4f1ea", { metalness: 0.3, roughness: 0.4 });
@@ -1287,6 +1288,7 @@ function buildFeatures(world) {
         // havalandırma topu ve paratoner. Gece mercek yanar ve iki ışık huzmesi döner.
         const y0 = world.height(f.x, f.z);
         const g = new THREE.Group();
+        g.userData.keep = true; // huzme döner
         g.position.set(f.x, y0, f.z);
         group.add(g);
         const toLand = world.fener?.door ? Math.atan2(world.fener.door[0] - f.x, world.fener.door[1] - f.z) : 0;
@@ -1629,6 +1631,45 @@ function buildFeatures(world) {
       fo.arcs.forEach((a, i) => { a.scale.y = 0.94 + 0.06 * Math.sin(t * 3.7 + i); });
     }
   };
+  // Statik birleştirme: tek tek eklenen, sonradan hareket etmeyen parçalar (şemsiyeler, oyun aletleri, potalar,
+  // rıhtım duvarı...) malzemeye göre tek mesh'te toplanır; 20.000 nüfusta binlerce çizim çağrısı birkaç yüze iner.
+  // Hareket edenler (çeşme, fener, dönme dolap) ayrı gruplarda ya da listede: dokunulmaz.
+  const moving = new Set(fountains.flatMap((fo) => [...fo.curtains, fo.jet, ...fo.arcs]));
+  const matKey = (m) => [m.type, m.color?.getHexString(), m.map?.uuid ?? "", m.roughness, m.metalness, m.transparent, m.opacity, m.side, m.emissive?.getHexString() ?? "", m.wireframe, m.flatShading].join("|");
+  const byMat = new Map();
+  group.updateMatrixWorld(true);
+  const take = (o) => {
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(k)) g.deleteAttribute(k);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    if (!g.attributes.uv) g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    g.applyMatrix4(o.matrixWorld);
+    const key = matKey(o.material);
+    if (!byMat.has(key)) byMat.set(key, { mat: o.material, geos: [], shadow: false });
+    const e = byMat.get(key);
+    e.geos.push(g);
+    e.shadow ||= o.castShadow;
+  };
+  for (const o of [...group.children]) {
+    if (o.isInstancedMesh || o.isSprite || o.isPoints || o.isLine || moving.has(o) || o.userData.keep) continue;
+    if (o.isMesh && !Array.isArray(o.material)) { take(o); group.remove(o); continue; }
+    if (o.isGroup) {
+      // Statik alt grup (oyun parkı, çardak, okul otobüsü...): içindeki düz mesh'ler de birleşir.
+      let ok = true;
+      o.traverse((c) => { if (c !== o && (c.isInstancedMesh || c.isSprite || c.isPoints || c.isLine || c.userData.keep || moving.has(c) || Array.isArray(c.material) || (c.isGroup && c.userData.keep))) ok = false; });
+      if (!ok) continue;
+      o.traverse((c) => { if (c.isMesh) take(c); });
+      group.remove(o);
+    }
+  }
+  for (const { mat, geos, shadow } of byMat.values()) {
+    const merged = mergeGeometries(geos);
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, mat);
+    m.castShadow = shadow;
+    m.receiveShadow = true;
+    group.add(m);
+  }
   return group;
 }
 
