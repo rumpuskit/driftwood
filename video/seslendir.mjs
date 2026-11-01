@@ -14,10 +14,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export const SES = {
-  voice: "vS90pb3uG7nu8BEGqcAk", // ElevenLabs kütüphanesi: "Olivia – Podcast Host"
+  voice: "pYG1XNtdbvDClmVSWMC0", // ElevenLabs kütüphanesi: "Rae" (kuru ama sıcak, Doğu Kıyısı; kullanıcı 1 Kasım'da seçti)
   model_id: "eleven_v4",
-  language_code: "tr",
-  voice_settings: { stability: 0.7, similarity_boost: 0.8, style: 0, use_speaker_boost: true, speed: 1.08 },
+  language_code: "en",
+  voice_settings: { stability: 0.7, similarity_boost: 0.8, style: 0, use_speaker_boost: true, speed: 1.05 },
 };
 
 export async function seslendir(S) {
