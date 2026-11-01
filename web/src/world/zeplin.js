@@ -10,7 +10,8 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { minuteOf } from "../sim.js";
 
 const L = 62, R = 8.1;
-const NAVY = "#1d3156", BELLY = "#28477a", CORAL = "#e9667f", CORAL_D = "#c84c66", PEARL = "#f6f4ef", TEAL = "#2f9c9a";
+// Driftwood renkleri: lacivert gövde şeritleri, altın vurgular (CORAL adı kod uyumu için kaldı), inci beyazı.
+const NAVY = "#1d3156", BELLY = "#28477a", CORAL = "#c8a24a", CORAL_D = "#a8842e", PEARL = "#f6f4ef", TEAL = "#2f7fb5";
 const SCHEDULE = { start: 9 * 3600, end: 22 * 3600 }; // yerel saniye
 const CRUISE = 9.5, TRANSIT = 17; // m/sn: tur ve geliş/gidiş hızı
 const ALT = 96; // tur yüksekliği (m); en yüksek bina ve tepedeki fenerin epey üstünde
@@ -58,20 +59,26 @@ function hullGeometry(ns, na) {
   return g;
 }
 
-/** Ada amblemi: mercan daire, güneş ve dalgalar. */
+/** Ada amblemi: lacivert daire, deniz feneri ve dalgalar. */
 function drawEmblem(g, cx, cy, rr) {
-  g.fillStyle = CORAL; g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2); g.fill();
+  // Driftwood amblemi: lacivert daire, beyaz deniz feneri ve ışık huzmesi, altın kenar, altta dalgalar.
+  g.fillStyle = NAVY; g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2); g.fill();
   g.save(); g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2); g.clip();
-  g.fillStyle = "#ffd98a"; g.beginPath(); g.arc(cx + rr * 0.15, cy - rr * 0.12, rr * 0.36, 0, Math.PI * 2); g.fill();
-  for (const [dy, c] of [[0.22, "rgba(255,255,255,0.95)"], [0.5, "rgba(47,156,154,0.95)"]]) {
+  g.fillStyle = "rgba(255,226,150,0.55)";
+  g.beginPath(); g.moveTo(cx, cy - rr * 0.42); g.lineTo(cx + rr, cy - rr * 0.75); g.lineTo(cx + rr, cy - rr * 0.2); g.closePath(); g.fill();
+  g.fillStyle = "#ffffff";
+  g.beginPath(); g.moveTo(cx - rr * 0.16, cy + rr * 0.45); g.lineTo(cx - rr * 0.1, cy - rr * 0.32); g.lineTo(cx + rr * 0.1, cy - rr * 0.32); g.lineTo(cx + rr * 0.16, cy + rr * 0.45); g.closePath(); g.fill();
+  g.fillStyle = "#ffe29a"; g.fillRect(cx - rr * 0.11, cy - rr * 0.48, rr * 0.22, rr * 0.16);
+  g.fillStyle = "#1f2224"; g.beginPath(); g.moveTo(cx - rr * 0.15, cy - rr * 0.48); g.lineTo(cx, cy - rr * 0.62); g.lineTo(cx + rr * 0.15, cy - rr * 0.48); g.closePath(); g.fill();
+  for (const [dy, c] of [[0.4, "rgba(47,127,181,0.95)"], [0.6, "rgba(255,255,255,0.9)"]]) {
     g.fillStyle = c;
     g.beginPath();
     g.moveTo(cx - rr, cy + rr * dy);
-    for (let k = 0; k <= 32; k++) g.lineTo(cx - rr + (2 * rr * k) / 32, cy + rr * dy + Math.sin(k * 0.8 + dy * 5) * rr * 0.08);
+    for (let k = 0; k <= 32; k++) g.lineTo(cx - rr + (2 * rr * k) / 32, cy + rr * dy + Math.sin(k * 0.8 + dy * 5) * rr * 0.06);
     g.lineTo(cx + rr, cy + rr); g.lineTo(cx - rr, cy + rr); g.closePath(); g.fill();
   }
   g.restore();
-  g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = rr * 0.072;
+  g.strokeStyle = CORAL; g.lineWidth = rr * 0.08;
   g.beginPath(); g.arc(cx, cy, rr, 0, Math.PI * 2); g.stroke();
 }
 
@@ -108,10 +115,10 @@ function defaultAd(W, H) {
   const big = fit("DRIFTWOOD", "900 PXpx Nunito, sans-serif", Math.round(H * 0.42), max);
   g.fillStyle = "#ffffff";
   g.fillText("DRIFTWOOD", left, H * 0.55);
-  fit("Takip et, adaya taşın", "800 PXpx Nunito, sans-serif", Math.round(big * 0.34), max);
-  g.fillStyle = "#ffd3dc";
-  g.fillText("Takip et, adaya taşın", left + big * 0.04, H * 0.73);
-  const tw = g.measureText("Takip et, adaya taşın").width;
+  fit("Follow, and you move in", "800 PXpx Nunito, sans-serif", Math.round(big * 0.34), max);
+  g.fillStyle = "#f3dfa8";
+  g.fillText("Follow, and you move in", left + big * 0.04, H * 0.73);
+  const tw = g.measureText("Follow, and you move in").width;
   fit("TikTok @driftwoodlive", "700 PXpx Nunito, sans-serif", Math.round(big * 0.26), max - tw - W * 0.05);
   g.fillStyle = "rgba(255,255,255,0.85)";
   g.fillText("TikTok @driftwoodlive", left + big * 0.04 + tw + W * 0.035, H * 0.73);
@@ -221,8 +228,9 @@ function gondolaGeometry(len, halfW, halfH, n = 3.4) {
   for (let i = 0; i <= NS; i++) {
     const t = i / NS;
     let k = 1;
-    if (t < 0.16) k = Math.sqrt(1 - ((0.16 - t) / 0.16) ** 2);
-    else if (t > 0.82) k = Math.sqrt(1 - ((t - 0.82) / 0.18) ** 2) * (1 - 0.25 * (t - 0.82) / 0.18);
+    // max(0, ...): t = 1'de kayan nokta hatası kökün içini eksiye düşürüp son halkayı NaN yapıyordu.
+    if (t < 0.16) k = Math.sqrt(Math.max(0, 1 - ((0.16 - t) / 0.16) ** 2));
+    else if (t > 0.82) k = Math.sqrt(Math.max(0, 1 - ((t - 0.82) / 0.18) ** 2)) * (1 - 0.25 * (t - 0.82) / 0.18);
     k = Math.max(k, 0.001);
     const w = halfW * k * (1 - 0.12 * t), h = halfH * (0.35 + 0.65 * k) * (1 - 0.18 * t);
     const x = len / 2 - t * len;

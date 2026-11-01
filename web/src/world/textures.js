@@ -1,4 +1,5 @@
-// Tarayıcıda çizilen zemin dokuları: asfalt, Arnavut kaldırımı, kaldırım taşı, toprak, sahil taşı, çimen.
+// Tarayıcıda çizilen dokular: asfalt, kaldırım, toprak, çimen; cephede ahşap kaplama (clapboard), tuğla; çatıda
+// asfalt shingle.
 // Dosya indirmeye gerek kalmaz ve her cihazda aynı görünür.
 import * as THREE from "three";
 import { rng } from "./noise.js";
@@ -192,6 +193,45 @@ export function pitch() {
   }, false));
 }
 
+/** Amerikan futbolu sahası (110 × 52 m'ye gerilir): uçlarda lacivert end zone ve yazısı, 10 yardada bir çizgi ve
+ * sayılar, orta sahada martı amblemi yerine sade daire, kenar çizgileri. */
+export function footballField() {
+  return (cache.football ??= canvasTexture(1024, (ctx, s) => {
+    const W = s, H = s / 2;
+    ctx.canvas.height = H;
+    for (let i = 0; i < 12; i++) {
+      ctx.fillStyle = i % 2 ? "#5f9e4a" : "#67a851";
+      ctx.fillRect((i * W) / 12, 0, W / 12, H);
+    }
+    const ez = W * (10 / 120);
+    ctx.fillStyle = "#1f3354";
+    ctx.fillRect(0, 0, ez, H);
+    ctx.fillRect(W - ez, 0, ez, H);
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.font = `900 ${Math.round(H * 0.16)}px Nunito, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const [x, rot] of [[ez / 2, -Math.PI / 2], [W - ez / 2, Math.PI / 2]]) {
+      ctx.save(); ctx.translate(x, H / 2); ctx.rotate(rot); ctx.fillText("GULLS", 0, 0); ctx.restore();
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, 2, W - 4, H - 4);
+    for (let yd = 0; yd <= 100; yd += 5) {
+      const x = ez + ((W - 2 * ez) * yd) / 100;
+      ctx.lineWidth = yd % 10 ? 1.5 : 3;
+      ctx.beginPath(); ctx.moveTo(x, 4); ctx.lineTo(x, H - 4); ctx.stroke();
+      if (yd % 10 === 0 && yd > 0 && yd < 100) {
+        ctx.font = `800 ${Math.round(H * 0.07)}px Nunito, sans-serif`;
+        const n = String(yd <= 50 ? yd : 100 - yd);
+        ctx.fillText(n, x, H * 0.14);
+        ctx.fillText(n, x, H * 0.86);
+      }
+    }
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, H * 0.12, 0, Math.PI * 2); ctx.stroke();
+  }, false));
+}
+
 /** Otopark: asfalt üstünde beyaz park çizgileri (2,7 m aralık, 13 m sıra). */
 export function parkingLot() {
   return (cache.lot ??= canvasTexture(256, (ctx, sz) => {
@@ -247,6 +287,66 @@ export function plaster() {
       ctx.fill();
     }
     speckle(ctx, sz, rand, 7000, ["rgba(0,0,0,0.05)", "rgba(255,255,255,0.1)"], 1.2);
+  }));
+}
+
+/** Yatay ahşap kaplama (clapboard): ~20 cm'lik tahtalar, alt kenarlarında gölge (gri tonlu; duvar rengiyle çarpılır). */
+export function clapboard() {
+  return (cache.clapboard ??= canvasTexture(256, (ctx, sz) => {
+    const rand = rng("clapboard");
+    const rows = 12, rh = sz / rows;
+    for (let r = 0; r < rows; r++) {
+      const y = r * rh;
+      const g = ctx.createLinearGradient(0, y, 0, y + rh);
+      g.addColorStop(0, "#f4f4f4");
+      g.addColorStop(0.8, "#e6e6e6");
+      g.addColorStop(1, "#b9b9b9");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y, sz, rh);
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.fillRect(0, y + rh - 1.6, sz, 1.6);
+    }
+    speckle(ctx, sz, rand, 2500, ["rgba(0,0,0,0.04)", "rgba(255,255,255,0.08)"], 1.2);
+  }));
+}
+
+/** Tuğla: dizi örgü, açık harç (gri tonlu; duvar rengiyle çarpılır). */
+export function brick() {
+  return (cache.brick ??= canvasTexture(256, (ctx, sz) => {
+    const rand = rng("tugla");
+    ctx.fillStyle = "#cfcac2";
+    ctx.fillRect(0, 0, sz, sz);
+    const rows = 24, cols = 8, rh = sz / rows, cw = sz / cols;
+    for (let r = 0; r < rows; r++) {
+      for (let c = -1; c < cols; c++) {
+        const x = c * cw + (r % 2) * (cw / 2), y = r * rh;
+        const v = 200 + Math.floor(rand() * 50);
+        ctx.fillStyle = `rgb(${v},${v - 6},${v - 10})`;
+        ctx.fillRect(x + 1, y + 1, cw - 2, rh - 2);
+      }
+    }
+    speckle(ctx, sz, rand, 3000, ["rgba(0,0,0,0.07)", "rgba(255,255,255,0.08)"], 1.1);
+  }));
+}
+
+/** Asfalt shingle çatı: kaydırmalı sıralar, ince yatay gölgeler (gri tonlu; çatı rengiyle çarpılır). */
+export function shingles() {
+  return (cache.shingles ??= canvasTexture(128, (ctx, sz) => {
+    const rand = rng("shingle");
+    ctx.fillStyle = "#d0d0d0";
+    ctx.fillRect(0, 0, sz, sz);
+    const rows = 8, cols = 6, rh = sz / rows, cw = sz / cols;
+    for (let r = 0; r < rows; r++) {
+      for (let c = -1; c < cols; c++) {
+        const x = c * cw + (r % 2) * (cw / 2), y = r * rh;
+        const v = 196 + Math.floor(rand() * 46);
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(x + 0.5, y, cw - 1, rh - 1.5);
+      }
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.fillRect(0, r * rh + rh - 1.5, sz, 1.5);
+    }
+    speckle(ctx, sz, rand, 3000, ["rgba(0,0,0,0.1)", "rgba(255,255,255,0.1)"], 1.0);
   }));
 }
 

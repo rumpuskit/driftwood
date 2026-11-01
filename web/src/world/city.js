@@ -112,12 +112,15 @@ export function makeKit() {
   const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   return {
     B: {
-      walls: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.92 }), T.plaster(), 6)),
+      // walls: ahşap kaplama (clapboard); brick: tuğla cepheler (Main Street, kamu binaları)
+      walls: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.92 }), T.clapboard(), 2.4)),
+      brick: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.95 }), T.brick(), 1.7)),
       sheet: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.6, metalness: 0.25 }), T.sheet(), 1.6)),
       plinth: new Batch(box, worldTextured(std("#b4ada3"), T.stoneBase(), 2.4)),
       trims: new Batch(box, std(0xffffff, { roughness: 0.7 }), { shadow: false }),
-      hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), worldTextured(std(0xffffff, { roughness: 0.75, flatShading: true }), T.tiles(), 1.6))),
-      gable: new Batch(gableRoof(), worldTextured(std(0xffffff, { roughness: 0.75, flatShading: true }), T.tiles(), 1.6)),
+      hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), worldTextured(std(0xffffff, { roughness: 0.85, flatShading: true }), T.shingles(), 1.4))),
+      gable: new Batch(gableRoof(), worldTextured(std(0xffffff, { roughness: 0.85, flatShading: true }), T.shingles(), 1.4)),
+      spires: new Batch(new THREE.ConeGeometry(1, 1, 8).translate(0, 0.5, 0), std(0xffffff, { roughness: 0.6, flatShading: true })),
       parapet: new Batch(box, std("#e7e2d9")),
       frames: new Batch(box, std("#f7f5f0", { roughness: 0.6 }), { shadow: false }),
       doors: new Batch(box, std("#6b4a35", { roughness: 0.6 }), { shadow: false }),
@@ -219,7 +222,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   const st = b.style ?? {};
   // Duvar ve taş taban zeminin 0,8 m altından başlar: arazideki küçük iniş çıkışlar binanın dibinde
   // boşluk ya da titreşen kesişme bırakmaz.
-  (b.industrial ? B.sheet : B.walls).add(local(b, 0, -0.8, 0), b.rot, s.set(b.w, h + 0.8, b.d), b.wall);
+  (b.industrial || st.diner ? B.sheet : isBrick(b) ? B.brick : B.walls).add(local(b, 0, -0.8, 0), b.rot, s.set(b.w, h + 0.8, b.d), b.wall);
   B.plinth.add(local(b, 0, -0.8, 0), b.rot, s.set(b.w + 0.12, b.industrial ? 1.6 : 1.4, b.d + 0.12));
   // Kat silmeleri.
   for (let f = 1; f < floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.1, 0), b.rot, s.set(b.w + 0.14, 0.2, b.d + 0.14), "#f6f3ee");
@@ -255,6 +258,11 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
         B.tanks.add(local(b, lx, h + 1.1, -2.6), b.rot, s.set(2, 0.6, 0.6));
       }
     }
+  }
+
+  if (b.kind === "konut" && b.house) {
+    drawHouse(K, b, floors, full, addWindow);
+    return;
   }
 
   if (b.kind === "konut") {
@@ -306,6 +314,11 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.3, h: 2.3 };
     B.slabs.add(local(b, 0, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
     B.slabs.add(local(b, 0, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
+    return;
+  }
+
+  if (b.kind === "cami" && st.church) {
+    drawChurch(K, b, floors, full, h, addGlass);
     return;
   }
 
@@ -448,11 +461,20 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   if (st.glass) for (let f = 1; f <= floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.25, 0), b.rot, s.set(b.w + 0.1, 0.25, b.d + 0.1), "#e8edf2");
   if (!full) return;
   if (st.tower) {
-    B.walls.add(local(b, 0, h, -2), b.rot, s.set(5, 11, 5), b.wall);
-    B.hips[0].add(local(b, 0, h + 11, -2), b.rot, s.set(6, 4, 6), b.roof);
-    B.frames.add(local(b, 0, h + 7.5, 0.55), b.rot, s.set(2.8, 2.8, 0.15));
-    B.rails.add(local(b, 0, h + 7.5, 0.65), b.rot, s.set(0.08, 1.1, 0.05));
+    // Saat kulesi (cupola): çatının ortasında beyaz kare kaide, dört yüzde saat, açık kemerli çan katı ve külah.
+    B.walls.add(local(b, 0, h, 0), b.rot, s.set(5, 6.5, 5), "#f4f1ea");
+    for (const [dr, dz] of [[0, 2.55], [Math.PI, -2.55], [Math.PI / 2, 2.55], [-Math.PI / 2, 2.55]]) {
+      const fake = { ...b, rot: b.rot + dr };
+      B.frames.add(local(fake, 0, h + 3.3, dz), fake.rot, s.set(2.4, 2.4, 0.12), "#f7f5f0");
+      B.rails.add(local(fake, 0, h + 4.4, dz + 0.08), fake.rot, s.set(0.08, 1.0, 0.04));
+      B.rails.add(local(fake, 0.3, h + 4.5, dz + 0.08), fake.rot, s.set(0.6, 0.08, 0.04));
+    }
+    B.trims.add(local(b, 0, h + 6.5, 0), b.rot, s.set(5.6, 0.35, 5.6), "#f4f1ea");
+    for (const [lx, lz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) B.trims.add(local(b, lx, h + 6.85, lz), b.rot, s.set(0.4, 3, 0.4), "#f4f1ea");
+    B.trims.add(local(b, 0, h + 9.85, 0), b.rot, s.set(4.4, 0.35, 4.4), "#f4f1ea");
+    B.spires.add(local(b, 0, h + 10.2, 0), b.rot + Math.PI / 8, s.set(2.6, 5.5, 2.6), "#3f4247");
   }
+  if (st.cornice) B.trims.add(local(b, 0, h - 0.45, 0), b.rot, s.set(b.w + 0.35, 0.55, b.d + 0.35), "#3f3a36");
   if (st.columns) for (let i = 0; i < 6; i++) B.trims.add(local(b, -b.w / 2 + 2 + i * ((b.w - 4) / 5), 0.6, b.d / 2 + 1.5), b.rot, s.set(0.8, h - 0.6, 0.8), "#f4f1ea");
   if (st.columns) B.slabs.add(local(b, 0, h - 0.4, b.d / 2 + 1.5), b.rot, s.set(b.w, 0.6, 3));
   // Resmî binalar (polis merkezi, muhtarlık): zemin kat üstünde renk şeridi, girişin üstünde tabela.
@@ -467,12 +489,206 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   }
   if (b.kind === "belediye" || (st.flag && floors > 1)) { // okulun bayrağı bahçede (okul_bahce)
     // Bayrak direği ve bayrak.
-    B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12));
-    B.signs.add(local(b, b.w / 2 - 2 + 1.2, 8.4, b.d / 2 + 4), b.rot, s.set(2.4, 1.6, 0.04), "#d8233a");
-  } else if (st.flag) { // küçük yapı (muhtarlık): yan duvarın dibinde kısa direk
-    B.rails.add(local(b, b.w / 2 + 1, 0, b.d / 2 - 0.5), b.rot, s.set(0.08, 5.5, 0.08));
-    B.signs.add(local(b, b.w / 2 + 1 + 0.75, 4.6, b.d / 2 - 0.5), b.rot, s.set(1.5, 1.0, 0.03), "#d8233a");
+    B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12), "#e8e8e8");
+    usFlag(B, b, b.w / 2 - 2 + 1.25, 8.4, b.d / 2 + 4, 2.4);
+  } else if (st.flag) { // küçük yapı (Community Center): yan duvarın dibinde kısa direk
+    B.rails.add(local(b, b.w / 2 + 1, 0, b.d / 2 - 0.5), b.rot, s.set(0.08, 5.5, 0.08), "#e8e8e8");
+    usFlag(B, b, b.w / 2 + 1 + 0.78, 4.6, b.d / 2 - 0.5, 1.5);
   }
+}
+
+const BRICKS = new Set(["#a34a3a", "#9b4a3a", "#b0533f", "#8a3e32"]);
+function isBrick(b) {
+  return !!b.style?.brick || BRICKS.has(b.wall);
+}
+
+/** ABD bayrağı: kırmızı-beyaz çizgiler ve sol üstte lacivert kanton (yandan bakınca levha). w genişlik. */
+export function usFlag(B, b, lx, ly, lz, w) {
+  const hgt = w * 0.53;
+  B.signs.add(local(b, lx, ly, lz), b.rot, s.set(w, hgt, 0.03), "#f4f4f2");
+  for (let k = 0; k < 7; k++) B.signs.add(local(b, lx, ly + (k * 2 * hgt) / 13, lz), b.rot, s.set(w, hgt / 13, 0.04), "#b22234");
+  B.signs.add(local(b, lx - w * 0.3, ly + hgt * (6 / 13), lz), b.rot, s.set(w * 0.4, hgt * (7 / 13), 0.05), "#3c3b6e");
+}
+
+const SHUTTERS = ["#1f2a24", "#2f4256", "#2e2e2e", "#5a2a24", "#3e5a44"];
+const PORCH = "#f7f5f0";
+
+/**
+ * Amerikan evleri (layout.js HOUSE_DIMS): Cape Cod kulübesi (tek kat, dik beşik çatı, iki çatı penceresi, kapı
+ * sundurması), iki aileli ev (sokağa bakan alınlık, iki katlı ön veranda), four-square (kırma çatı, ön çatı penceresi,
+ * boydan veranda), garden apartment (3 kat, ortada giriş saçağı). Pencereler kepenkli; daire sahibi pencereye bağlı.
+ */
+function drawHouse(K, b, floors, full, addWindow) {
+  const { B } = K;
+  const h = floors * FLOOR_H;
+  const seed = b.pathSeed ?? 1;
+  const sh = SHUTTERS[seed % SHUTTERS.length];
+  const tip = b.house;
+  const unit = (f, lx) => {
+    const col = b.perFloor === 1 ? 0 : b.perFloor === 2 ? (lx < 0 ? 0 : 1) : Math.min(2, Math.floor((lx + b.w / 2) / (b.w / 3)));
+    const k = f * b.perFloor + col;
+    return k < b.daireler ? { slot: b.slot0 + k } : { workplace: "merdiven", seed: f };
+  };
+  const win = (lx, ly, side, w, hh, owner, shutters = b.shutters) => {
+    addWindow(b, lx, ly, side, w, hh, owner);
+    if (shutters) for (const e of [-1, 1]) B.signs.add(local(b, lx + e * (w / 2 + 0.3), ly - 0.05, side * (b.d / 2 + 0.06)), b.rot, s.set(0.42, hh + 0.1, 0.06), sh);
+  };
+  const sideWins = (f, ly, list) => {
+    for (const side of [-1, 1]) {
+      const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
+      for (const lx of list) addWindow(fake, lx, ly, 1, 0.9, 1.25, unit(f, -side * b.w / 2));
+    }
+  };
+  // Köşe pervazları (beyaz) ve ön kapı.
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B.trims.add(local(b, lx * (b.w / 2 + 0.02), -0.2, lz * (b.d / 2 + 0.02)), b.rot, s.set(0.22, h + 0.2, 0.22), "#f7f5f0");
+  const door = (lx, w = 1.0) => ({ idx: B.doors.add(local(b, lx, 0.55, b.d / 2 + 0.02), b.rot, s.set(w, 2.2, 0.1), ["#2f4256", "#5a2a24", "#2e2e2e", "#3e5a44", "#f4f1ea"][(seed >> 3) % 5]), y: 0.55, z: b.d / 2 + 0.02, w, h: 2.2 });
+  // Basamak ve ön veranda zemini.
+  const porchDeck = (lx, w, d, y = 0.5) => {
+    B.slabs.add(local(b, lx, y - 0.1, b.d / 2 + d / 2), b.rot, s.set(w, 0.12, d), "#cfc6b8");
+    B.plinth.add(local(b, lx, -0.6, b.d / 2 + d / 2), b.rot, s.set(w, y + 0.5, d));
+  };
+  const posts = (lx0, lx1, z, y, hh, n) => {
+    for (let i = 0; i < n; i++) B.trims.add(local(b, lx0 + ((lx1 - lx0) * i) / (n - 1), y, z), b.rot, s.set(0.2, hh, 0.2), PORCH);
+  };
+  const railing = (lx0, lx1, z, y) => {
+    B.trims.add(local(b, (lx0 + lx1) / 2, y + 0.85, z), b.rot, s.set(lx1 - lx0, 0.08, 0.1), PORCH);
+    B.trims.add(local(b, (lx0 + lx1) / 2, y + 0.12, z), b.rot, s.set(lx1 - lx0, 0.06, 0.08), PORCH);
+    for (let x = lx0 + 0.2; x < lx1 - 0.1; x += 0.25) B.trims.add(local(b, x, y + 0.12, z), b.rot, s.set(0.04, 0.75, 0.04), PORCH);
+  };
+
+  if (tip === "cottage") {
+    // Cape Cod: ortada kapı ve iki yanında kepenkli pencereler; dik çatı, iki çatı penceresi, yan bacası.
+    win(-2.4, 0.95, 1, 1.0, 1.35, unit(0, -1));
+    win(2.4, 0.95, 1, 1.0, 1.35, unit(0, 1));
+    win(-2.2, 0.95, -1, 1.0, 1.25, unit(0, -1), false);
+    win(2.2, 0.95, -1, 1.0, 1.25, unit(0, 1), false);
+    b.door = door(0);
+    porchDeck(0, 2.6, 1.6, 0.45);
+    if (full) {
+      const rh = 4.2;
+      B.gable.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.6, rh, b.d + 0.9), b.roof);
+      // Kapı sundurması: iki ince direk, küçük alınlık.
+      posts(-1.0, 1.0, b.d / 2 + 1.25, 0.45, 2.35, 2);
+      B.gable.add(local(b, 0, 2.8, b.d / 2 + 0.85), b.rot + Math.PI / 2, s.set(1.9, 0.7, 2.6), b.roof);
+      for (const lx of [-2.2, 2.2]) {
+        B.walls.add(local(b, lx, h + 0.55, b.d / 4 - 0.2), b.rot, s.set(1.6, 1.5, 2.2), b.wall);
+        B.gable.add(local(b, lx, h + 2.05, b.d / 4 - 0.2), b.rot + Math.PI / 2, s.set(2.4, 0.8, 1.9), b.roof);
+        addWindow({ ...b, d: b.d / 2 + 1.5 }, lx, h + 0.75, 1, 0.8, 0.9, unit(0, lx));
+      }
+      B.chimneys.add(local(b, -b.w / 2 + 0.9, h - 0.2, -0.6), b.rot, s.set(0.9, rh + 0.6, 0.9), "#8a4a3a");
+      // Çatı arası penceresi (yan alınlıklar).
+      for (const side of [-1, 1]) {
+        const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
+        addWindow(fake, 0, h + 1.0, 1, 0.8, 0.9, unit(0, 0));
+      }
+    }
+    return;
+  }
+
+  if (tip === "twofamily") {
+    // İki aileli ev: alınlık sokağa bakar; zemin ve üst kat birer daire, iki katlı ön veranda.
+    for (let f = 0; f < floors; f++) {
+      win(1.9, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, 0));
+      if (f > 0) win(-2.0, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, 0));
+      for (const lx of [-2.2, 2.2]) addWindow(b, lx, f * FLOOR_H + 0.95, -1, 1.0, 1.3, unit(f, 0));
+      sideWins(f, f * FLOOR_H + 0.95, [-3.5, 0, 3.5]);
+    }
+    b.door = door(-2.0);
+    B.doors.add(local(b, -0.9, 0.55, b.d / 2 + 0.02), b.rot, s.set(0.9, 2.2, 0.1), "#6b4a35"); // üst kat merdiven kapısı
+    porchDeck(0, b.w + 0.2, 2.4);
+    B.slabs.add(local(b, 0, FLOOR_H + 0.4, b.d / 2 + 1.2), b.rot, s.set(b.w + 0.2, 0.15, 2.4), "#cfc6b8");
+    posts(-b.w / 2 + 0.2, b.w / 2 - 0.2, b.d / 2 + 2.25, 0.5, 2 * FLOOR_H - 0.4, 4);
+    railing(-b.w / 2 + 0.3, b.w / 2 - 0.3, b.d / 2 + 2.25, FLOOR_H + 0.45);
+    if (full) {
+      B.slabs.add(local(b, 0, 2 * FLOOR_H + 0.05, b.d / 2 + 1.2), b.rot, s.set(b.w + 0.4, 0.18, 2.6), b.roof);
+      B.gable.add(local(b, 0, h, 0), b.rot + Math.PI / 2, s.set(b.d + 0.8, 3.8, b.w + 0.7), b.roof);
+      addWindow(b, 0, h + 1.0, 1, 0.9, 1.1, unit(floors - 1, 0)); // çatı arası
+      B.chimneys.add(local(b, 2.6, h + 1.0, -2.5), b.rot, s.set(0.7, 3.2, 0.7), "#8a4a3a");
+    }
+    return;
+  }
+
+  if (tip === "fourplex") {
+    // Four-square: her katta iki daire, boydan zemin kat verandası, kırma çatı ve ön çatı penceresi.
+    for (let f = 0; f < floors; f++) {
+      for (const lx of [-4.4, -2.0, 2.0, 4.4]) {
+        if (f === 0 && Math.abs(lx) < 2.5) continue;
+        win(lx, f * FLOOR_H + 0.95, 1, 1.0, 1.4, unit(f, lx));
+      }
+      for (const lx of [-4.2, -1.6, 1.6, 4.2]) addWindow(b, lx, f * FLOOR_H + 0.95, -1, 1.0, 1.3, unit(f, lx));
+      sideWins(f, f * FLOOR_H + 0.95, [-4, 0, 4]);
+    }
+    b.door = door(0, 1.4);
+    porchDeck(0, b.w + 0.2, 2.6);
+    posts(-b.w / 2 + 0.2, b.w / 2 - 0.2, b.d / 2 + 2.45, 0.5, FLOOR_H - 0.3, 5);
+    railing(-b.w / 2 + 0.3, -1.2, b.d / 2 + 2.45, 0.5);
+    railing(1.2, b.w / 2 - 0.3, b.d / 2 + 2.45, 0.5);
+    B.slabs.add(local(b, 0, FLOOR_H + 0.2, b.d / 2 + 1.3), b.rot, s.set(b.w + 0.4, 0.18, 2.8), b.roof);
+    if (full) {
+      B.hips[0].add(local(b, 0, h, 0), b.rot, s.set(b.w + 1.0, 3.6, b.d + 1.0), b.roof);
+      B.walls.add(local(b, 0, h + 0.6, b.d / 2 - 2.2), b.rot, s.set(2.2, 1.5, 2.4), b.wall);
+      B.hips[0].add(local(b, 0, h + 2.1, b.d / 2 - 2.2), b.rot, s.set(2.8, 0.8, 2.9), b.roof);
+      addWindow({ ...b, d: b.d - 2.0 }, 0, h + 0.8, 1, 1.2, 0.8, unit(floors - 1, 0));
+      B.chimneys.add(local(b, 3.2, h + 1.5, -1.8), b.rot, s.set(0.8, 3.2, 0.8), "#8a4a3a");
+    }
+    return;
+  }
+
+  // Garden apartment: her katta altı pencere çifti; ortada giriş, üstünde saçak; yanlarda pencere.
+  const cols = [-11.5, -8.5, -4.5, -1.5, 1.5, 4.5, 8.5, 11.5];
+  for (let f = 0; f < floors; f++) {
+    for (const lx of cols) {
+      if (f === 0 && Math.abs(lx) < 2) continue;
+      win(lx, f * FLOOR_H + 0.95, 1, 1.1, 1.4, unit(f, lx), b.shutters && Math.abs(lx) > 2);
+      addWindow(b, lx, f * FLOOR_H + 0.95, -1, 1.1, 1.3, unit(f, lx));
+    }
+    sideWins(f, f * FLOOR_H + 0.95, [-3.5, 3.5]);
+    if (f > 0) addWindow(b, 0, f * FLOOR_H - 0.5, 1, 0.9, 1.2, { workplace: "merdiven", seed: f });
+  }
+  b.door = door(0, 1.6);
+  B.slabs.add(local(b, 0, 2.75, b.d / 2 + 0.9), b.rot, s.set(3.2, 0.15, 1.8), "#f7f5f0");
+  posts(-1.4, 1.4, b.d / 2 + 1.7, 0, 2.75, 2);
+  B.slabs.add(local(b, 0, 0, b.d / 2 + 0.9), b.rot, s.set(3.2, 0.15, 1.8), "#cfc6b8");
+  if (full) {
+    B.gable.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.8, 3.2, b.d + 0.9), b.roof);
+    for (const lx of [-8, 8]) B.chimneys.add(local(b, lx, h + 0.6, -1.5), b.rot, s.set(0.8, 3.0, 0.8), "#8a4a3a");
+  }
+}
+
+/**
+ * Beyaz ahşap New England kilisesi: sokağa bakan alınlık, yanlarda uzun pencereler, önde kule (kaide, açık çan katı,
+ * sekizgen külah). (Ön cephe +z.)
+ */
+function drawChurch(K, b, floors, full, h, addGlass) {
+  const { B } = K;
+  for (const side of [-1, 1]) {
+    const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
+    for (let k = 0; k < 4; k++) {
+      const lx = -b.d / 2 + 3 + k * ((b.d - 6) / 3);
+      B.frames.add(local(fake, lx, 1.2, b.w / 2), fake.rot, s.set(1.5, 4.0, 0.14), "#f7f5f0");
+      addGlass(fake, lx, 3.2, b.w / 2 + 0.09, 1.1, 3.6, false, { workplace: "cami", seed: k + (side > 0 ? 10 : 0) });
+      B.arches.add(local(fake, lx, 5.0, b.w / 2 + 0.03), fake.rot, s.set(0.7, 1, 0.15), "#f7f5f0");
+      for (const e of [-1, 1]) B.signs.add(local(fake, lx + e * 1.05, 1.2, b.w / 2 + 0.06), fake.rot, s.set(0.45, 3.9, 0.06), "#2e2e2e");
+    }
+  }
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B.trims.add(local(b, lx * (b.w / 2 + 0.03), -0.2, lz * (b.d / 2 + 0.03)), b.rot, s.set(0.3, h + 0.2, 0.3), "#ffffff");
+  // Ön kule: kapı kulenin dibinde.
+  const tz = b.d / 2 + 2.0;
+  B.walls.add(local(b, 0, -0.8, tz), b.rot, s.set(4.4, h + 3.6, 4.4), b.wall);
+  b.door = { idx: B.doors.add(local(b, 0, 0.2, tz + 2.22), b.rot, s.set(1.8, 3.0, 0.1), "#7a2a24"), y: 0.2, z: tz + 2.22, w: 1.8, h: 3.0 };
+  B.gable.add(local(b, 0, 3.4, tz + 2.3), b.rot + Math.PI / 2, s.set(0.5, 0.9, 2.6), "#ffffff");
+  B.frames.add(local(b, 0, h - 0.6, tz + 2.21), b.rot, s.set(1.1, 1.8, 0.1), "#2e2e2e");
+  B.slabs.add(local(b, 0, -0.05, tz + 3.3), b.rot, s.set(4.0, 0.25, 2.2), "#cfc6b8");
+  if (!full) return;
+  B.gable.add(local(b, 0, h, 0), b.rot + Math.PI / 2, s.set(b.d + 0.8, 4.6, b.w + 0.8), b.roof);
+  const y0 = h + 2.8;
+  B.trims.add(local(b, 0, y0, tz), b.rot, s.set(4.8, 0.4, 4.8), "#ffffff");
+  // Çan katı: dört köşe direk, açık kemerler; üstte korniş ve külah.
+  for (const [lx, lz] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) B.trims.add(local(b, lx, y0 + 0.4, tz + lz), b.rot, s.set(0.45, 3.2, 0.45), "#ffffff");
+  B.walls.add(local(b, 0, y0 + 0.4, tz), b.rot, s.set(1.4, 1.4, 1.4), "#2e2e2e"); // çan
+  B.trims.add(local(b, 0, y0 + 3.6, tz), b.rot, s.set(4.2, 0.45, 4.2), "#ffffff");
+  B.spires.add(local(b, 0, y0 + 4.05, tz), b.rot + Math.PI / 8, s.set(2.3, 9.5, 2.3), "#f7f5f0");
+  B.rails.add(local(b, 0, y0 + 13.4, tz), b.rot, s.set(0.08, 1.2, 0.08), "#c9a441");
 }
 
 export function buildCity(world) {
@@ -495,7 +711,7 @@ export function buildCity(world) {
     windows: K.glass.mesh,
     windowOwners: K.windowOwners,
     windowInfo: K.windowInfo,
-    wallMaterials: [K.B.walls.material, K.B.plinth.material, K.B.doors.material],
+    wallMaterials: [K.B.walls.material, K.B.brick.material, K.B.plinth.material, K.B.doors.material],
     /** Bir binayı gizler ya da geri getirir (ev içi görünümü için). */
     setHidden(b, on) {
       for (const batch of batches) {
@@ -535,8 +751,9 @@ export function buildCity(world) {
     },
     /** Işın hangi binaya çarpıyor? */
     pickBuilding(raycaster) {
-      const hit = raycaster.intersectObject(K.B.walls.mesh)[0];
-      return hit?.instanceId != null ? K.B.walls.items[hit.instanceId].owner : null;
+      const hits = [K.B.walls, K.B.brick, K.B.sheet].map((bt) => [bt, raycaster.intersectObject(bt.mesh)[0]]).filter(([, h]) => h?.instanceId != null);
+      hits.sort((a, b) => a[1].distance - b[1].distance);
+      return hits.length ? hits[0][0].items[hits[0][1].instanceId].owner : null;
     },
   };
 }
@@ -666,9 +883,10 @@ function buildFeatures(world) {
   };
 
   const fenerLamps = [];
-  const glowSigns = []; // gece yanan tabelalar (hastanenin "ACİL" bandı)
+  const glowSigns = []; // gece yanan tabelalar (hastanenin "EMERGENCY" bandı)
   const fruit = [];
   const fountains = [];
+  const ferrisWheels = [];
   for (const f of world.features) {
     switch (f.type) {
       case "cesme": {
@@ -805,7 +1023,7 @@ function buildFeatures(world) {
         add(new THREE.BoxGeometry(7, 0.35, 12), white, f.x + 3.5, y0 + 4.2, f.z);
         // Bant saçağın ön kenarında, boyu z ekseninde (yazı +x yüzünde okunur).
         // Gece ışıklı tabela: yazı dokusu kendi ışığıyla parlar (setFlood).
-        const acil = label("ACİL", 12, 0.8, "#d8342b", "#ffffff");
+        const acil = label("EMERGENCY", 12, 0.8, "#d8342b", "#ffffff");
         acil.emissive = new THREE.Color("#ffffff"); acil.emissiveMap = acil.map; acil.emissiveIntensity = 0;
         glowSigns.push(acil);
         add(new THREE.BoxGeometry(0.1, 0.8, 12), acil, f.x + 7.05, y0 + 3.85, f.z, 0, false);
@@ -904,6 +1122,123 @@ function buildFeatures(world) {
         add(new THREE.BoxGeometry(0.05, 12, 0.05), metal, f.x - 16, FLAT_Y + 19.5, f.z, 0, false);
         break;
       }
+      case "rihtim": {
+        // Rıhtım duvarı: kıyı çizgisi boyunca granit bloklar (sudan rıhtım üstüne), üstte açık renk başlık taşı.
+        const granite = std("#8f8a82", { roughness: 0.9 }), cap = std("#bdb7ad", { roughness: 0.8 });
+        const pts = f.pts;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b2 = pts[i];
+          if (!a || !b2) continue;
+          const len = Math.hypot(b2[0] - a[0], b2[1] - a[1]);
+          if (len > 12) continue;
+          const rot = Math.atan2(b2[0] - a[0], b2[1] - a[1]), mx = (a[0] + b2[0]) / 2, mz = (a[1] + b2[1]) / 2;
+          add(new THREE.BoxGeometry(1.0, FLAT_Y + 3.2, len + 0.3), granite, mx, (FLAT_Y + 3.2) / 2 - 3.05, mz, rot, false);
+          add(new THREE.BoxGeometry(1.3, 0.25, len + 0.3), cap, mx, FLAT_Y + 0.25, mz, rot, false);
+        }
+        break;
+      }
+      case "bandstand": {
+        // Town Green çardağı: sekizgen beyaz ahşap, yüksek döşeme, ince direkler, korkuluk ve sekizgen külah.
+        const y0 = world.groundY(f.x, f.z);
+        const g = new THREE.Group();
+        g.position.set(f.x, y0, f.z);
+        group.add(g);
+        const put = (geo, mat, x, y, z, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+        const R = 5.2;
+        put(new THREE.CylinderGeometry(R + 0.2, R + 0.4, 1.0, 8), std("#cfc6b8"), 0, 0.5, 0, Math.PI / 8);
+        put(new THREE.CylinderGeometry(R + 0.35, R + 0.35, 0.18, 8), white, 0, 1.08, 0, Math.PI / 8);
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          put(new THREE.BoxGeometry(0.22, 3.2, 0.22), white, Math.sin(a) * R, 2.75, Math.cos(a) * R);
+          if (k === 0) continue; // giriş
+          const b2 = (k + 0.5) / 8 * Math.PI * 2, rr = R * Math.cos(Math.PI / 8);
+          put(new THREE.BoxGeometry(2 * R * Math.sin(Math.PI / 8) - 0.2, 0.08, 0.1), white, Math.sin(b2) * rr, 2.05, Math.cos(b2) * rr, b2);
+          put(new THREE.BoxGeometry(2 * R * Math.sin(Math.PI / 8) - 0.2, 0.06, 0.08), white, Math.sin(b2) * rr, 1.35, Math.cos(b2) * rr, b2);
+        }
+        put(new THREE.CylinderGeometry(R + 0.6, R + 0.6, 0.25, 8), white, 0, 4.45, 0, Math.PI / 8);
+        put(new THREE.ConeGeometry(R + 0.7, 2.6, 8), std("#4d5560", { roughness: 0.7, flatShading: true }), 0, 5.85, 0, Math.PI / 8);
+        put(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 5), metal, 0, 7.6, 0);
+        put(new THREE.BoxGeometry(1.3, 0.4, 0.8), std("#cfc6b8"), 0, 0.2, R + 0.9);
+        break;
+      }
+      case "dikilitas": {
+        // Sade granit dikilitaş (anma taşı): kademeli kaide, sivrilen gövde.
+        const y0 = world.groundY(f.x, f.z);
+        const granite = std("#b9b6b0", { roughness: 0.7 });
+        add(new THREE.BoxGeometry(1.6, 0.5, 1.6), granite, f.x, y0 + 0.25, f.z);
+        add(new THREE.BoxGeometry(1.0, 0.4, 1.0), granite, f.x, y0 + 0.7, f.z);
+        add(new THREE.CylinderGeometry(0.22, 0.42, 4.2, 4).rotateY(Math.PI / 4), granite, f.x, y0 + 3.0, f.z);
+        add(new THREE.ConeGeometry(0.3, 0.5, 4).rotateY(Math.PI / 4), granite, f.x, y0 + 5.35, f.z);
+        break;
+      }
+      case "lunapark": {
+        // Eğlence iskelesi: kazıklar üstünde ahşap güverte, korkuluklar, oyun tezgâhları, atlıkarınca ve dönme dolap.
+        const top = world.lunapark?.pier.top ?? 2.6;
+        const x0 = f.x - 9, x1 = f.x + 9, z0 = f.z0, z1 = f.z1, L = z1 - z0;
+        const planks = std("#a5835e", { roughness: 0.95 });
+        add(new THREE.BoxGeometry(18, 0.3, L), planks, f.x, top - 0.15, (z0 + z1) / 2);
+        const pile = new Batch(new THREE.CylinderGeometry(0.22, 0.22, 1, 6).translate(0, 0.5, 0), std("#6b5a48"), { shadow: false });
+        for (let z = z0 + 2; z < z1; z += 6) for (const x of [x0 + 0.5, f.x, x1 - 0.5]) pile.add(v.set(x, -6, z), 0, s.set(1, top + 6, 1));
+        group.add(pile.build());
+        for (const x of [x0 + 0.1, x1 - 0.1]) {
+          add(new THREE.BoxGeometry(0.1, 0.08, L), white, x, top + 1.0, (z0 + z1) / 2, 0, false);
+          for (let z = z0 + 1; z < z1; z += 2) add(new THREE.BoxGeometry(0.08, 1.0, 0.08), white, x, top + 0.5, z, 0, false);
+        }
+        const stripe = ["#c43a3a", "#2f4256", "#e9b23a", "#3e7a5a"];
+        for (let k = 0; k < 4; k++) {
+          const z = z1 - 14 - k * 9, x = k % 2 ? x1 - 2.6 : x0 + 2.6;
+          add(new THREE.BoxGeometry(3.4, 2.4, 3.6), std("#f4f1ea"), x, top + 1.2, z);
+          add(new THREE.BoxGeometry(3.8, 0.12, 4.0), std(stripe[k]), x, top + 2.55, z);
+        }
+        // Atlıkarınca: çatılı yuvarlak platform, direkler.
+        const cz = z0 + 62;
+        add(new THREE.CylinderGeometry(5, 5, 0.4, 24), std("#f4f1ea"), f.x, top + 0.2, cz);
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          add(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 5), std("#c9a441", { metalness: 0.5 }), f.x + Math.sin(a) * 3.8, top + 2.0, cz + Math.cos(a) * 3.8, 0, false);
+          add(new THREE.BoxGeometry(0.35, 0.6, 1.1), std(stripe[k % 4]), f.x + Math.sin(a) * 3.8, top + 1.2 + (k % 2) * 0.4, cz + Math.cos(a) * 3.8, a, false);
+        }
+        add(new THREE.ConeGeometry(5.6, 2.0, 24), std("#c43a3a", { flatShading: true }), f.x, top + 4.6, cz);
+        // Dönme dolap: kıyıya bakan düzlemde (eksen z), A ayaklar; gece renkli ampuller.
+        const [wx, wz] = f.wheel, R = 14, hub = top + R + 3;
+        const legs = std("#e8e8e8", { metalness: 0.4, roughness: 0.4 });
+        for (const sz of [-1.6, 1.6]) for (const sx of [-1, 1]) {
+          const leg = add(new THREE.CylinderGeometry(0.22, 0.3, (hub - top) / Math.cos(0.3), 8), legs, wx + sx * Math.tan(0.3) * (hub - top) / 2, (hub + top) / 2, wz + sz);
+          leg.rotation.z = -sx * 0.3;
+        }
+        add(new THREE.CylinderGeometry(0.4, 0.4, 3.6, 10).rotateX(Math.PI / 2), legs, wx, hub, wz);
+        const wheel = new THREE.Group();
+        wheel.position.set(wx, hub, wz);
+        group.add(wheel);
+        const rim = std("#f4f1ea", { metalness: 0.3, roughness: 0.4 });
+        for (const sz of [-1.2, 1.2]) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.18, 6, 48), rim);
+          ring.position.z = sz;
+          wheel.add(ring);
+          for (let k = 0; k < 16; k++) {
+            const a = (k / 16) * Math.PI * 2;
+            const sp = new THREE.Mesh(new THREE.BoxGeometry(0.08, R, 0.08).translate(0, R / 2, 0), rim);
+            sp.rotation.z = a;
+            sp.position.z = sz;
+            wheel.add(sp);
+          }
+        }
+        const bulbMat = new THREE.MeshStandardMaterial({ color: "#ffe9b0", emissive: new THREE.Color("#ffd27a"), emissiveIntensity: 0 });
+        const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 6, 4), bulbMat, 96);
+        for (let k = 0; k < 96; k++) { const a = (k / 96) * Math.PI * 2; bulbs.setMatrixAt(k, new THREE.Matrix4().makeTranslation(Math.sin(a) * (R + 0.25), Math.cos(a) * (R + 0.25), 1.3)); }
+        wheel.add(bulbs);
+        const cars = [];
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2;
+          const car = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.4, 1.8).translate(0, -0.9, 0), std(stripe[k % 4]));
+          car.position.set(Math.sin(a) * R, Math.cos(a) * R, 0);
+          car.castShadow = true;
+          wheel.add(car);
+          cars.push(car);
+        }
+        ferrisWheels.push({ wheel, cars, bulbMat });
+        break;
+      }
       case "fener": {
         // Deniz feneri: sekizgen taş kaide ve kapı, kırmızı-beyaz bantlı konik gövde ve pencereleri,
         // konsollu seyir balkonu ve korkuluğu, kayıtlı camlı fener odası (içinde mercek), bakır kubbe,
@@ -923,7 +1258,7 @@ function buildFeatures(world) {
         for (let i = 0; i < bands; i++) {
           const ya = 1.4 + (i * (H - 1.4)) / bands, yb = 1.4 + ((i + 1) * (H - 1.4)) / bands;
           const ra = r0 + ((r1 - r0) * (ya - 1.4)) / (H - 1.4), rb = r0 + ((r1 - r0) * (yb - 1.4)) / (H - 1.4);
-          put(new THREE.CylinderGeometry(rb, ra, yb - ya, 24), std(i % 2 ? "#c8312f" : "#f7f5f0", { roughness: 0.6 }), 0, (ya + yb) / 2, 0);
+          put(new THREE.CylinderGeometry(rb, ra, yb - ya, 24), std(f.abd ? "#f7f5f0" : i % 2 ? "#c8312f" : "#f7f5f0", { roughness: 0.6 }), 0, (ya + yb) / 2, 0);
         }
         // Kapı (kara tarafında) ve basamaklar; gövdede kademeli küçük pencereler.
         put(new THREE.BoxGeometry(1.1, 2.2, 0.3), std("#4a3426"), 0, 2.5, r0 - 0.05, false);
@@ -947,7 +1282,7 @@ function buildFeatures(world) {
         put(new THREE.TorusGeometry(r1 + 0.8, 0.04, 6, 40).rotateX(Math.PI / 2), metal, 0, H + 1.2, 0, false);
         put(new THREE.TorusGeometry(r1 + 0.8, 0.025, 6, 40).rotateX(Math.PI / 2), metal, 0, H + 0.7, 0, false);
         // Fener odası: alt duvar, camlar ve kayıtlar, mercek.
-        put(new THREE.CylinderGeometry(1.45, 1.45, 0.8, 16), std("#f7f5f0"), 0, H + 0.6, 0);
+        put(new THREE.CylinderGeometry(1.45, 1.45, 0.8, 16), std(f.abd ? "#1f2224" : "#f7f5f0"), 0, H + 0.6, 0);
         put(new THREE.CylinderGeometry(1.42, 1.42, 2.1, 16, 1, true), new THREE.MeshStandardMaterial({ color: "#cfe3ee", transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.4, side: THREE.DoubleSide, depthWrite: false }), 0, H + 2.05, 0, false);
         for (let k = 0; k < 10; k++) {
           const a = (k / 10) * Math.PI * 2;
@@ -956,8 +1291,8 @@ function buildFeatures(world) {
         const lensMat = new THREE.MeshStandardMaterial({ color: "#fff6d6", emissive: new THREE.Color("#fff1c4"), emissiveIntensity: 0.15, roughness: 0.1 });
         const lens = put(new THREE.CylinderGeometry(0.55, 0.55, 1.3, 12), lensMat, 0, H + 2.0, 0, false);
         put(new THREE.CylinderGeometry(1.5, 1.5, 0.12, 16), metal, 0, H + 3.15, 0);
-        put(new THREE.SphereGeometry(1.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), std("#3e6b5a", { roughness: 0.5, metalness: 0.3 }), 0, H + 3.2, 0);
-        put(new THREE.SphereGeometry(0.28, 10, 8), std("#3e6b5a", { metalness: 0.3 }), 0, H + 4.85, 0);
+        put(new THREE.SphereGeometry(1.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(f.abd ? "#1f2224" : "#3e6b5a", { roughness: 0.5, metalness: 0.3 }), 0, H + 3.2, 0);
+        put(new THREE.SphereGeometry(0.28, 10, 8), std(f.abd ? "#1f2224" : "#3e6b5a", { metalness: 0.3 }), 0, H + 4.85, 0);
         put(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 5), metal, 0, H + 5.6, 0, false);
         // Işık huzmeleri: gece görünür, yavaşça döner.
         // Huzme: kaynağında parlak, uzaklaştıkça sönen ince ışık konisi (uv.y: 1 kaynak, 0 uç).
@@ -1005,6 +1340,15 @@ function buildFeatures(world) {
       }
       case "kale": {
         const y0 = world.groundY(f.x, f.z) + 0.1;
+        if (f.football) {
+          // Amerikan futbolu kale direği: tek ayaklı sarı "Y" (ayak, kavisli kol, 3 m'de yatay direk, 5,6 m arayla dikmeler).
+          const yellow = std("#f2c230", { roughness: 0.5, metalness: 0.2 });
+          add(new THREE.CylinderGeometry(0.11, 0.13, 3.05, 8), yellow, f.x - f.dir * 1.6, y0 + 1.52, f.z);
+          add(new THREE.CylinderGeometry(0.08, 0.08, 1.6, 8).rotateZ(Math.PI / 2), yellow, f.x - f.dir * 0.8, y0 + 3.05, f.z);
+          add(new THREE.CylinderGeometry(0.07, 0.07, 5.64, 8).rotateX(Math.PI / 2), yellow, f.x, y0 + 3.05, f.z);
+          for (const dz of [-2.82, 2.82]) add(new THREE.CylinderGeometry(0.05, 0.05, 6.1, 8), yellow, f.x, y0 + 3.05 + 3.05, f.z + dz);
+          break;
+        }
         const post = std("#ffffff");
         for (const dz of [-3.66, 3.66]) add(new THREE.CylinderGeometry(0.06, 0.06, 2.44, 8), post, f.x, y0 + 1.22, f.z + dz);
         add(new THREE.CylinderGeometry(0.06, 0.06, 7.32, 8).rotateX(Math.PI / 2), post, f.x, y0 + 2.44, f.z);
@@ -1228,9 +1572,15 @@ function buildFeatures(world) {
     floodGlareMat.opacity = 0.75 * stadium;
     for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * fener; f.beamMat.uniforms.uOpacity.value = 0.35 * fener; f.beam.visible = fener > 0; }
     for (const m of glowSigns) m.emissiveIntensity = 0.9 * fener;
+    for (const w of ferrisWheels) w.bulbMat.emissiveIntensity = 2.2 * fener;
   };
   group.userData.tick = (t) => {
     for (const f of fenerLamps) f.beam.rotation.y = t * 0.6;
+    // Dönme dolap: bir tur ~4 dakika; kabinler hep dik durur.
+    for (const w of ferrisWheels) {
+      w.wheel.rotation.z = -t * 0.026;
+      for (const c of w.cars) c.rotation.z = t * 0.026;
+    }
     for (const fo of fountains) {
       fo.curtains.forEach((c, i) => { c.scale.set(1 + Math.sin(t * 3 + i) * 0.015, 1, 1 + Math.cos(t * 3 + i) * 0.015); c.material.opacity = 0.45 + 0.1 * Math.sin(t * 5); });
       fo.jet.scale.set(1, 0.9 + 0.12 * Math.sin(t * 4.3), 1);

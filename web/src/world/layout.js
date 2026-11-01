@@ -1044,6 +1044,14 @@ export class World {
       for (let k = 0; k < 3; k++) if (hash2(i, k, 61) < 0.75) this.features.push({ type: "tekne", x: x + (k % 2 ? 5 : -5), z: mz + 14 + k * 11, rot: 0, len: 8 + hash2(i, k, 62) * 3, yelken: true });
     }
     this.labels.push({ text: "Harbor Bay", x: 120, z: 520, h: 40 });
+    // Rıhtım duvarı: kasaba önünde kıyı boyunca granit (island.js quay); iskeleler ve dolgular dahil.
+    const wall = [];
+    for (let x = -1000; x <= 800; x += 5) {
+      const [cx, cz] = this.coastPoint(x, Math.min(I.mainZ(Math.max(-700, Math.min(700, x))), I.shoreZ(x) - 60), 0, 1, 0);
+      if (I.quay(cx, cz - 2) > 0.5) wall.push([cx, cz]);
+      else if (wall.length && wall.at(-1) !== null) wall.push(null);
+    }
+    this.features.push({ type: "rihtim", pts: wall });
   }
 
   _layoutFishingPier(coast) {

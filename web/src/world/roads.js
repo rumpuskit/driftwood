@@ -507,7 +507,7 @@ export function buildGrounds(world) {
     if (p.kind === "tarla") slab(w, d, cx, cz, T.crops(CROPS[p.crop]), 2.4, 0.08);
     else if (p.kind === "saha") {
       slab(w + 8, d + 8, cx, cz, T.paving(), 2.4, 0.06);
-      const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: T.pitch(), roughness: 0.95 }));
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: world.pitch?.football ? T.footballField() : T.pitch(), roughness: 0.95 }));
       f.position.set(cx, FLAT + 0.12, cz);
       f.receiveShadow = true;
       group.add(f);

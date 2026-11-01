@@ -455,7 +455,7 @@ export function buildFishingCove(world) {
     const c = cv.getContext("2d");
     c.fillStyle = "#8a5a3a"; c.fillRect(0, 0, 512, 128);
     c.fillStyle = "#f4ead8"; c.font = "bold 60px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
-    c.fillText("BALIKÇI KOYU", 256, 68);
+    c.fillText("FISHING WHARF", 256, 68);
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.65, 0.08), [MATW, MATW, MATW, MATW, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }), MATW]);

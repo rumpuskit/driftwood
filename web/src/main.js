@@ -176,6 +176,11 @@ controls.onUserMove = (kind) => { flight = null; if (follower) follower.zoomTo =
 
 const T0 = performance.now();
 const world = new World(population);
+// Mevsim (ağaç renkleri, nature.js): ada gününün ayı; testte ?tarih=YYYY-MM-DD.
+{
+  const tp = /^\d{4}-(\d{2})-\d{2}$/.exec(params.get("tarih") ?? "");
+  world.month = tp && (params.has("test") || params.has("gelistir")) ? Number(tp[1]) - 1 : sim.civilFromDays(sim.dayOf(Date.now() / 1000))[1] - 1;
+}
 const T1 = performance.now();
 progress(0.3, "Laying the roads…");
 await paint();
@@ -293,7 +298,8 @@ function soundEnv(dist, light, minute) {
 }
 
 // Maç topu.
-const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), new THREE.MeshStandardMaterial({ color: "#f4f4f4", roughness: 0.6, flatShading: true }));
+// Amerikan futbolu topu: kahverengi, uçları sivri (uzun ekseni x).
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8).scale(1.6, 1, 1), new THREE.MeshStandardMaterial({ color: "#7a4528", roughness: 0.7 }));
 ball.castShadow = true;
 scene.add(ball);
 
@@ -329,6 +335,8 @@ controls.update();
 // --- zaman ---
 // Zaman hızı yalnızca geliştirmede (vite dev, ?gelistir ya da ?test): yayında şehir gerçek saatle yaşar.
 const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle") || params.has("test");
+// Geliştirmede sahne ve dünya konsoldan incelenebilir (hata ayıklama, ekran görüntüsü betikleri).
+if (dev) globalThis.__ada = { scene, world };
 let speed = dev ? Number(params.get("hiz")) || 1 : 1;
 if (dev) {
   const speedBar = document.getElementById("speed"), hud = document.getElementById("hud");

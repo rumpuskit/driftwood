@@ -333,17 +333,23 @@ export function flatness(x, z) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-/** Doğal arazi (tesviyesiz): kıyıda denize iner, Bluff Head kıyısı sarp (kaya). */
+/** Kasaba kıyısı rıhtım mı (0..1)? Koy boyunca x −1000…800: kumsal yerine taş rıhtım duvarı. */
+export function quay(x, z) {
+  return quiet(x, z) * smooth((x + 1000) / 60) * smooth((800 - x) / 60);
+}
+
+/** Doğal arazi (tesviyesiz): kıyıda denize iner, Bluff Head kıyısı sarp (kaya), kasaba önünde rıhtım duvarı. */
 export function terrainHeight(x, z) {
   const L = land(x, z);
   const f = flatness(x, z);
   let h = FLAT_Y + naturalHeight(x, z) * (1 - f);
   const bluff = Math.exp(-((x - 1680) ** 2 + (z - 120) ** 2) / (2 * 330 * 330));
-  const band = 40 - 26 * bluff; // Bluff'ta kıyı şeridi dar: yamaç denize sarp iner
+  const q = quay(x, z);
+  const band = (40 - 26 * bluff) * (1 - q) + 1.5 * q; // Bluff'ta kıyı şeridi dar; rıhtımda dik duvar
   if (L >= band) return h;
   if (L >= 0) {
     const t = 1 - L / band;
-    return h * (1 - smooth(t)) - 0.3 * t;
+    return h * (1 - smooth(t)) - 0.3 * t - 2.2 * q * t;
   }
-  return Math.max(-12, -0.3 + L * 0.12);
+  return Math.max(-12, (-0.3 + L * 0.12) * (1 - q) + (-2.5 + L * 0.06) * q);
 }
