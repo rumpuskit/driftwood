@@ -108,9 +108,9 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 # Sitedeki yorumla doğrulama kodu: "code 1234", "code: 1234", "my code is 1234".
 KOD = re.compile(r"\bcode\s*(?:is\s*)?(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>jobs?|occupation|profession|career|work as)|(?P<hobi>hobby|hobbies)|(?P<evcil>pets?))\b")
-# "I want to be a fisherman", "I wanna be a cop", "make me a baker", "can I be the lighthouse keeper"...
+# "I want to be a fisherman", "I wanna be a cop", "make me a baker", "can I be the lighthouse keeper", "may I be a doctor?"...
 ISTEK = re.compile(r"\b(?:i want to (?:be|become)|i wanna (?:be|become)|wanna be|want to be|make me|id like to be|i would like to be"
-                   r"|can i be|could i be|let me be|lemme be|im gonna be|gonna be|ill be|i will be|i choose|put me (?:down )?as"
+                   r"|can i (?:be|become)|could i (?:be|become)|may i (?:be|become)|let me be|lemme be|im gonna be|gonna be|ill be|i will be|i choose|put me (?:down )?as"
                    r"|sign me up as|i want|i wanna|i wish to be|my dream is to be|i should be)"
                    r" (?:an? |the |as an? )?(?P<x>(?:[a-z0-9]+ ){0,3}[a-z0-9]+)")
 # "fisherman please", "baker pls"

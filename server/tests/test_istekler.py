@@ -21,6 +21,8 @@ class CozumleTest(unittest.TestCase):
             "I’d like to be an architect": {"meslek": "mimar"},
             "lemme be the lighthouse keeper": {"meslek": "fener_bekcisi"},
             "can I be the lighthouse keeper?": {"meslek": "fener_bekcisi"},
+            "may I be a doctor? 🙂‍↕️": {"meslek": "doktor"},
+            "could I become a nurse": {"meslek": "hemsire"},
             "My job: software developer": {"meslek": "yazilimci"},
             "job: programmer": {"meslek": "yazilimci"},
             "job: doctor": {"meslek": "doktor"},
