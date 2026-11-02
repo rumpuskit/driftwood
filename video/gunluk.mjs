@@ -2,7 +2,7 @@
 // standardına (video/cikti/ANLATIM-STANDARDI.md) uygun seslendirme ve çekim planını kurar; istenirse sesi ve
 // videoyu üretir, açıklamayı panoya kopyalar ve bildirim gönderir.
 //
-//   node gunluk.mjs [--yuva ogle|aksam|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--hikaye h.json]
+//   node gunluk.mjs [--yuva ogle|aksam|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--taslaksiz] [--hikaye h.json]
 //
 // --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
 // vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], ("saat" artık yok sayılır: ada saati üretim anı),
@@ -363,7 +363,8 @@ if (!args.includes("--onizleme")) {
 
 // TikTok bağlıysa (node tiktok.mjs baglan) video gelen kutusuna taslak olarak gider; olmazsa dosyadan yüklenir.
 let taslak = null;
-if (!args.includes("--onizleme") && existsSync(resolve(HERE, "../secret/tiktok-dev/token.json"))) {
+// --taslaksiz: TikTok'a yükleme (Mac'teki otomatik üretim videoyu sosyal sistemin takvimine verir, taslağı o gönderir).
+if (!args.includes("--onizleme") && !args.includes("--taslaksiz") && existsSync(resolve(HERE, "../secret/tiktok-dev/token.json"))) {
   try {
     taslak = await yukle(video);
     console.log("TikTok taslağı:", taslak.publish_id);
