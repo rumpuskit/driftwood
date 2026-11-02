@@ -5,7 +5,7 @@
 //   node gunluk.mjs [--yuva ogle|aksam|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--hikaye h.json]
 //
 // --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
-// vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], "saat": "19:40",
+// vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], ("saat" artık yok sayılır: ada saati üretim anı),
 // "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
 // "ilk": imza çekimi (varsayılan "ucus")}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
 //
@@ -225,6 +225,13 @@ if (!tur || !govde.length) {
   konuId = konu.id;
   govde = konu.govde; soru = konu.soru; cekim = konu.cekim; saat = konu.saat ?? saat;
 }
+
+// Ada saati = videonun üretildiği andaki gerçek ada saati (ET). Yayın saatine ya da güzel ışığa göre SEÇİLMEZ
+// (kullanıcı kararı, 2 Kasım 2026: öğle videosu 18:40'ta çekilmişti). Hikâyedeki "saat" yok sayılır; yalnız
+// kullanıcı açıkça isterse --saat HH:MM.
+const istenenSaat = saat;
+saat = opt("--saat") ?? new Intl.DateTimeFormat("en-GB", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+if (!opt("--saat") && istenenSaat !== saat) console.log(`ada saati ${saat} (ET, şimdi); "${istenenSaat}" kullanılmadı`);
 
 // İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı).
 const yer = next ? the(next.ad) : "";
