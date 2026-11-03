@@ -150,7 +150,7 @@ const BOS = [
   { id: "gece", govde: [c("Evening on the island."), c("The lighthouse is on."), c("Nobody is watching.", null, true)], soru: c("Who spends the first night here?"), cekim: ["fener", "ucus"], saat: "18:30" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus";
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", soruCekim = null, onsoz = [], onsozCekim = null;
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -218,7 +218,8 @@ if (opt("--hikaye")) {
   const cc = (x) => c(x.ses, x.yazi ?? null, !!x.vurus);
   tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
-  imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim;
+  imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; soruCekim = h.soruCekim ?? null;
+  onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
 }
 if (!tur || !govde.length) {
   tur = "bos";
@@ -242,17 +243,21 @@ if (vapurSaati !== saat) console.log(`ferry not docked at ${saat}: pier shots at
 
 // İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı).
 const yer = next ? the(next.ad) : "";
-const imza = N === 0
+// "onsoz" (isteğe bağlı, 3 Kasım): imzadan önce vurucu açılış (izleyici ilk 1–2 sn'de kaydırıyor), ör. "A doctor. No hospital."
+// "onsozCekim" verilirse kendi çekimlerinde (kart yok), yoksa ilk çekimde. "soruCekim": soru karesinin çekimi.
+const imza = [...onsoz, ...(N === 0
   ? [c("Nobody lives on this island."), c(`We need ${say(need)} ${kisi(need)} for ${yer}.`, `We need ${fmt(need)} ${kisi(need)}\nfor ${yer}.`)]
   : [c(N === 1 ? "One person lives on this island." : `${say(N)} people live on this island.`, `${fmt(N)} ${kisi(N)} ${N === 1 ? "lives" : "live"} on this island.`),
-     ...(imza2 ? [imza2] : next ? [c(`We need ${say(need)} more for ${yer}.`, `We need ${fmt(need)} more\nfor ${yer}.`)] : [])];
+     ...(imza2 ? [imza2] : next ? [c(`We need ${say(need)} more for ${yer}.`, `We need ${fmt(need)} more\nfor ${yer}.`)] : [])])];
+const onGrup = onsoz.length && onsozCekim ? onsoz.length : 0;
 const kapanis = [soru, c("Follow, and you move to the island."), c("Pick your job."), c("Comment: job, fisherman.", "Comment:\njob: fisherman")];
 const cumleler = [...imza, ...govde, ...kapanis];
 const gruplar = [
-  { cekim: ilkCekim, arayuz: true, ilk: 0, son: imza.length - 1 },
+  ...(onGrup ? splitGovde(onGrup, onsozCekim).map(([a, b, ck]) => ({ cekim: ck, ilk: a, son: b })) : []),
+  { cekim: ilkCekim, arayuz: true, ilk: onGrup, son: imza.length - 1 },
   ...splitGovde(govde.length, cekim).map(([a, b, ck]) => ({ cekim: ck, ilk: imza.length + a, son: imza.length + b })),
   // Kapanış üç çekim: soru (konunun son açısı), "takip eden adaya taşınıyor" (iskele), istek kalıbı (yazılı son kare).
-  { cekim: typeof cekim.at(-1) === "object" ? "meydan" : cekim.at(-1), varyantEk: 1, ilk: imza.length + govde.length, son: imza.length + govde.length },
+  { cekim: soruCekim ?? (typeof cekim.at(-1) === "object" ? "meydan" : cekim.at(-1)), ilk: imza.length + govde.length, son: imza.length + govde.length },
   { cekim: "iskele", ilk: imza.length + govde.length + 1, son: imza.length + govde.length + 1 },
   { cekim: "kapanis", ilk: imza.length + govde.length + 2, son: cumleler.length - 1 },
 ];
@@ -348,7 +353,8 @@ function canlandir(shot, v) {
 
 /** Çekim kütüphanesi: gerçek adanın sabit ve dinamik açıları (koordinatlar: senaryolar/acilis.mjs notları). */
 function CEKIM(ad, v, sure, arayuz) {
-  const a = `saat=${typeof ad === "string" && ad.startsWith("iskele") ? vapurSaati : saat}&hiz=4`;
+  // Bilgi kartlı (arayuz) çekim kartta saati gösterir: gerçek saatte kalır (iskele bile olsa).
+  const a = `saat=${!arayuz && typeof ad === "string" && ad.startsWith("iskele") ? vapurSaati : saat}&hiz=4`;
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
   if (typeof ad === "object") return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
