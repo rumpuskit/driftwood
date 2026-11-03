@@ -167,7 +167,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
       globalThis.__yonetmen = () => {
         const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
         const a = yorunge.a0 + (yorunge.a1 - yorunge.a0) * u;
-        A.camera.position.set(x + Math.sin(a) * yorunge.r, gy + yorunge.h, z + Math.cos(a) * yorunge.r);
+        const m = 1 + ((yorunge.r1 ?? yorunge.r) / yorunge.r - 1) * u; // r1: bitiş uzaklığı (itme/çekme)
+        A.camera.position.set(x + Math.sin(a) * yorunge.r * m, gy + yorunge.h * m, z + Math.cos(a) * yorunge.r * m);
         A.controls.target.set(x, gy + (yorunge.bak ?? 2), z);
         A.camera.lookAt(A.controls.target);
       };

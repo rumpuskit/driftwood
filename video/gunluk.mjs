@@ -22,6 +22,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
+import { ferryOut, nextArrival } from "../web/src/world/ferry.js";
 import { seslendir } from "./seslendir.mjs";
 import { yukle } from "./tiktok.mjs";
 
@@ -232,6 +233,12 @@ if (!tur || !govde.length) {
 const istenenSaat = saat;
 saat = opt("--saat") ?? new Intl.DateTimeFormat("en-GB", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
 if (!opt("--saat") && istenenSaat !== saat) console.log(`ada saati ${saat} (ET, şimdi); "${istenenSaat}" kullanılmadı`);
+// Feribot iskele çekiminde iskelede olsun (kullanıcı, 3 Kasım: "vapur yokken vapur çekilmeye çalışılıyor"): ada saatinde
+// feribot açıktaysa iskele çekimleri bir sonraki yanaşmanın 1 dk sonrasına (en çok ~17 dk ileri) alınır; diğerleri şimdi.
+const dakika = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+const saatYaz = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const vapurSaati = ferryOut(dakika(saat)) === 0 && ferryOut(dakika(saat) + 1) === 0 ? saat : saatYaz(nextArrival(dakika(saat)) + 1);
+if (vapurSaati !== saat) console.log(`ferry not docked at ${saat}: pier shots at ${vapurSaati}`);
 
 // İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı).
 const yer = next ? the(next.ad) : "";
@@ -289,23 +296,59 @@ if (!args.includes("--uret")) {
 const ses = await seslendir(S0);
 const kay = (k) => Object.entries(aralar).reduce((a, [j, d]) => a + (Number(j) <= k ? d : 0), 0);
 const bas = (k) => ses.cumleler[k].bas + kay(k), son = (k) => ses.cumleler[k].son + kay(k);
-const X = 0.35, bitis = son(cumleler.length - 1) + 1.4;
-// Çekim sınırları: grubun ilk cümlesinden 0,15 sn önce; 4 sn'den uzun gruplar ikiye bölünür (ikinci açı).
+// Kurgu (3 Kasım 2026, kullanıcı: "art arda aynı sahne, heyecan/vuruculuk yok"): geçiş kısa (neredeyse kesme),
+// her çekim en çok PARCA sn (uzun grup bölünür), aynı yerin her kullanımı başka açı (yer başına sayaç, bkz. canlandir),
+// kamera her çekimde belirgin hareket eder (itme/çekme + yay). Sakin izleme en çok 4,2 sn, kalanı meydan.
+const X = 0.12, bitis = son(cumleler.length - 1) + 1.2, PARCA = 2.6;
 const kesitler = [];
 gruplar.forEach((g, gi) => {
   const t0 = gi === 0 ? 0 : bas(g.ilk) - 0.15;
   const t1 = gi === gruplar.length - 1 ? bitis : bas(gruplar[gi + 1].ilk) - 0.15;
-  const parca = g.cekim === "kapanis" || typeof g.cekim === "object" ? 1 : Math.max(1, Math.ceil((t1 - t0) / 4.2));
-  for (let k = 0; k < parca; k++) kesitler.push({ ...g, varyant: k + (g.varyantEk ?? 0), t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
+  const sakin = typeof g.cekim === "object";
+  const parca = g.cekim === "kapanis" ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA)));
+  for (let k = 0; k < parca; k++) kesitler.push({ ...g, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
 });
+const kullanim = {};
 const cekimler = kesitler.map((k, i) => {
   const sure = +(k.t1 - k.t0 + (i < kesitler.length - 1 ? X : 0)).toFixed(3);
-  return { sure, ...CEKIM(k.cekim, k.varyant, sure, k.arayuz) };
+  const anahtar = typeof k.cekim === "object" ? "sakin:" + k.cekim.sakin : k.cekim;
+  const v = (kullanim[anahtar] = (kullanim[anahtar] ?? -1) + 1);
+  const shot = CEKIM(k.cekim, v, sure, k.arayuz);
+  return { sure, ...(k.cekim === "kapanis" ? shot : canlandir(shot, v)) };
 });
+// Art arda iki çekim aynı kalmasın (aynı adres + yörünge): olursa ikincisi döndürülür (güvenlik ağı).
+for (let i = 1; i < cekimler.length; i++) {
+  const ayni = (a, b) => a.adres === b.adres && JSON.stringify(a.kamera ?? a.yorunge ?? null) === JSON.stringify(b.kamera ?? b.yorunge ?? null);
+  if (ayni(cekimler[i - 1], cekimler[i]) && !cekimler[i].serbest) canlandir(cekimler[i], 3);
+}
+
+/** Aynı yerin v. kullanımı başka kadraj: DUZEN[v] = [açı (rad, hedef çevresinde), uzaklık çarpanı] (geniş → yakın →
+ *  daha geniş …; art arda aynı yer bile belirgin farklı görünür). Çekim içinde de hareket: çift v'de sona doğru içeri
+ *  itilir, tekte dışarı çekilir. Yörüngede yay en az 0,5 rad, r1 bitiş uzaklığı (kaydet.mjs uygular). */
+function canlandir(shot, v) {
+  const DUZEN = [[0, 1], [0.6, 0.55], [-0.6, 1.45], [1.1, 0.75], [-1.1, 1.25], [1.6, 0.6], [-1.6, 1.1]];
+  const [aci, olc] = DUZEN[v % DUZEN.length], m = v % 2 ? 1.12 : 0.82;
+  if (shot.kamera) {
+    const [, kx0, ky0, kz0, bx0, by0, bz0] = shot.kamera[0];
+    const yakin = Math.hypot(kx0 - bx0, ky0 - by0, kz0 - bz0) < 25; // sokak düzeyi: binaya girmesin
+    const th = aci * (yakin ? 0.6 : 1), o = yakin ? Math.min(1.2, Math.max(0.8, olc)) : olc;
+    const c = Math.cos(th), s = Math.sin(th), n = shot.kamera.length;
+    shot.kamera = shot.kamera.map(([t, kx, ky, kz, bx, by, bz], i) => {
+      const k = o * (i === n - 1 ? m : 1), dx = kx - bx, dz = kz - bz;
+      return [t, bx + (dx * c - dz * s) * k, by + (ky - by) * k, bz + (dx * s + dz * c) * k, bx, by, bz];
+    });
+  } else if (shot.yorunge && shot.yorunge.hedef !== "zeplin-yer") {
+    const y = shot.yorunge, yay = Math.max(Math.abs(y.a1 - y.a0), 0.5) * (Math.sign(y.a1 - y.a0) || 1);
+    const o = y.r < 50 ? Math.max(0.85, olc) : olc; // yakın yörünge daha da yaklaşmaz (çardağa, direğe, bacaya girdi, 3 Kasım)
+    y.a0 += aci; y.a1 = y.a0 + yay; y.r = +(y.r * o).toFixed(2); y.h = +(y.h * o).toFixed(2);
+    if (y.hedef !== "zeplin") y.r1 = +(y.r * m).toFixed(2);
+  }
+  return shot;
+}
 
 /** Çekim kütüphanesi: gerçek adanın sabit ve dinamik açıları (koordinatlar: senaryolar/acilis.mjs notları). */
 function CEKIM(ad, v, sure, arayuz) {
-  const a = `saat=${saat}&hiz=4`;
+  const a = `saat=${typeof ad === "string" && ad.startsWith("iskele") ? vapurSaati : saat}&hiz=4`;
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
   if (typeof ad === "object") return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
