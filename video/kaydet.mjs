@@ -128,8 +128,63 @@ for (const [ci, shot] of S.cekimler.entries()) {
   if (shot.hazirlik) await page.evaluate(shot.hazirlik);
   // Isınma: benzetim birkaç saniye ilerlesin (yürüyüşler, araçlar yerleşsin).
   for (let k = 0; k < (shot.isinma ?? 20); k++) await page.evaluate(() => window.__step(1000 / 30));
-  await page.evaluate(({ kamera, takip, yorunge, sure }) => {
+  await page.evaluate(({ kamera, takip, yorunge, sure, sakinYorunge }) => {
     const A = globalThis.__ada;
+    if (!kamera && !takip && !yorunge && sakinYorunge) {
+      // Sakin çekimi (bul=@ad, 6 Kasım): site sakini bulup izler; sakin dışarıdaysa kamera onun çevresinde yavaşça
+      // döner ve biraz yaklaşır (bankta oturan sakinde görüntü donuk kalıyordu, sakin kadrajın kenarındaydı). Evde/
+      // işteyse (iç mekân) kamerayı site yönetir.
+      const P = A.people, ease = (u) => u * u * (3 - 2 * u), st = {};
+      globalThis.__isaretsiz = true; // seçim iğnesi ad etiketinin önüne binmesin
+      globalThis.__yonetmen = (dt) => {
+        const i = A.follower?.target?.i;
+        const u0 = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
+        const tasitta = i != null && !P.poses[i].indoor && (!P.visible[i] || P.poses[i].inVehicle);
+        if (i != null && (P.poses[i].indoor || tasitta)) {
+          // İç mekân (evin/iş yerinin içi açık, kamerayı site koyar): o kadraj hedef çevresinde hafifçe döner ve
+          // yaklaşır (6 Kasım: avukatın ofisi 1,2 sn kıpırdamadan duruyordu).
+          // Taban: girişteki site kadrajı (hedefe göre kamera farkı); hedef, sakinin odak noktası kaydıkça (vapur gider)
+          // onunla birlikte kayar.
+          const c = A.camera.position, t = A.controls.target, [fx, fz] = P.focusPoint?.(i) ?? [t.x, t.z];
+          if (!st.ic || st.ic.tasitta !== tasitta) {
+            st.ic = { ox: c.x - t.x, oy: c.y - t.y, oz: c.z - t.z, tx: t.x, ty: t.y, tz: t.z, fx0: fx, fz0: fz, fx, fz, tasitta };
+            if (tasitta) {
+              globalThis.__sakinYok = true;
+              // Vapurda/araçta (görünmüyor): site kamerayı vapurun çatısına yapıştırıyordu (6 Kasım, Driftwood).
+              // Taşıtın tamamı görünsün: en az 36 m uzak, 14 m yüksek.
+              const d = Math.hypot(st.ic.ox, st.ic.oz) || 1, D = Math.max(36, d);
+              Object.assign(st.ic, { ox: (st.ic.ox / d) * D, oz: (st.ic.oz / d) * D, oy: Math.max(14, st.ic.oy) });
+            }
+          }
+          const b = st.ic, kf = 1 - Math.exp(-dt * 4);
+          b.fx += (fx - b.fx) * kf; b.fz += (fz - b.fz) * kf;
+          const tx = b.tx + b.fx - b.fx0, tz = b.tz + b.fz - b.fz0;
+          // Hafif dönüş; yaklaşma yok: yakında başka sakinlerin ad etiketleri açılıp seçilinin üstüne biniyor.
+          const aa = (sakinYorunge.yon ?? 1) * 0.26 * u0;
+          A.camera.position.set(tx + b.ox * Math.cos(aa) + b.oz * Math.sin(aa), b.ty + b.oy, tz - b.ox * Math.sin(aa) + b.oz * Math.cos(aa));
+          A.controls.target.set(tx, b.ty, tz);
+          A.camera.lookAt(A.controls.target);
+          st.a = null;
+          return;
+        }
+        st.ic = null;
+        if (i == null) { st.a = null; return; }
+        const x = P.positions[i * 3], y = P.positions[i * 3 + 1], z = P.positions[i * 3 + 2];
+        if (st.a == null) {
+          const dx = A.camera.position.x - x, dz = A.camera.position.z - z;
+          Object.assign(st, { a: Math.atan2(dx, dz), D: Math.min(11, Math.max(7, Math.hypot(dx, dz))),
+            H: Math.min(4.5, Math.max(2.6, A.camera.position.y - y)), x, y, z, yon: sakinYorunge.yon ?? 1 });
+        }
+        const kp = 1 - Math.exp(-dt * 6);
+        st.x += (x - st.x) * kp; st.y += (y - st.y) * kp; st.z += (z - st.z) * kp;
+        const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
+        const a = st.a + st.yon * 0.55 * u, m = 1 - 0.18 * u;
+        A.camera.position.set(st.x + Math.sin(a) * st.D * m, st.y + st.H * m, st.z + Math.cos(a) * st.D * m);
+        A.controls.target.set(st.x, st.y + 1.1, st.z);
+        A.camera.lookAt(A.controls.target);
+      };
+      return;
+    }
     if (!kamera && !takip && !yorunge) {
       globalThis.__yonetmen = null; // kamerayı site yönetir (bul=, uçuş, takip)
       return;
@@ -222,7 +277,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
       A.camera.position.set(L(1), L(2), L(3));
       A.camera.lookAt(A.controls.target);
     };
-  }, { kamera: shot.kamera, takip: shot.takip, yorunge: shot.yorunge, sure: shot.sure });
+  }, { kamera: shot.kamera, takip: shot.takip, yorunge: shot.yorunge, sure: shot.sure, sakinYorunge: shot.sakinYorunge });
 
   const frames = Math.round(shot.sure * fps);
   const enc = ffmpeg(["-f", "image2pipe", "-framerate", String(fps), "-c:v", "mjpeg", "-i", "-",
@@ -258,6 +313,9 @@ for (const [ci, shot] of S.cekimler.entries()) {
   enc.p.stdin.end();
   await enc.done;
   console.log(`\r  çekim ${ci + 1}: ${frames} kare → ${path}`);
+  // Sakin o an adada görünmüyorsa (vapurda/anakarada) bunu söyle: kare sakini göstermez, çekim değiştirilmeli.
+  if (shot.sakinYorunge && (await page.evaluate(() => globalThis.__sakinYok === true)))
+    console.log(`  UYARI çekim ${ci + 1}: sakin şu an adada görünmüyor (vapurda/anakarada); karede yalnız iskele/vapur var. Bu çekimi başka yerle değiştir.`);
   await page.close();
 }
 await browser.close();

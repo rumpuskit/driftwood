@@ -380,7 +380,9 @@ function CEKIM(ad, v, sure, arayuz) {
     return { adres: a, yorunge: { hedef, r, h, a0, a1, bak }, ayarli: true, ...(arayuz ? { arayuz: true } : {}) };
   }
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
-  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
+  // Dışarıdaki sakinin çevresinde kamera döner (sakinYorunge). Üstte ayrıca "@ad" yazısı YOK (6 Kasım, Mercanada):
+  // sitenin ad etiketi sakinin başında zaten görünüyor, ikisi üst üste binip ad iki kez okunuyordu.
+  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, sakinYorunge: { yon: v % 2 ? -1 : 1 } };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
   // Hepsi yörünge çekimi (hedef sitede hesaplanır; ada değişse de kadraj doğru kalır). a: 0 = kamera denizden (+z) bakar.
   const L = {

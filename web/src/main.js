@@ -768,6 +768,8 @@ function tick() {
     const y = people.visible[sel] ? people.positions[sel * 3 + 1] : world.groundY(x, z);
     marker.position.set(x, y, z);
     pin.position.y = 2.6 + Math.sin(real * 3) * 0.15;
+    // Video kaydında (__isaretsiz) iğne yok: yakın çekimde ad etiketinin önüne biniyordu (6 Kasım); halka kalır.
+    pin.visible = !globalThis.__isaretsiz;
     ring.scale.setScalar(1 + (real % 1.2) * 0.4);
     ring.visible = true;
   } else {
@@ -780,6 +782,7 @@ function tick() {
       const tall = { bus: 1.7, itfaiye: 1.5, cop: 1.5, ambulans: 1.0 }[vr.kind] ?? 0;
       marker.position.set(at.x, world.surfaceY(at.x, at.z) + 0.06 + tall, at.z);
       pin.position.y = 2.6 + Math.sin(real * 3) * 0.15;
+      pin.visible = true;
       ring.visible = false;
     }
   }
