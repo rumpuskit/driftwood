@@ -333,6 +333,9 @@ export class World {
     for (const b of all) if (b._k != null && !this.has(b._k)) keys.add(b._k);
     for (const st of cat().gelisim) for (const k of st.acar) if (!this.has(k)) keys.add(k);
     for (const k of keys) next = Math.min(next, stageOf(k));
+    // Açılmamış binaların parselleri (sıradaki şantiye dahil): ağaç dikilmez (7 Kasım: Diner şantiyesinin içinde
+    // ağaç duruyordu, hayalet bina ağaçla iç içe görünüyordu; bina açılınca ağaç da binanın içinde kalırdı).
+    this.lots = all.filter((b) => b._k != null && !this.has(b._k));
     this.sites = [];
     this.nextStage = null;
     if (next < Infinity) {

@@ -146,8 +146,19 @@ function treeDensity(world, x, z, h, zone) {
   return 0.015 + Math.max(0, fbm(x / 140, z / 140, 31)) * 0.65;
 }
 
+/** (x, z) açılmamış bir binanın parselinde mi: bina tabanı + şantiye çiti (1,5 m) + taç payı (3 m). */
+function inLot(lots, x, z) {
+  for (const b of lots) {
+    const dx = x - b.x, dz = z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot);
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    if (Math.abs(lx) < b.w / 2 + 4.5 && Math.abs(lz) < b.d / 2 + 4.5) return true;
+  }
+  return false;
+}
+
 export function buildTrees(world) {
   const spots = [];
+  const lots = world.lots ?? [];
   const { x0, x1, z0, z1 } = world.bounds;
   const step = 7;
   for (let gx = Math.floor((x0 - 150) / step); gx <= (x1 + 150) / step; gx++) {
@@ -155,7 +166,7 @@ export function buildTrees(world) {
       const roll = hash2(gx, gz, 43);
       if (roll > 0.5) continue; // yoğunluk hiçbir yerde 0,5'i geçmez: pahalı hesaplardan önce ele
       const x = (gx + hash2(gx, gz, 41)) * step, z = (gz + hash2(gx, gz, 42)) * step;
-      if (world.isBlocked(x, z)) continue;
+      if (world.isBlocked(x, z) || inLot(lots, x, z)) continue;
       const h = world.height(x, z);
       if (h < 1.0) continue;
       const zone = world.zoneAt(x, z);
@@ -164,7 +175,7 @@ export function buildTrees(world) {
     }
   }
   // Green'in akçaağaçları (sokak ağaçları).
-  for (const f of world.features) if (f.type === "agac") spots.push({ x: f.x, z: f.z, y: world.groundY(f.x, f.z) - 0.05, kind: f.tur ?? "akcaagac", r: 0.6, t: (Math.abs(f.x * 7 + f.z * 3) % 100) / 100 });
+  for (const f of world.features) if (f.type === "agac" && !inLot(lots, f.x, f.z)) spots.push({ x: f.x, z: f.z, y: world.groundY(f.x, f.z) - 0.05, kind: f.tur ?? "akcaagac", r: 0.6, t: (Math.abs(f.x * 7 + f.z * 3) % 100) / 100 });
 
   const group = new THREE.Group();
   const crowns = [];
@@ -182,6 +193,7 @@ export function buildTrees(world) {
       if (!list.length) continue;
       const trunk = new THREE.InstancedMesh(kind.trunk(v), bark, list.length);
       const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1 });
+      crownMat.onBeforeCompile = yakinSil;
       crowns.push(crownMat);
       const crown = new THREE.InstancedMesh(kind.crown(v), crownMat, list.length);
       list.forEach((t, i) => {
@@ -233,6 +245,22 @@ export function driftClouds(clouds, dt) {
     c.position.x += c.userData.speed * dt;
     if (c.position.x > b) c.position.x = a;
   }
+}
+
+/**
+ * Kameraya çok yakın ağaç tepesi çizilmez (5 m içi silinir, 5–8 m arası noktalı geçişle incelir). 7 Kasım: kamera bir
+ * akçaağacın tepesinin içinden ya da hemen yanından geçince (yakında tepeler zaten yarı saydam) kadrajın tamamını sarı,
+ * yarı saydam dev bir perde kaplıyordu (video, 7 Shell Street; kod notunda "sokak lambası gölgesi" sanıldı).
+ */
+function yakinSil(sh) {
+  sh.vertexShader = sh.vertexShader
+    .replace("#include <common>", "#include <common>\nvarying float vKamUzak;")
+    .replace("#include <project_vertex>", "#include <project_vertex>\nvKamUzak = length(mvPosition.xyz);");
+  sh.fragmentShader = sh.fragmentShader
+    .replace("#include <common>", "#include <common>\nvarying float vKamUzak;")
+    .replace("void main() {", `void main() {
+  float yakin = clamp((vKamUzak - 5.0) / 3.0, 0.0, 1.0);
+  if (yakin < 1.0 && fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) > yakin) discard;`);
 }
 
 /** Yakına inildiğinde ağaç tepeleri saydamlaşır; altındaki insanlar görünsün. */
