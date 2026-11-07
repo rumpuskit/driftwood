@@ -371,6 +371,10 @@ const cekimler = kesitler.map((k, i) => {
   const v = (kullanim[anahtar] = (kullanim[anahtar] ?? -1) + 1);
   // "Taşın" karesi iskelenin geniş açısı (v çift): gövdede iskele kullanıldıysa kod ona sıradaki açıyı veriyordu.
   if (k.tasin && k.cekim === "iskele") return { sure, ...canlandir(CEKIM({ yer: "iskele", varyant: 0 }, 0, sure, false), 0) };
+  // Bölünen ayarlı çekimde parça başına kadraj (7 Kasım kod notu: 2. parçanın sabit sapması temiz kadrajı bozuyordu):
+  // {"yer"|"yorunge": .., "parcalar": [{aci, uzak, yuk} | {yorunge}, ...]} → k. parça (k ≥ 1) parcalar[k − 1] ile.
+  const pk = k.parca > 0 && k.cekim && typeof k.cekim === "object" ? k.cekim.parcalar?.[k.parca - 1] : null;
+  if (pk) return { sure, ...canlandir(CEKIM({ ...k.cekim, ...pk, parcalar: undefined }, v, sure, k.arayuz), 0) };
   const shot = CEKIM(k.cekim, v, sure, k.arayuz);
   return { sure, ...(k.cekim === "kapanis" ? shot : canlandir(shot, shot.ayarli ? k.parca : v)) };
 });

@@ -119,6 +119,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
     const sub = document.createElement("div");
     sub.className = "altyazi";
     box.append(sub);
+    // Altyazı bandı (top 1215 px, en çok iki satır): sitenin ad etiketleri bu banda konmaz (nametags.js).
+    globalThis.__altyaziBandi = [1195 / 1920, 1400 / 1920];
     document.body.append(box);
   }, { yazilar: shot.yazilar, arayuz: shot.arayuz, kart: shot.kart, olcek });
   // Dokular ve ilk kareler otursun, sonra sanal saate geç.
@@ -128,6 +130,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
   if (shot.hazirlik) await page.evaluate(shot.hazirlik);
   // Isınma: benzetim birkaç saniye ilerlesin (yürüyüşler, araçlar yerleşsin).
   for (let k = 0; k < (shot.isinma ?? 20); k++) await page.evaluate(() => window.__step(1000 / 30));
+  const santiyeGoster = shot.yorunge?.hedef === "siradaki" || /[?&]taslak=/.test(shot.adres ?? "");
   await page.evaluate(({ kamera, takip, yorunge, sure, sakinYorunge }) => {
     const A = globalThis.__ada;
     if (!kamera && !takip && !yorunge && sakinYorunge) {
@@ -139,7 +142,13 @@ for (const [ci, shot] of S.cekimler.entries()) {
       globalThis.__yonetmen = (dt) => {
         const i = A.follower?.target?.i;
         const u0 = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
-        const tasitta = i != null && !P.poses[i].indoor && (!P.visible[i] || P.poses[i].inVehicle);
+        // Görünmeyen sakin: vapurda/araçta ya da iç mekânı açılmayan bir binanın içinde (7 Kasım: iş yerinde oturan
+        // sakinde yörünge kamerası binanın duvarına girdi, karede yalnız halka ve düz yüzey vardı).
+        const binada = (px, pz) => A.world.buildings.some((b) => {
+          const c = Math.cos(b.rot), sn = Math.sin(b.rot), lx = (px - b.x) * c - (pz - b.z) * sn, lz = (px - b.x) * sn + (pz - b.z) * c;
+          return Math.abs(lx) < b.w / 2 - 0.2 && Math.abs(lz) < b.d / 2 - 0.2;
+        });
+        const tasitta = i != null && !P.poses[i].indoor && (!P.visible[i] || P.poses[i].inVehicle || binada(P.positions[i * 3], P.positions[i * 3 + 2]));
         if (i != null && (P.poses[i].indoor || tasitta)) {
           // İç mekân (evin/iş yerinin içi açık, kamerayı site koyar): o kadraj hedef çevresinde hafifçe döner ve
           // yaklaşır (6 Kasım: avukatın ofisi 1,2 sn kıpırdamadan duruyordu).
@@ -174,12 +183,40 @@ for (const [ci, shot] of S.cekimler.entries()) {
           const dx = A.camera.position.x - x, dz = A.camera.position.z - z;
           Object.assign(st, { a: Math.atan2(dx, dz), D: Math.min(11, Math.max(7, Math.hypot(dx, dz))),
             H: Math.min(4.5, Math.max(2.6, A.camera.position.y - y)), x, y, z, yon: sakinYorunge.yon ?? 1 });
+          // Engelsiz açı ara (tente, şemsiye, ağaç, duvar): önce sitenin açısı, sonra çevresi; alçakta (tentenin altı) da
+          // dene. Bulunamazsa her karede kamera engelin önüne yaklaşır (aşağıda).
+          if (A.engel) {
+            const ac = (da, H) => { const aa = st.a + da; return [x + Math.sin(aa) * st.D, y + H, z + Math.cos(aa) * st.D]; };
+            const temiz = (da, H) => { const c = ac(da, H), L = Math.hypot(c[0] - x, c[1] - y - 1.1, c[2] - z); return A.engel(x, y + 1.1, z, ...c) >= L; };
+            ara: for (const H of [st.H, 1.7]) for (const da of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2.1, -2.1, 2.7, -2.7, Math.PI]) {
+              if (temiz(da, H) && temiz(da + st.yon * 0.55, H)) { st.a += da; st.H = H; break ara; }
+            }
+          }
         }
-        const kp = 1 - Math.exp(-dt * 6);
+        // Hareketli sakin (bisiklet, koşu; 7 Kasım: bisikletlide kamera geride kalıp kişiyi kesiyor, direk giriyordu):
+        // hız > 2 m/sn ise kamera gidiş yönünün arkasından-yanından, daha uzak ve yüksekten, sıkı izler.
+        const vx = dt > 0 ? (x - (st.px ?? x)) / dt : 0, vz = dt > 0 ? (z - (st.pz ?? z)) / dt : 0;
+        st.px = x; st.pz = z;
+        const kv = 1 - Math.exp(-dt * 3);
+        st.vx = (st.vx ?? 0) + (vx - (st.vx ?? 0)) * kv; st.vz = (st.vz ?? 0) + (vz - (st.vz ?? 0)) * kv;
+        const hiz = Math.hypot(st.vx, st.vz), hareketli = hiz > 2;
+        const kp = 1 - Math.exp(-dt * (hareketli ? 14 : 6));
         st.x += (x - st.x) * kp; st.y += (y - st.y) * kp; st.z += (z - st.z) * kp;
         const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
-        const a = st.a + st.yon * 0.55 * u, m = 1 - 0.18 * u;
-        A.camera.position.set(st.x + Math.sin(a) * st.D * m, st.y + st.H * m, st.z + Math.cos(a) * st.D * m);
+        if (hareketli) {
+          const hedefA = Math.atan2(-st.vx, -st.vz) + st.yon * 0.7;
+          let fa = hedefA - st.a; fa = Math.atan2(Math.sin(fa), Math.cos(fa));
+          st.a += fa * (1 - Math.exp(-dt * 2.5));
+          st.D += (12 - st.D) * kv; st.H += (5 - st.H) * kv;
+        }
+        const a = st.a + (hareketli ? 0 : st.yon * 0.55 * u), m = 1 - 0.18 * u;
+        // Kamera ile sakin arasında opak engel (tente, ağaç gövdesi, direk, duvar) varsa kamera engelin önüne gelir;
+        // geri çekilmesi yavaş (titremesin).
+        const hx = st.x, hy = st.y + 1.1, hz = st.z, cx = st.x + Math.sin(a) * st.D * m, cy = st.y + st.H * m, cz = st.z + Math.cos(a) * st.D * m;
+        const L = Math.hypot(cx - hx, cy - hy, cz - hz), e = A.engel ? A.engel(hx, hy, hz, cx, cy, cz) : Infinity;
+        const hedefK = e < L ? Math.max(2.5, e - 0.6) / L : 1;
+        st.k = st.k == null ? hedefK : hedefK < st.k ? hedefK : st.k + (hedefK - st.k) * (1 - Math.exp(-dt * 1.5));
+        A.camera.position.set(hx + (cx - hx) * st.k, hy + (cy - hy) * st.k, hz + (cz - hz) * st.k);
         A.controls.target.set(st.x, st.y + 1.1, st.z);
         A.camera.lookAt(A.controls.target);
       };
@@ -278,6 +315,17 @@ for (const [ci, shot] of S.cekimler.entries()) {
       A.camera.lookAt(A.controls.target);
     };
   }, { kamera: shot.kamera, takip: shot.takip, yorunge: shot.yorunge, sure: shot.sure, sakinYorunge: shot.sakinYorunge });
+  // Sıradaki yerin şantiye kutusu (yarı saydam taslak) yakın çekimlerde kadraja giriyordu (7 Kasım: bayrak kamerası
+  // Lodos Kahvesi kutusunu gösterdi): sıradaki yeri göstermeyen çekimde kamera kutuya 70 m'den yakınsa gizli.
+  if (!santiyeGoster) await page.evaluate(() => {
+    const A = globalThis.__ada, g = A.scene.getObjectByName("santiye"), at = A.world.nextStage?.at;
+    if (!g || !at) return;
+    const d0 = globalThis.__yonetmen;
+    globalThis.__yonetmen = (dt, u) => {
+      d0?.(dt, u);
+      g.visible = Math.hypot(A.camera.position.x - at[0], A.camera.position.z - at[1]) > 70;
+    };
+  });
 
   const frames = Math.round(shot.sure * fps);
   const enc = ffmpeg(["-f", "image2pipe", "-framerate", String(fps), "-c:v", "mjpeg", "-i", "-",
@@ -315,7 +363,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
   console.log(`\r  çekim ${ci + 1}: ${frames} kare → ${path}`);
   // Sakin o an adada görünmüyorsa (vapurda/anakarada) bunu söyle: kare sakini göstermez, çekim değiştirilmeli.
   if (shot.sakinYorunge && (await page.evaluate(() => globalThis.__sakinYok === true)))
-    console.log(`  UYARI çekim ${ci + 1}: sakin şu an adada görünmüyor (vapurda/anakarada); karede yalnız iskele/vapur var. Bu çekimi başka yerle değiştir.`);
+    console.log(`  UYARI çekim ${ci + 1}: sakin şu an adada görünmüyor (vapurda/anakarada ya da iç mekânı açılmayan bir binada); karede sakin yok. Bu çekimi başka yerle değiştir.`);
   await page.close();
 }
 await browser.close();

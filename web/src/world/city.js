@@ -1763,6 +1763,7 @@ function buildFeatures(world) {
  */
 export function buildSites(world) {
   const group = new THREE.Group();
+  group.name = "santiye"; // video kaydı yakın sabit kameralarda gizler (kaydet.mjs)
   const fill = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.2, depthWrite: false });
   const edge = new THREE.LineBasicMaterial({ color: "#e8892a", transparent: true, opacity: 0.85 });
   const posts = [], rails = [];

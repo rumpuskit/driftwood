@@ -82,6 +82,10 @@ export class NameTags {
     const H = innerHeight, W = innerWidth;
     const k1 = (0.022 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))) * H; // etiket yüksekliği (px)
     const placed = [];
+    // Video kaydı (__altyaziBandi = [üst, alt], ekran yüksekliğine oran): altyazı bandına etiket konmaz; izlenen sakinin
+    // etiketi bandın üstüne itilir (7 Kasım: ad etiketi altyazıyla aynı hizada üst üste biniyordu).
+    const bant = globalThis.__altyaziBandi ? [0, globalThis.__altyaziBandi[0] * H, W, globalThis.__altyaziBandi[1] * H] : null;
+    if (bant) placed.push(bant);
     const v = this._v ??= new THREE.Vector3();
     let k = 0;
     for (const [d2, i] of near) {
@@ -96,6 +100,12 @@ export class NameTags {
       const sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
       const ph = Math.max(k1, (0.28 / Math.max(d, 0.1)) * (k1 / 0.022)), pw = ph * aspect;
       const r = [sx - pw / 2 - 8, sy - ph / 2 - 5, sx + pw / 2 + 8, sy + ph / 2 + 5];
+      let yy = y;
+      if (i === selected && bant && r[3] > bant[1] && r[1] < bant[3]) {
+        const kay = r[3] - bant[1]; // piksel: etiketin altı bandın üstüne gelsin
+        yy = y + kay * (h / ph);
+        r[1] -= kay; r[3] -= kay;
+      }
       if (i !== selected && placed.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue;
       placed.push(r);
       const s = this.sprites[k++];
@@ -104,8 +114,10 @@ export class NameTags {
         s.material.needsUpdate = true;
       }
       s.material.opacity = fade;
+      // Seçili/izlenen sakinin etiketi duvarın arkasında kalmaz (7 Kasım: iç mekânda duvar etiketi kesiyordu).
+      s.material.depthTest = i !== selected;
       s.scale.set(h * aspect, h, 1);
-      s.position.set(P[i * 3], y, P[i * 3 + 2]);
+      s.position.set(P[i * 3], yy, P[i * 3 + 2]);
       s.visible = true;
     }
   }

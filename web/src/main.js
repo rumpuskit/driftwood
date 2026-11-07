@@ -389,6 +389,29 @@ follower = new Follower({ camera, controls, world, people, traffic, zeplin });
 const claim = {}; // "Bu benim" (karttan Benim evim'e): ben oluşturulunca doldurulur
 const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, claim, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
+// Video kaydı: hedeften kameraya giden ışında ilk opak engelin uzaklığı (yoksa Infinity). kaydet.mjs sakin çekiminde
+// kamerayı engelin önüne alır (7 Kasım: terastaki sakinde kamera tentenin içine düştü, kare düz mavi kaldı).
+if (globalThis.__ada) {
+  const rc = new THREE.Raycaster(), o = new THREE.Vector3(), d = new THREE.Vector3();
+  const opak = (h) => {
+    const m = h.object.material;
+    return !h.object.isSprite && h.object.visible && m && !(Array.isArray(m) ? m[0] : m).transparent;
+  };
+  // İki yönde: tek yüzlü düzlemler (tente, çatı) yalnız ön yüzden çarpar.
+  const ilk = (ax, ay, az, bx, by, bz, near, kis) => {
+    o.set(ax, ay, az); d.set(bx - ax, by - ay, bz - az);
+    const L = d.length();
+    rc.set(o, d.normalize()); rc.near = near; rc.far = Math.max(near, L - kis); rc.camera = camera; // sprite ışını kamera ister
+    let hit = null;
+    try { hit = rc.intersectObjects(scene.children, true).find(opak); } catch { /* ışın atılamayan nesne: engel yok say */ }
+    return [hit ? hit.distance : Infinity, L];
+  };
+  globalThis.__ada.engel = (ax, ay, az, bx, by, bz) => {
+    const [h1] = ilk(ax, ay, az, bx, by, bz, 0.6, 0);
+    const [h2, L] = ilk(bx, by, bz, ax, ay, az, 0, 0.6);
+    return Math.min(h1, h2 < Infinity ? L - h2 : Infinity);
+  };
+}
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
