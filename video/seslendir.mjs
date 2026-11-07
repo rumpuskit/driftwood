@@ -29,7 +29,12 @@ export async function seslendir(S) {
   const jsonPath = `${out}/ses.json`;
   if (existsSync(jsonPath) && existsSync(`${out}/ses.mp3`)) {
     const eski = JSON.parse(readFileSync(jsonPath, "utf8"));
-    if (eski.anahtar === anahtar) return eski;
+    // Anahtar yalnız sesi kapsar; altyazı (yazi) değişince ses yeniden üretilmez ama altyazı güncel metinden gelir
+    // (7 Kasım: --cekim-dene'de yalnız yazi değişince eski altyazı görünüyordu).
+    if (eski.anahtar === anahtar) {
+      eski.cumleler.forEach((c, k) => { c.yazi = S.seslendirme[k].yazi ?? parts[k]; });
+      return eski;
+    }
   }
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error("ELEVENLABS_API_KEY yok (seslendirme değişti, yeniden üretilmeli)");

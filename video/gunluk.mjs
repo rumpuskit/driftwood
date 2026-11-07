@@ -8,8 +8,10 @@
 // vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], ("saat" artık yok sayılır: ada saati üretim anı),
 // "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
 // "ilk": imza çekimi (varsayılan "ucus"), "onsoz"/"onsozCekim", "soruCekim", "tasinCekim": "Follow, and you move to the
-// island" karesi (varsayılan "iskele")}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
-// Çekim tanımı (cekim/ilk/onsozCekim/soruCekim/tasinCekim öğeleri): "iskele" (kütüphane adı) | {"sakin": "ad"} |
+// island" karesi (varsayılan "iskele"), "acilis": videonun İLK cümlesinin çekimi (varsayılan "bayrak": Town Green'deki
+// direkte dalgalanan ABD bayrağı, kart yok; null = açılış çekimi yok)}. "ilk" bir dizi de olabilir (imza cümleleri
+// sırayla bu çekimlere bölünür, bilgi kartı yalnız ilkinde). İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
+// Çekim tanımı (cekim/ilk/onsozCekim/soruCekim/tasinCekim öğeleri): "iskele" (kütüphane adı) | {"sakin": "ad", "yon"?: 1|-1 (kameranın dönüş yönü; varsayılan sırayla)} |
 //   kadraj ayarı {"yer": "iskele", "aci": rad (hedef çevresinde döndür), "uzak": çarpan, "yuk": yükseklik çarpanı,
 //   "varyant": n (kütüphanedeki n. açı)} | ham yörünge {"yorunge": {"hedef": "iskele"|"meydan"|"fener"|"kilise"|
 //   "ilkev"|"siradaki"|[x, z], "r", "h", "a0", "a1", "bak"}, "vapur": true (iskelede feribot dakikası)}. Ayarlı/ham
@@ -158,7 +160,7 @@ const BOS = [
   { id: "gece", govde: [c("Evening on the island."), c("The lighthouse is on."), c("Nobody is watching.", null, true)], soru: c("Who spends the first night here?"), cekim: ["fener", "ucus"], saat: "18:30" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele";
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele", acilis = "bayrak";
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -228,6 +230,7 @@ if (opt("--hikaye")) {
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
   imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; soruCekim = h.soruCekim ?? null; tasinCekim = h.tasinCekim ?? tasinCekim;
   onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
+  if (h.acilis !== undefined) acilis = h.acilis;
 }
 if (!tur || !govde.length) {
   tur = "bos";
@@ -257,12 +260,19 @@ const imza = [...onsoz, ...(N === 0
   ? [c("Nobody lives on this island."), c(`We need ${say(need)} ${kisi(need)} for ${yer}.`, `We need ${fmt(need)} ${kisi(need)}\nfor ${yer}.`)]
   : [c(N === 1 ? "One person lives on this island." : `${say(N)} people live on this island.`, `${fmt(N)} ${kisi(N)} ${N === 1 ? "lives" : "live"} on this island.`),
      ...(imza2 ? [imza2] : next ? [c(`We need ${say(need)} more for ${yer}.`, `We need ${fmt(need)} more\nfor ${yer}.`)] : [])])];
+// Açılış (7 Kasım, kullanıcı: "bayrakla başlayan videolar daha çok izlendi, varsayılan olsun ama kurgu bayrak etrafında
+// dönmesin"): videonun İLK cümlesi kendi çekiminde, varsayılan "bayrak" (kart yok, bölünmez). Bayrak yalnız burada;
+// önsözün kalan cümleleri onsozCekim'e, imza "ilk"e sırayla dağılır.
+const A = acilis ? 1 : 0;
 const onGrup = onsoz.length && onsozCekim ? onsoz.length : 0;
+const imzaBas = Math.max(onGrup, A);
+const ilkler = Array.isArray(ilkCekim) ? ilkCekim : [ilkCekim];
 const kapanis = [soru, c("Follow, and you move to the island."), c("Pick your job."), c("Comment: job, fisherman.", "Comment:\njob: fisherman")];
 const cumleler = [...imza, ...govde, ...kapanis];
 const gruplar = [
-  ...(onGrup ? splitGovde(onGrup, onsozCekim).map(([a, b, ck]) => ({ cekim: ck, ilk: a, son: b })) : []),
-  { cekim: ilkCekim, arayuz: true, ilk: onGrup, son: imza.length - 1 },
+  ...(A ? [{ cekim: acilis, acilis: true, ilk: 0, son: 0 }] : []),
+  ...(onGrup > A ? splitGovde(onGrup - A, onsozCekim).map(([a, b, ck]) => ({ cekim: ck, ilk: A + a, son: A + b })) : []),
+  ...(imza.length > imzaBas ? splitGovde(imza.length - imzaBas, ilkler).map(([a, b, ck], i) => ({ cekim: ck, ...(i === 0 ? { arayuz: true } : {}), ilk: imzaBas + a, son: imzaBas + b })) : []),
   ...splitGovde(govde.length, cekim).map(([a, b, ck]) => ({ cekim: ck, ilk: imza.length + a, son: imza.length + b })),
   // Kapanış üç çekim: soru (konunun son açısı), "takip eden adaya taşınıyor" (iskele), istek kalıbı (yazılı son kare).
   { cekim: soruCekim ?? (sakinMi(cekim.at(-1)) ? "meydan" : cekim.at(-1)), ilk: imza.length + govde.length, son: imza.length + govde.length },
@@ -323,7 +333,9 @@ gruplar.forEach((g, gi) => {
   const t0 = gi === 0 ? 0 : bas(g.ilk) - 0.15;
   const t1 = gi === gruplar.length - 1 ? bitis : bas(gruplar[gi + 1].ilk) - 0.15;
   const sakin = sakinMi(g.cekim);
-  const parca = g.cekim === "kapanis" ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA)));
+  // Bölme eşiğinde %12 pay: grup 2,6 sn'ye çok yakınken ses yenilenince kendiliğinden ikiye bölünüp AYNI/BENZER
+  // veriyordu (7 Kasım kod notu). Açılış çekimi hiç bölünmez.
+  const parca = g.cekim === "kapanis" || g.acilis ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA) - 0.12));
   for (let k = 0; k < parca; k++) kesitler.push({ ...g, parca: k, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
 });
 const kullanim = {};
@@ -382,10 +394,13 @@ function CEKIM(ad, v, sure, arayuz) {
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
   // Dışarıdaki sakinin çevresinde kamera döner (sakinYorunge). Üstte ayrıca "@ad" yazısı YOK (6 Kasım, Mercanada):
   // sitenin ad etiketi sakinin başında zaten görünüyor, ikisi üst üste binip ad iki kez okunuyordu.
-  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, sakinYorunge: { yon: v % 2 ? -1 : 1 } };
+  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, sakinYorunge: { yon: ad.yon ?? (v % 2 ? -1 : 1) } };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
   // Hepsi yörünge çekimi (hedef sitede hesaplanır; ada değişse de kadraj doğru kalır). a: 0 = kamera denizden (+z) bakar.
   const L = {
+    // Açılış: Town Green'in güney ucundaki direk (0, 39; 14 m, bayrak doğuya uzanır, geniş yüzü güneye) alttan,
+    // gökyüzü önünde; kamera güneybatıdan yaklaşır. İkinci kullanım (nadir) güneydoğudan.
+    bayrak: () => (v % 2 ? yor([1.5, 39], 10.5, 2.4, 0.55, 0.4, 13) : yor([1.5, 39], 10.5, 2.2, -0.6, -0.5, 13.2)),
     ucus: () => yor([60, -80], 520, 230, -0.45 + 0.9 * (v % 2), -0.25 + 0.9 * (v % 2), 0),
     // Feribot dakika 0-7 (mod 20) arasında iskelede: 16:40, 08:20 uygun.
     iskele: () => (v % 2 ? yor("iskele", 30, 6, 2.5, 2.75, 2) : yor("iskele", 75, 28, 0.5, 0.8, 2)),
