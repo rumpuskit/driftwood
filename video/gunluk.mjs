@@ -15,7 +15,9 @@
 //   kadraj ayarı {"yer": "iskele", "aci": rad (hedef çevresinde döndür), "uzak": çarpan, "yuk": yükseklik çarpanı,
 //   "varyant": n (kütüphanedeki n. açı)} | ham yörünge {"yorunge": {"hedef": "iskele"|"meydan"|"fener"|"kilise"|
 //   "ilkev"|"siradaki"|[x, z], "r", "h", "a0", "a1", "bak"}, "vapur": true (iskelede feribot dakikası)}. Ayarlı/ham
-//   çekim otomatik döndürülmez (ilk parça verilen kadraj, sonraki parçalar ondan yarım ölçüde sapar).
+//   çekim otomatik döndürülmez (ilk parça verilen kadraj, sonraki parçalar ondan yarım ölçüde sapar). | kilitli yerin
+//   taslağı {"taslak": "balikci_koyu:0", "r"?, "h"?, "a0"?, "a1"?, "bak"?} (sıradaki OLMAYAN açılmamış yerin binaları yarı
+//   saydam taslak + çitle; metin "henüz yok / N. sakinde gelecek" demeli); ham yörüngeye de "taslak" eklenebilir.
 // --cekim-dene N: önizleme ölçeğinde yalnız N. çekimi çizer (sesi önbellekten), cekimN-kareler.jpg (baş/orta/son) yazar;
 //   kadrajı tek tek düzeltmek için. Durum yazılmaz.
 //
@@ -122,7 +124,8 @@ const level = Math.max(data.zirve ?? 0, residents.reduce((m, r) => Math.max(m, r
 sim.setTown(level);
 const stages = catalog.gelisim;
 const next = stages.find((s) => s.nufus > level);
-const need = next ? Math.max(1, next.nufus - N) : 0;
+// Kaç kişi daha: eşik gelişim düzeyine göre (sitedeki kartla aynı, ui.js): ayrılanların sırası yeniden verilmez.
+const need = next ? Math.max(1, next.nufus - level) : 0;
 
 // --- hikâye seçimi ---
 const named = (r) => r.handle != null; // adını gizleyenler adlarıyla anılmaz
@@ -281,7 +284,7 @@ const gruplar = [
 ];
 function sakinMi(ck) { return !!ck && typeof ck === "object" && "sakin" in ck; }
 /** Kullanım sayacı anahtarı: aynı yer (ayarlı ya da değil) aynı sayacı paylaşır; ham yörünge kendi başına. */
-function ckAnahtar(ck) { return typeof ck === "string" ? ck : sakinMi(ck) ? "sakin:" + ck.sakin : ck.yer ?? JSON.stringify(ck.yorunge); }
+function ckAnahtar(ck) { return typeof ck === "string" ? ck : sakinMi(ck) ? "sakin:" + ck.sakin : ck.yer ?? (ck.taslak && !ck.yorunge ? "taslak:" + ck.taslak : JSON.stringify(ck.yorunge)); }
 function splitGovde(n, ck) {
   // Gövde cümleleri çekimlere sırayla bölünür (en az bir cümle).
   const k = Math.min(ck.length, n), out = [];
@@ -339,6 +342,29 @@ gruplar.forEach((g, gi) => {
   for (let k = 0; k < parca; k++) kesitler.push({ ...g, parca: k, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
 });
 const kullanim = {};
+// Kilitli yerin taslağı ({"taslak": "balikci_koyu:0"}): yerin binalarının ortası ve boyu sitenin kendi yerleşiminden
+// (layout.js, aynı düzeyde) hesaplanır; site ?taslak= ile o binaları yarı saydam taslak + çit olarak çizer.
+const TASLAK = {};
+{
+  const anahtarlar = new Set();
+  const topla = (ck) => { if (Array.isArray(ck)) ck.forEach(topla); else if (ck && typeof ck === "object" && ck.taslak) anahtarlar.add(ck.taslak); };
+  [cekim, ilkCekim, onsozCekim, soruCekim, tasinCekim, acilis].forEach(topla);
+  if (anahtarlar.size) {
+    const { World } = await import("../web/src/world/layout.js");
+    const W = new World(residents.reduce((m, r) => Math.max(m, r.slot + 1), 0));
+    for (const k of anahtarlar) {
+      const bs = (W.lots ?? []).filter((b) => b._k === k);
+      if (!bs.length) {
+        const kilitli = [...new Set((W.lots ?? []).map((b) => b._k))].filter((x) => !x.startsWith("carsi:"));
+        console.error(`taslak "${k}": bu düzeyde kilitli binası yok (açık ya da binasız yer). Kilitli: ${kilitli.join(" ")}`);
+        process.exit(1);
+      }
+      const xs = bs.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), zs = bs.flatMap((b) => [b.z - b.d / 2, b.z + b.d / 2]);
+      const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+      TASLAK[k] = { x: +((x0 + x1) / 2).toFixed(1), z: +((z0 + z1) / 2).toFixed(1), boy: Math.max(x1 - x0, z1 - z0) };
+    }
+  }
+}
 const cekimler = kesitler.map((k, i) => {
   const sure = +(k.t1 - k.t0 + (i < kesitler.length - 1 ? X : 0)).toFixed(3);
   const anahtar = ckAnahtar(k.cekim);
@@ -387,9 +413,15 @@ function CEKIM(ad, v, sure, arayuz) {
   const vapurlu = typeof ad === "string" ? ad.startsWith("iskele") : !!(ad?.vapur || ad?.yorunge?.hedef === "iskele");
   // Bilgi kartlı (arayuz) çekim kartta saati gösterir: gerçek saatte kalır (iskele bile olsa).
   const a = `saat=${!arayuz && vapurlu ? vapurSaati : saat}&hiz=4`;
+  const tsl = ad && typeof ad === "object" && ad.taslak ? `&taslak=${encodeURIComponent(ad.taslak)}` : "";
   if (ad && typeof ad === "object" && ad.yorunge) {
     const { hedef, r, h, a0 = 0, a1 = a0 + 0.3, bak = 2 } = ad.yorunge;
-    return { adres: a, yorunge: { hedef, r, h, a0, a1, bak }, ayarli: true, ...(arayuz ? { arayuz: true } : {}) };
+    return { adres: a + tsl, yorunge: { hedef, r, h, a0, a1, bak }, ayarli: true, ...(arayuz ? { arayuz: true } : {}) };
+  }
+  // Kilitli yerin taslağı: yerin ortası çevresinde yörünge (r varsayılan boyun 2,2 katı, en az 40 m; a: 0 denizden).
+  if (ad && typeof ad === "object" && ad.taslak) {
+    const T = TASLAK[ad.taslak], r = ad.r ?? Math.max(40, 2.2 * T.boy), a0 = ad.a0 ?? 0.3;
+    return { adres: a + tsl, yorunge: { hedef: [T.x, T.z], r, h: ad.h ?? +(0.45 * r).toFixed(1), a0, a1: ad.a1 ?? a0 + 0.4, bak: ad.bak ?? 2 }, ayarli: true, ...(arayuz ? { arayuz: true } : {}) };
   }
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
   // Dışarıdaki sakinin çevresinde kamera döner (sakinYorunge). Üstte ayrıca "@ad" yazısı YOK (6 Kasım, Mercanada):

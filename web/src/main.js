@@ -216,6 +216,10 @@ const T5 = performance.now();
 const lampLight = createLampLight(world, world.lampSpots,
   [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials, ...(harbor.userData.groundMaterials ?? [])],
   { wallMaterials: city.wallMaterials });
+// Video çekimi (gunluk.mjs {"taslak": "<anahtar>"}): kilitli, sıradaki OLMAYAN bir yerin binaları da yarı saydam
+// taslak olarak çizilir (7 Kasım: açılmamış Fishing Wharf boş kıyı gösteriyordu). Parametresiz canlı site değişmez.
+const taslak = (params.get("taslak") ?? "").split(",").filter(Boolean);
+if (taslak.length) world.sites = [...(world.sites ?? []), ...(world.lots ?? []).filter((b) => taslak.includes(b._k) && !(world.sites ?? []).includes(b))];
 scene.add(city.group, trees, buildSites(world));
 // Pencere çiçekleri (tercih.js): seçen dairelerin pencerelerinde; tercih değişince yeniden kurulur.
 let flowers = buildFlowers(city.windowInfo);

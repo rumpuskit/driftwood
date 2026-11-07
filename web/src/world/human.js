@@ -361,8 +361,18 @@ export class Crowd {
     const handR = hands[1];
     for (const prop of p.props ?? []) {
       switch (prop) {
-        // Olta ucu suya doğru yukarı (−1,9'da kuma batıyordu); kitap iki elin arasında, sayfalar okura dönük.
-        case "olta": this._prop("olta", this._joint(propM, handR, 0, -0.05, 0, 2.4)); break;
+        // Olta elden çıkar ama yönü gövdeye göre: öne (bakılan yöne, suya) ve ~40° yukarı, sapı elin 0,4 m gerisinde
+        // (7 Kasım: ele bağlı açı kola göre döndüğü için olta yukarı-geriye, kara tarafına ve kıyıya paralel uzanıyordu).
+        // Kitap iki elin arasında, sayfalar okura dönük.
+        case "olta": {
+          this._p.setFromMatrixPosition(handR);
+          // Atışta (people.js "fish": omuz 0,75 → 1,75) olta yalnız düşey düzlemde başın üstüne kalkar, yana dönmez.
+          const atis = Math.min(1, Math.max(0, ((p.shR ?? 0.75) - 0.75) / 1.0));
+          this._q.setFromAxisAngle(AY, p.heading).multiply(this._q2.setFromAxisAngle(AX, 0.88 - 1.1 * atis));
+          propM.compose(this._p, this._q, this._s.set(k, k, k)).multiply(tmp.makeTranslation(0.04, -0.4, 0));
+          this._prop("olta", propM);
+          break;
+        }
         case "kitap": this._prop("kitap", this._joint(propM, handR, -0.12, -0.06, 0.06, -0.7)); break;
         // Ekran (+z) yüze dönük, telefon 45°'ye yakın eğik (−1,3'te dimdik, +1,6'da ekran karşıya bakıyordu).
         case "telefon": this._prop("telefon", this._joint(propM, handR, 0, -0.07, 0.03, -0.6)); break;

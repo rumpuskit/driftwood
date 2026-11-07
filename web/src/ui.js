@@ -64,13 +64,16 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   const ns = world.nextStage;
   if (ns) {
     const btn = $("next");
-    const need = Math.max(1, ns.nufus - residents.length);
+    // Eşik nüfusa değil gelişim düzeyine (en büyük sıra numarası) göre: ayrılanın (left_day) sırası yeniden verilmez,
+    // yeni gelen en büyük sıranın ardına yerleşir; yer düzey eşiğe varınca açılır (7 Kasım, Mercanada'yla aynı düzeltme).
+    const duzey = Math.max(residents.length, Number.isFinite(sim.townLevel()) ? sim.townLevel() : 0);
+    const need = Math.max(1, ns.nufus - duzey);
     const prev = Math.max(0, ...sim.cat().gelisim.map((g) => g.nufus).filter((n) => n < ns.nufus));
     btn.hidden = false;
     $("next-name").textContent = ns.name;
     $("next-need").textContent = waiting >= need ? `at the ${nextMove()} move-in` : `${plural(need, "more resident")}`;
     // Adımın başında da çubuk görünsün (en az %4).
-    $("next-bar").style.width = `${Math.round(Math.min(1, Math.max(0.04, (residents.length - prev) / (ns.nufus - prev))) * 100)}%`;
+    $("next-bar").style.width = `${Math.round(Math.min(1, Math.max(0.04, (duzey - prev) / (ns.nufus - prev))) * 100)}%`;
     if (ns.at) btn.addEventListener("click", () => flyTo(ns.at[0], world.groundY(ns.at[0], ns.at[1]), ns.at[1], 110));
   }
   let selected = null;
