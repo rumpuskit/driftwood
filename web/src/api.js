@@ -47,7 +47,7 @@ export const api = {
   hasToken: () => !!token(),
   /** Doğrulamayı başlatır: kod ve cihaz anahtarı (anahtar saklanır). */
   async baslat(handle) {
-    const r = await call("POST", "/api/dogrula", { handle });
+    const r = await call("POST", "/api/dogrula", { handle }, true);
     store.set("driftwood_anahtar", r.token);
     return r;
   },

@@ -107,6 +107,20 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 
 # Sitedeki yorumla doğrulama kodu: "code 1234", "code: 1234", "my code is 1234".
 KOD = re.compile(r"\bcode\s*(?:is\s*)?(\d{4})\b")
+# Whole comment is just the code ("8538"): the Worker binds it only if it was issued to that username, so no false match.
+KOD_TEK = re.compile(r"^(\d{4})$")
+# No fixed format (Nov 8): every 4-digit number in the comment is a candidate code ("4521 that's me", "1234 is my code",
+# "posted my code: 1234"). The Worker binds only a pending code issued to that username; numbers like years fall away.
+KOD_HER = re.compile(r"(?<!\d)(\d{4})(?!\d)")
+
+
+def kodlar_bul(text: str) -> list[tuple[str, bool]]:
+    """[(kod, kesin)]: kesin = the comment clearly states a code (the word "code" appears, or the whole comment is "1234").
+    Non-kesin numbers bind in the Worker only if the code was issued to exactly that username (typo tolerance and the
+    "seen from another account" note only for kesin ones)."""
+    t = katla(text[:200])
+    kesin = bool(re.search(r"\bcode", t) or KOD_TEK.match(t))
+    return [(k, kesin) for k in dict.fromkeys(KOD_HER.findall(t))][:3]
 TETIK = re.compile(r"\b(?:(?P<meslek>jobs?|occupation|profession|career|work as)|(?P<hobi>hobby|hobbies)|(?P<evcil>pets?))\b")
 # "I want to be a fisherman", "I wanna be a cop", "make me a baker", "can I be the lighthouse keeper", "may I be a doctor?"...
 ISTEK = re.compile(r"\b(?:i want to (?:be|become)|i wanna (?:be|become)|wanna be|want to be|make me|id like to be|i would like to be"
@@ -245,12 +259,13 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
         cid, handle = str(it[0])[:40], sim.normalize_handle(str(it[1]))
         if not cid or not handle or handle == hesap:
             continue
-        if m := KOD.search(katla(it[3][:200])):
-            kodlar.append([m.group(1), handle])
+        for kod, kesin in kodlar_bul(it[3]):
+            kodlar.append([kod, handle, kesin])
         for tur, deger in cozumle(it[3]).items():
             # Aynı yorumda birden çok istek: kaynak kimliği türle ayrılır.
             satirlar.append([handle, tur, deger, f"{cid}:{tur}", it[2]])
-    # Sitedeki yorumla doğrulama: "code 1234" yazanın kodu Worker'da o kullanıcı adına verildiyse bağlanır.
+    # Sitedeki yorumla doğrulama: yorumdaki kod Worker'da o kullanıcı adına verildiyse bağlanır (kesin kodda küçük yazım
+    # farkı da tolere edilir, bkz. sayac/src/kayit.js /api/onayla).
     onay = (ortak.kayit("POST", "/api/onayla", {"ciftler": kodlar}) or {}).get("onaylanan", []) if kodlar else []
     yeni = kaydet(satirlar, "yorum", db)
     dolu = "SELECT coalesce(json_agg(json_build_array(handle, deger) ORDER BY id), '[]') FROM istekler WHERE durum = 'dolu'"

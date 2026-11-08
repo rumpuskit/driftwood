@@ -29,6 +29,20 @@ export const FILM_SECENEK = ["komedi", "macera", "korku", "animasyon"];
 const HANDLE = /^[a-z0-9._]{2,24}$/;
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
 const HOUR = 3600e3, DAY = 86400e3;
+// Kod 7 gün geçerli (8 Kasım: 48 saatte yorumu geç okunan kişinin kodu düşüyordu; kod alanın zorlanmaması öncelik).
+const KOD_GUN = 7;
+
+/** Levenshtein uzaklığı: kullanıcı adındaki küçük yazım hatası (sitede "ahmett", TikTok'ta "ahmet"). */
+function yakin(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
 
 async function sha(text) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -51,6 +65,8 @@ export class Kayit extends DurableObject {
       CREATE TABLE IF NOT EXISTS bulunan (gun TEXT NOT NULL, cihaz TEXT NOT NULL, PRIMARY KEY (gun, cihaz));
       CREATE TABLE IF NOT EXISTS secim_oy (handle TEXT NOT NULL, tur TEXT NOT NULL, aday TEXT, olusma INTEGER NOT NULL, PRIMARY KEY (handle, tur));
       CREATE TABLE IF NOT EXISTS sinir (anahtar TEXT PRIMARY KEY, n INTEGER NOT NULL, bitis INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS gorulen (kod TEXT PRIMARY KEY, yazan TEXT NOT NULL, zaman INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS biten (anahtar TEXT PRIMARY KEY, handle TEXT NOT NULL, zaman INTEGER NOT NULL);
     `);
   }
 
@@ -77,33 +93,59 @@ export class Kayit extends DurableObject {
     const ipKey = await sha(`${request.headers.get("cf-connecting-ip") ?? "?"}|${trDay()}|${this.env.YAYIN_ANAHTARI ?? ""}`);
     const body = request.method === "POST" ? await request.json().catch(() => ({})) : {};
     const now = Date.now();
-    // Eskiyen kayıtlar: bekleyen kodlar 48 saat, sınırlar süresi bitince, bulunanlar 40 gün.
-    this.sql.exec("DELETE FROM bekleyen WHERE olusma < ?", now - 2 * DAY);
+    // Eskiyen kayıtlar: bekleyen kodlar 7 gün (süresi dolan "biten"e geçer: site kişiye söyler), sınırlar süresi
+    // bitince, görülen/biten notları 7 gün.
+    this.sql.exec("INSERT OR REPLACE INTO biten SELECT anahtar, handle, ? FROM bekleyen WHERE olusma < ?", now, now - KOD_GUN * DAY);
+    this.sql.exec("DELETE FROM bekleyen WHERE olusma < ?", now - KOD_GUN * DAY);
+    this.sql.exec("DELETE FROM biten WHERE zaman < ?", now - 7 * DAY);
+    this.sql.exec("DELETE FROM gorulen WHERE zaman < ?", now - 7 * DAY);
     this.sql.exec("DELETE FROM sinir WHERE bitis < ?", now);
 
     if (path === "/api/dogrula" && request.method === "POST") {
       const handle = String(body.handle ?? "").toLowerCase().replace(/^@/, "").trim();
       if (!HANDLE.test(handle)) return json({ hata: "Invalid username" }, 400);
+      // Cihaz anahtarı varsa korunur: aynı cihazın eski kodları da geçerli kalır (kişi eski kodu yazmış olabilir).
+      const tokIn = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+      let token = /^[0-9a-f]{64}$/.test(tokIn) ? tokIn : null;
+      let anahtar = token ? await sha(token) : null;
+      if (anahtar) {
+        // Aynı ad için zaten kod varsa yenisi verilmez: aynı kod döner, süresi tazelenir.
+        const ayni = this.sql.exec("SELECT kod FROM bekleyen WHERE anahtar = ? AND handle = ?", anahtar, handle).toArray()[0];
+        if (ayni) {
+          this.sql.exec("UPDATE bekleyen SET olusma = ? WHERE kod = ?", now, ayni.kod);
+          return json({ kod: ayni.kod, token, handle });
+        }
+      }
       if (!this.limit(`d:${ipKey}`, 6, HOUR)) return json({ hata: "Too many tries; please try again in a bit" }, 429);
       let kod;
-      for (let n = 0; n < 20; n++) {
+      for (let n = 0; n < 40; n++) {
         kod = String(1000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 9000));
+        if (Number(kod) >= 1900 && Number(kod) <= 2099) continue; // yıl gibi sayılar yorumlarda sık geçer
         if (!this.sql.exec("SELECT 1 FROM bekleyen WHERE kod = ?", kod).toArray().length) break;
       }
-      const token = rand(32);
-      this.sql.exec("INSERT OR REPLACE INTO bekleyen VALUES (?, ?, ?, ?)", kod, handle, await sha(token), now);
+      if (!token) { token = rand(32); anahtar = await sha(token); }
+      this.sql.exec("INSERT OR REPLACE INTO bekleyen VALUES (?, ?, ?, ?)", kod, handle, anahtar, now);
+      this.sql.exec("DELETE FROM biten WHERE anahtar = ?", anahtar);
       return json({ kod, token, handle });
     }
     if (path === "/api/ben" && request.method === "GET") {
       const handle = await this.who(request);
       const tok = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-      const bek = handle ? null : this.sql.exec("SELECT kod, handle FROM bekleyen WHERE anahtar = ?", await sha(tok)).toArray()[0] ?? null;
+      const anahtar = /^[0-9a-f]{64}$/.test(tok) ? await sha(tok) : "";
+      const bek = handle ? null : this.sql.exec("SELECT kod, handle, olusma FROM bekleyen WHERE anahtar = ? ORDER BY olusma DESC LIMIT 1", anahtar).toArray()[0] ?? null;
+      if (bek) {
+        // Kod başka bir hesaptan yazılmış görüldüyse kişiye söylenir; kalan gün de.
+        bek.gorulen = this.sql.exec("SELECT yazan FROM gorulen WHERE kod = ?", bek.kod).toArray()[0]?.yazan ?? null;
+        bek.kalan_gun = Math.max(1, Math.ceil((bek.olusma + KOD_GUN * DAY - now) / DAY));
+        delete bek.olusma;
+      }
+      const biten = handle || bek ? null : this.sql.exec("SELECT handle FROM biten WHERE anahtar = ?", anahtar).toArray()[0]?.handle ?? null;
       const t = handle ? this.sql.exec("SELECT veri FROM tercih WHERE handle = ?", handle).toArray()[0] : null;
-      return json({ handle, bekleyen: bek, tercih: t ? JSON.parse(t.veri) : {} });
+      return json({ handle, bekleyen: bek, suresi_doldu: biten, tercih: t ? JSON.parse(t.veri) : {} });
     }
     if (path === "/api/cikis" && request.method === "POST") {
       const tok = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
-      if (/^[0-9a-f]{64}$/.test(tok)) { const h = await sha(tok); this.sql.exec("DELETE FROM oturum WHERE anahtar = ?", h); this.sql.exec("DELETE FROM bekleyen WHERE anahtar = ?", h); }
+      if (/^[0-9a-f]{64}$/.test(tok)) { const h = await sha(tok); this.sql.exec("DELETE FROM oturum WHERE anahtar = ?", h); this.sql.exec("DELETE FROM bekleyen WHERE anahtar = ?", h); this.sql.exec("DELETE FROM biten WHERE anahtar = ?", h); }
       return json({ ok: true });
     }
     if (path === "/api/bekleyen-sayi" && request.method === "GET") {
@@ -113,12 +155,23 @@ export class Kayit extends DurableObject {
       // Sunucu: yorumlarda görülen [kod, kullanıcı adı] çiftleri. Kod o kullanıcı adına verilmişse bağlanır.
       if (!this.env.YAYIN_ANAHTARI || request.headers.get("authorization") !== `Bearer ${this.env.YAYIN_ANAHTARI}`) return json({ hata: "not allowed" }, 401);
       const out = [];
-      for (const [kod, h] of Array.isArray(body.ciftler) ? body.ciftler.slice(0, 500) : []) {
+      // Üçüncü öğe "kesin": yorum açıkça kod yazıyor ("kod 1234" ya da yalnız "1234"); değilse yorumda geçen herhangi
+      // bir 4 haneli sayıdır (yalnız tam ad eşleşmesinde bağlanır).
+      for (const [kod, h, kesin = true] of Array.isArray(body.ciftler) ? body.ciftler.slice(0, 500) : []) {
+        const yazan = String(h).toLowerCase();
         const row = this.sql.exec("SELECT handle, anahtar FROM bekleyen WHERE kod = ?", String(kod)).toArray()[0];
-        if (!row || row.handle !== String(h).toLowerCase()) continue;
-        this.sql.exec("INSERT OR REPLACE INTO oturum VALUES (?, ?, ?)", row.anahtar, row.handle, now);
-        this.sql.exec("DELETE FROM bekleyen WHERE kod = ?", String(kod));
-        out.push(row.handle);
+        if (!row || !HANDLE.test(yazan)) continue;
+        // Sitede yazılan ad küçük bir yazım hatasıyla farklıysa (en çok 2 harf) kodu yazan gerçek hesaba bağlanır.
+        const uygun = row.handle === yazan || (kesin && yakin(row.handle, yazan) <= 2);
+        if (!uygun) {
+          if (kesin) this.sql.exec("INSERT OR REPLACE INTO gorulen VALUES (?, ?, ?)", String(kod), yazan, now);
+          continue;
+        }
+        this.sql.exec("INSERT OR REPLACE INTO oturum VALUES (?, ?, ?)", row.anahtar, yazan, now);
+        this.sql.exec("DELETE FROM gorulen WHERE kod IN (SELECT kod FROM bekleyen WHERE anahtar = ?)", row.anahtar);
+        this.sql.exec("DELETE FROM bekleyen WHERE anahtar = ?", row.anahtar);
+        this.sql.exec("DELETE FROM biten WHERE anahtar = ?", row.anahtar);
+        out.push(yazan);
       }
       return json({ onaylanan: out });
     }

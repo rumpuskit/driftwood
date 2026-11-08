@@ -104,6 +104,11 @@ class DogrulamaKoduTest(unittest.TestCase):
             m = KOD.search(katla(text))
             self.assertEqual(m and m.group(1), want, text)
         self.assertEqual(cozumle("code 4821"), {})
+        from istekler import kodlar_bul
+        for text, want in [("code 1234", [("1234", True)]), ("my code is 3674", [("3674", True)]), ("8538", [("8538", True)]),
+                           ("4521 that's me!", [("4521", False)]), ("1234 is my code 🏠", [("1234", True)]),
+                           ("Posted my CODE: 9087 ✨", [("9087", True)]), ("call 5551234567", []), ("i want to be a cop", [])]:
+            self.assertEqual(kodlar_bul(text), want, text)
 
     def test_worker_cagrisi(self):
         import istekler
@@ -118,5 +123,5 @@ class DogrulamaKoduTest(unittest.TestCase):
             out = istekler.yorumlar([["c1", "Ali", 1, "code 4821"], ["c2", "veli", 2, "job: fisherman"], ["c3", "biz", 3, "code 1111"]], hesap="biz")
         finally:
             ortak.kayit, istekler.kaydet, istekler.psql, istekler.uygula = eski_kayit, eski_kaydet, eski_psql, eski_uygula
-        self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali"]]})])
+        self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali", True]]})])
         self.assertEqual(out["dogrulanan"], ["ali"])
