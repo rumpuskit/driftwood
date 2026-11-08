@@ -47,7 +47,7 @@ const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const yuva = opt("--yuva", "ogle");
 // Paylaşma saati: ada ET'de, kullanıcı Almanya'da (ABD/AB yaz saati geçiş haftalarında Almanya bir saat erken).
-const SAAT = { sabah: "15:30 DE (9:30 AM ET)", ogle: "18:30 DE (12:30 PM ET)", aksam: "01:00 DE (7:00 PM ET), Studio'da zamanla" };
+const SAAT = { sabah: "15:30 DE (9:30 AM ET)", ogle: "18:30 DE (12:30 PM ET)", aksam: "23:30 DE (5:30 PM ET)" }; // 8 Kasım: ikinci günlük video (kullanıcı: "tek video yetmiyor")
 // Takipçi sayısına göre günde kaç video (önce öğle, sonra akşam, sonra sabah).
 const SIKLIK = [[0, ["ogle"]], [100, ["ogle", "aksam"]], [1000, ["sabah", "ogle", "aksam"]]];
 
