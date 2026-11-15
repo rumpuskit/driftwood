@@ -1317,3 +1317,70 @@ body.foto #hud, body.foto #card, body.foto #arama, body.foto #minimap, body.foto
 #tur-basla { border: 0; border-radius: 999px; padding: 9px 14px; background: var(--accent); color: #fff; font: 800 13px "Nunito", system-ui, sans-serif; cursor: pointer; }
 #tur-bitir { border: 0; border-radius: 999px; padding: 9px 13px; background: var(--glass-2); color: var(--ink); font: 800 13px "Nunito", system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
 body.tur #hud, body.tur #card, body.tur #arama, body.tur #navbtns, body.tur #dock { opacity: 0; pointer-events: none; transition: opacity .4s; }
+
+/* --- Telefon ve uygulama içi tarayıcı (15 Kasım; TikTok/Instagram webview ~360–412 × 640–780 px) ---
+   Üst panel bütün satırlarıyla ~330 px tutuyor, alttaki sekme çubuğu + aramayla ada ekranın üçte birine iniyordu.
+   Kapalı panel: başlık, iki sayaç, sırayla dönen tek bilgi satırı (seçim, sıradaki, takip et, iskele, günün olayı,
+   çevrimiçi); ok düğmesi hepsini açar. Bildirim ve tur kendi katmanında (önce #sol içinde dock/arama/sayfanın altında). */
+#hud-ac { display: none; }
+#toast { z-index: 60; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 140px); }
+#toast:not([hidden]) { animation: tk-in 0.25s ease both; }
+@keyframes tk-in { from { opacity: 0; transform: translate(var(--tx, -50%), 6px); } }
+@media (max-width: 899px) {
+  #hud .hud-top { justify-content: flex-start; gap: 6px; }
+  #hud .clock { margin-left: auto; }
+  #hud-ac {
+    display: grid; place-items: center; flex: 0 0 auto; width: 28px; height: 28px; margin: -2px -4px -2px 0; padding: 0;
+    border: 0; border-radius: 50%; background: var(--glass-2); color: var(--ink); cursor: pointer;
+  }
+  #hud-ac svg.i { width: 17px; height: 17px; stroke-width: 2.4; transition: transform 0.2s ease; }
+  body.hud-acik #hud-ac svg.i { transform: rotate(180deg); }
+  body.kart-acik #hud-ac, body.kayit #hud-ac { display: none; }
+  body.kart-acik #hud > :not(.hud-top) { display: none !important; } /* kart açıkken yalnız başlık satırı */
+
+  body:not(.hud-acik) #hud { gap: 6px; padding: 8px 10px; }
+  body:not(.hud-acik) #hud .clock { padding: 4px 8px; }
+  body:not(.hud-acik) #hud .stats { display: flex; gap: 4px; }
+  body:not(.hud-acik) #hud .stats .chip:nth-child(2),
+  body:not(.hud-acik) #hud .stats .chip:nth-child(3) { display: none; }
+  body:not(.hud-acik) #hud .chip { flex: 1 1 0; flex-direction: row; justify-content: center; align-items: baseline; gap: 4px; padding: 3px 6px; overflow: hidden; }
+  body:not(.hud-acik) #hud .chip b { font-size: 13px; }
+  body:not(.hud-acik) #hud .chip b svg.i { width: 13px; height: 13px; margin-right: 4px; }
+  body:not(.hud-acik) #hud :is(#online, #next, #gunun, #waiting, #secim, .links):not(.tk-on) { display: none; }
+  body:not(.hud-acik) #hud .tk-on { animation: tk-in 0.35s ease both; --tx: 0; }
+  body:not(.hud-acik) #hud .priv { display: none; }
+  body:not(.hud-acik) #hud .online { min-height: 30px; padding: 0 4px; }
+  /* Sıradaki tek satır: bayrak, ad, kalan; altında ince çubuk. */
+  body:not(.hud-acik) #hud .goal { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 7px; row-gap: 5px; padding: 6px 10px 7px; }
+  body:not(.hud-acik) #hud .goal-head { display: contents; }
+  body:not(.hud-acik) #hud .goal-label { font-size: 0; display: flex; }
+  body:not(.hud-acik) #hud .goal-label svg.i { margin: 0; }
+  body:not(.hud-acik) #hud .goal-name { grid-column: 2; grid-row: 1; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body:not(.hud-acik) #hud .goal-need { grid-column: 3; grid-row: 1; }
+  body:not(.hud-acik) #hud .goal .bar { grid-column: 1 / -1; margin: 0; height: 4px; }
+
+
+  /* Kart açıkken arama gizlenir; kart doğrudan sekme çubuğunun üstünde (ada için ~60 px daha). */
+  body.kart-acik #arama { display: none; }
+  body:not(.kayit) #card { bottom: calc(env(safe-area-inset-bottom) + 66px) !important; max-height: 40vh; max-height: 40dvh; }
+  body.kart-acik:not(.kayit) #floorbar { bottom: calc(env(safe-area-inset-bottom) + 66px) !important; }
+  body:not(.kayit) #floorbar:not([hidden]) ~ #sol #card { bottom: calc(env(safe-area-inset-bottom) + 118px) !important; }
+  .sayfa-kutu { max-height: 86dvh; }
+
+  /* Bildirim ekranın üstünden iner: alttaki kart, sayfa, yer paneli ve klavyeyle çakışmaz. */
+  #toast {
+    top: max(10px, env(safe-area-inset-top)); bottom: auto; left: 12px; right: 12px; transform: none; max-width: none;
+    background: var(--glass-solid); border: 1px solid var(--line); border-left: 4px solid var(--accent); --tx: 0;
+  }
+  /* Tur ve tur önerisi aramanın üstünde (eski kural sonra tanımlı #tur'un altında kalıp aramayla çakışıyordu). */
+  #tur { bottom: calc(env(safe-area-inset-bottom) + 124px); }
+}
+/* Dokunmatik telefonda yakınlaştırma iki parmakla: +/− düğmeleri sağ sütunu dolduruyordu. */
+@media (max-width: 899px) and (pointer: coarse) {
+  #navbtns #zoom-in, #navbtns #zoom-out { display: none; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  body.kart-acik #arama { display: flex; }
+  body:not(.kayit) #card { bottom: auto !important; max-height: calc(100vh - 146px); max-height: calc(100dvh - 146px); } /* soldaki sekme şeridinin üstünde biter */
+  #floorbar, body.kart-acik:not(.kayit) #floorbar { bottom: auto !important; }
+}

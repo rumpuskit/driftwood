@@ -589,6 +589,33 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("floorbar").hidden = true;
   }
 
+  // Telefon / uygulama içi tarayıcı (15 Kasım): üst panel kapalıyken bilgi satırları tek satırda 6 sn'de bir sırayla
+  // döner; ok düğmesi hepsini açar. Video kaydı (kaydet.mjs saatini önceden kurar) eski, açık düzeni görür.
+  const kayit = typeof globalThis.__manual === "function";
+  // Saat kutusunun sığma ölçümü yazı tipi yüklenince ve boyut değişince yeniden yapılır (yedek yazı tipiyle ölçülüp kesiliyordu).
+  const saatTazele = () => { $("clock").dataset.text = ""; };
+  document.fonts?.ready.then(saatTazele);
+  addEventListener("resize", saatTazele);
+  if (kayit) document.body.classList.add("kayit", "hud-acik");
+  const hudAc = $("hud-ac");
+  hudAc?.addEventListener("click", () => {
+    const on = document.body.classList.toggle("hud-acik");
+    hudAc.setAttribute("aria-expanded", String(on));
+    hudAc.setAttribute("aria-label", on ? "Hide details" : "Show details");
+  });
+  const SIRA = ["secim", "next", null, "waiting", "gunun", "online"].map((id) => (id ? $(id) : document.querySelector("#hud .links")));
+  let siradaki = null;
+  function dondur() {
+    const vis = SIRA.filter((el) => el && !el.hidden);
+    const yeni = vis[(vis.indexOf(siradaki) + 1) % vis.length] ?? null;
+    if (yeni === siradaki) return;
+    siradaki?.classList.remove("tk-on");
+    siradaki = yeni;
+    siradaki?.classList.add("tk-on");
+  }
+  dondur();
+  setInterval(() => { if (!document.body.classList.contains("hud-acik") && $("card").hidden) dondur(); }, 6000);
+
   $("card-close").addEventListener("click", close);
   $("floor-up").addEventListener("click", () => changeFloor(1));
   $("floor-down").addEventListener("click", () => changeFloor(-1));
@@ -613,6 +640,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         clock.innerHTML = `${text}<span class="sun">${sunText ? " · " + svg("gunes") + sunText.slice(3) : ""}</span>`;
         clock.classList.remove("dar");
         if (clock.scrollWidth > clock.clientWidth + 1) clock.classList.add("dar");
+        // Hâlâ sığmıyorsa (dar telefon, kapalı üst panel) gün kısaltılır.
+        if (clock.scrollWidth > clock.clientWidth) clock.textContent = `${clockText(minuteNow)} · ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][sim.weekday(day)]}`;
       }
       // Döküm benzetimden: işte, evde (uyuyanlar dahil) ve dışarıda (yolda, çarşıda, hobisinde).
       let work = 0, home = 0;
@@ -643,6 +672,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
           gun.title = gun.textContent;
         }
       }
+      if (!siradaki || siradaki.hidden) dondur();
       if (!$("card").hidden) render();
     },
   };

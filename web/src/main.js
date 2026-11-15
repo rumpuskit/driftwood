@@ -667,6 +667,7 @@ function enter() {
 
 // --- döngü ---
 let frame = 0;
+let viewKay = 0; // telefonda kart açıkken görüntünün yukarı kayması (px, yumuşatılmış)
 let lastReal = performance.now() / 1000;
 
 // Uyarlanır kalite: zayıf telefonlarda kare hızı düşük kalırsa önce çözünürlük kademeli düşer, en sonda
@@ -780,9 +781,17 @@ function tick() {
   harbor.userData.setMinute(minute);
   bayram.update(day, minute, real, renderer.domElement.height / 900);
   fadeTrees(trees, dist);
-  // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.
-  const cardOpen = !document.getElementById("card").hidden;
-  if (cardOpen && innerWidth < 900) camera.setViewOffset(innerWidth, innerHeight, 0, innerHeight * 0.2, innerWidth, innerHeight);
+  // Telefonda kart ekranın altını kapatır: odak, üst panelle kartın arasındaki boşluğun ortasına kayar (sabit %20
+  // kaydırma kısa uygulama içi tarayıcılarda sakini kartın altında bırakıyordu, 15 Kasım). Yatayda kart soldadır: kaydırma yok.
+  const cardEl = document.getElementById("card");
+  let hedefKay = 0;
+  if (!cardEl.hidden && innerWidth < 900) {
+    const ust = document.getElementById("hud").getBoundingClientRect().bottom, alt = cardEl.getBoundingClientRect().top;
+    if (alt > ust + 80) hedefKay = Math.max(0, innerHeight / 2 - (ust + alt) / 2);
+  }
+  viewKay += (hedefKay - viewKay) * Math.min(1, dt * 8);
+  if (Math.abs(viewKay) < 0.5 && !hedefKay) viewKay = 0;
+  if (viewKay) camera.setViewOffset(innerWidth, innerHeight, 0, viewKay, innerWidth, innerHeight);
   else if (camera.view?.enabled) camera.clearViewOffset();
   scaleLabels(labels, camera);
 

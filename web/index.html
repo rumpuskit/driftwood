@@ -50,6 +50,7 @@
         <div class="hud-top">
           <div class="brand"><img src="/favicon.svg" alt="" width="22" height="22" />Driftwood</div>
           <div class="clock" id="clock">--:--</div>
+          <button id="hud-ac" type="button" aria-expanded="false" aria-label="Show details"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
         </div>
         <div class="stats" id="stats"></div>
         <div class="online" id="online" hidden><span class="dot"></span><span id="online-n">1</span> on the island now</div>
@@ -63,8 +64,6 @@
         <button class="waiting secim" id="secim" hidden></button>
         <div class="links"><a id="cta" class="cta" target="_blank" rel="noopener">Follow on TikTok, move in</a><a class="priv" href="/privacy.html">Privacy</a></div>
       </header>
-      <div id="toast" role="status" aria-live="polite" hidden></div>
-      <div id="tur" hidden><div id="tur-yazi"></div><button id="tur-basla" hidden>Start</button><button id="tur-bitir">End tour</button></div>
       <section id="card" hidden>
         <div class="grip" aria-hidden="true"></div>
         <button id="card-close" aria-label="Close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -134,6 +133,10 @@
         <button type="submit" class="go">Find</button>
       </form>
     </div>
+
+    <!-- Bildirim ve tur: her panelin üstünde (kendi katmanlarında; #sol içinde dock/arama/sayfanın altında kalıyorlardı). -->
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+    <div id="tur" hidden><div id="tur-yazi"></div><button id="tur-basla" hidden>Start</button><button id="tur-bitir">End tour</button></div>
 
     <div id="loading">
       <svg class="load-scene" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
