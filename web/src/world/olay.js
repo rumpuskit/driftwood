@@ -344,8 +344,10 @@ function kazaKur(world, traffic, o) {
     if (Math.hypot(P[0] - n.p[0], P[1] - n.p[1]) > 16) { neden.push(`${n.id}: kesişim uzak`); continue; }
     // B kavşağın içinde (darbe yan tarafına), A'nın burnu B'nin yanında.
     const sag = dA[0] * dB[1] - dA[1] * dB[0] > 0 ? 1 : -1;
-    const B = { x: P[0], z: P[1], h: yon(dB[0], dB[1]) - sag * 0.42, renk: 3 + (o.tohum % 5) };
-    const A = { x: P[0] - dA[0] * 2.9, z: P[1] - dA[1] * 2.9, h: yon(dA[0], dA[1]) + sag * 0.13, renk: (o.tohum >> 5) % 10 };
+    // Renkler zıt (16 Kasım: iki lacivert araç ayırt edilmiyordu): biri açık (beyaz/gümüş/bej/kırmızı), öbürü koyu.
+    const ACIK = [0, 2, 5, 3, 7], KOYU = [1, 4, 8, 9, 6];
+    const B = { x: P[0], z: P[1], h: yon(dB[0], dB[1]) - sag * 0.42, renk: KOYU[o.tohum % 5] };
+    const A = { x: P[0] - dA[0] * 2.9, z: P[1] - dA[1] * 2.9, h: yon(dA[0], dA[1]) + sag * 0.13, renk: ACIK[(o.tohum >> 5) % 5] };
     // A'nın yanı: çekici B'nin OLMADIĞI tarafa park eder (16 Kasım denetimi: B'nin içine giriyordu).
     let sagA = [dA[1], -dA[0]];
     if (sagA[0] * (B.x - A.x) + sagA[1] * (B.z - A.z) > 0) sagA = [-sagA[0], -sagA[1]];
@@ -391,7 +393,8 @@ function kazaKur(world, traffic, o) {
     // Polislerin yeri: biri polis aracının yanında trafiği yönlendirir, öbürü kazalı araçların yanında.
     const polisYer = [
       { x: polisPark[0] - dB[0] * 4 + dB[1] * 2.2, z: polisPark[1] - dB[1] * 4 - dB[0] * 2.2, heading: yon(-dB[0], -dB[1]), rol: "trafik", look: null },
-      { x: P[0] + sagA[0] * 2.4 - dA[0] * 1.2, z: P[1] + sagA[1] * 2.4 - dA[1] * 1.2, heading: yon(A.x - P[0], A.z - P[1]) + 0.6, rol: "tutanak", look: [A.x, A.z] },
+      // Tutanak tutan: A'nın arkasında, hafif yanda (araçların içinde durmasın; çekici A'nın öbür yanına park eder).
+      { x: A.x - dA[0] * 4.3 - sagA[0] * 0.9, z: A.z - dA[1] * 4.3 - sagA[1] * 0.9, heading: yon(dA[0], dA[1]) + 0.25, rol: "tutanak", look: [A.x, A.z] },
     ];
     // Bakış yönü: iki aracın geldiği kolların arasındaki çeyrek (her iki araç önden görünür).
     const v = [dA[0] + dB[0], dA[1] + dB[1]];
