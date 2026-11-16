@@ -18,6 +18,24 @@
 //   çekim otomatik döndürülmez (ilk parça verilen kadraj, sonraki parçalar ondan yarım ölçüde sapar). | kilitli yerin
 //   taslağı {"taslak": "balikci_koyu:0", "r"?, "h"?, "a0"?, "a1"?, "bak"?} (sıradaki OLMAYAN açılmamış yerin binaları yarı
 //   saydam taslak + çitle; metin "henüz yok / N. sakinde gelecek" demeli); ham yörüngeye de "taslak" eklenebilir.
+// Çekim nesnesinde ayrıca "saat": "HH:MM[:SS]" | olay saati (aşağıda) ve "hiz" (benzetim hızı, varsayılan 4); cümlede
+//   "ara": sn (öncesine sessizlik). --tarih YYYY-AA-GG (deneme) sitenin tarihini değiştirir.
+// Hareket dili (16 Kasım 2026, Mercanada'dan; ayrıntı video/cikti/VIDEO-URETIM-REHBERI.md §5.4): her çekime otomatik bir
+//   kamera hareketi atanır; art arda iki çekim aynı aileden olmaz, ~25 sn'lik video ≥4 farklı hareket kullanır. Çekim
+//   nesnesinde isteğe bağlı: "hareket": yorunge | itme | vinc | yanKay | alcak | tele | el | whip | vertigo | drone |
+//   takip | yanTakip (zorlar; bölünen çekimde yalnız ilk parça; drone ve vertigo YALNIZ böyle), "yon": ±1, "sarsinti":
+//   0–1, "fov": derece (varsayılan 40; tele 16), "gecis": kesme | solma | kaydir | flas | yakinlas (bu çekime GİRİŞ).
+//   Yalnız {"yer": ".."} verilirse kadraj elle sayılmaz (hareket serbest); aci/uzak/yuk/varyant, ham yörünge ve taslak
+//   kadrajını korur (yalnız yorunge, el, whip ya da küçük yanKay).
+// Olay çekimleri (günün olayı, web/src/world/olay-plan.js + olay-ayar.js; Driftwood'da şimdilik firtina, sis, balina):
+//   "olay" (geniş), "olay-yakin" (sokak düzeyi, el kamerası), "olay-kalabalik" (seyirciler), "olay-tele" (uzaktan dar
+//   açı), "olay-hava" (fırtına: iskele başından deniz ve gök; sis: denizden limana), "olay-arac:<ad>" (araç yolu ve
+//   itfaiye açılınca). Saat verilmezse olaya uygun an (OLAY_ANI). "saat": "olay+12" (başından dk, kesirli/eksi) |
+//   "olay:<evre>" (evre ortası) | "olay:<evre>+N". Fırtınada çekime bir şimşek, balinada bir sıçrama kendiliğinden
+//   oturtulur (kaydet.mjs anAni; "an": false kapatır). Bugün olay yoksa olay çekimleri Town Green/uçuşa düşer (UYARI).
+//   Deneme: --olay sis --olaysaat 06:00 (olayı zorlar, sayfaya da geçer), --ad test-x (ayrı çıktı klasörü).
+//   Efektler (efekt.mjs): "efekt": ad | {ad, sure, ses dB, bas sn} | dizi | false; siren, vapur, sisduduk, siren-arac,
+//   carpisma, gok, yagmur, korna, su, kalabalik. Fırtınada yağmur ve şimşekte gök gürültüsü, siste sis düdüğü kendiliğinden.
 // --cekim-dene N: önizleme ölçeğinde yalnız N. çekimi çizer (sesi önbellekten), cekimN-kareler.jpg (baş/orta/son) yazar;
 //   kadrajı tek tek düzeltmek için. Durum yazılmaz.
 //
@@ -36,6 +54,8 @@ import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
 import { ferryOut, nextArrival } from "../web/src/world/ferry.js";
 import { seslendir } from "./seslendir.mjs";
+import { efekt, EFEKT_SES } from "./efekt.mjs";
+import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
 import { yukle } from "./tiktok.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -122,6 +142,13 @@ if (args.includes("--uret") && !args.includes("--onizleme") && !args.includes("-
 }
 const level = Math.max(data.zirve ?? 0, residents.reduce((m, r) => Math.max(m, r.slot + 1), 0));
 sim.setTown(level);
+// Günün olayı (16 Kasım; web/src/world/olay-plan.js, site aynı planı hesaplar; ada günü ET). --olay/--olaysaat yalnız
+// deneme: olayı zorlar ve çekim adreslerine aynı parametreleri ekler (sayfa da zorlanır).
+const olayZorla = opt("--olay"), olaySaatZorla = opt("--olaysaat");
+const olayGun = opt("--tarih") ? Date.parse(opt("--tarih") + "T00:00:00Z") / 86400000 : today;
+const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined });
+const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}` : "";
+if (olay) console.log(`günün olayı: ${olay.en} (${olay.tur}) ${saatYaz(olay.bas)}–${saatYaz(olay.son)} ET${olayZorla ? " [zorlandı]" : ""}`);
 const stages = catalog.gelisim;
 const next = stages.find((s) => s.nufus > level);
 // Kaç kişi daha: eşik gelişim düzeyine göre (sitedeki kartla aynı, ui.js): ayrılanların sırası yeniden verilmez.
@@ -228,7 +255,7 @@ if (acilan.length) {
 if (opt("--hikaye")) {
   // Elle yazılmış hikâye (seçimin yerine geçer).
   const h = JSON.parse(readFileSync(opt("--hikaye"), "utf8"));
-  const cc = (x) => c(x.ses, x.yazi ?? null, !!x.vurus);
+  const cc = (x) => ({ ...c(x.ses, x.yazi ?? null, !!x.vurus), ...(x.ara ? { ara: x.ara } : {}) });
   tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
   imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; soruCekim = h.soruCekim ?? null; tasinCekim = h.tasinCekim ?? tasinCekim;
@@ -250,8 +277,8 @@ saat = opt("--saat") ?? new Intl.DateTimeFormat("en-GB", { timeZone: "America/Ne
 if (!opt("--saat") && istenenSaat !== saat) console.log(`ada saati ${saat} (ET, şimdi); "${istenenSaat}" kullanılmadı`);
 // Feribot iskele çekiminde iskelede olsun (kullanıcı, 3 Kasım: "vapur yokken vapur çekilmeye çalışılıyor"): ada saatinde
 // feribot açıktaysa iskele çekimleri bir sonraki yanaşmanın 1 dk sonrasına (en çok ~17 dk ileri) alınır; diğerleri şimdi.
-const dakika = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-const saatYaz = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+function dakika(t) { const [h, m, sn = 0] = t.split(":").map(Number); return h * 60 + m + sn / 60; }
+function saatYaz(m) { return `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.floor(m) % 60).padStart(2, "0")}`; }
 const vapurSaati = ferryOut(dakika(saat)) === 0 && ferryOut(dakika(saat) + 1) === 0 ? saat : saatYaz(nextArrival(dakika(saat)) + 1);
 if (vapurSaati !== saat) console.log(`ferry not docked at ${saat}: pier shots at ${vapurSaati}`);
 
@@ -292,10 +319,10 @@ function splitGovde(n, ck) {
   return out;
 }
 
-const ad = `gunluk/${tarih}-${yuva}`;
+const ad = opt("--ad") ? `gunluk/${opt("--ad")}` : `gunluk/${tarih}-${yuva}`; // --ad: yalnız deneme (ayrı çıktı klasörü)
 const out = resolve("cikti", ad);
 mkdirSync(out, { recursive: true });
-const aralar = Object.fromEntries(cumleler.map((x, k) => [k, x.vurus ? 0.35 : 0]).filter(([, d]) => d));
+const aralar = Object.fromEntries(cumleler.map((x, k) => [k, x.ara ?? (x.vurus ? 0.35 : 0)]).filter(([, d]) => d));
 const S0 = { ad, seslendirme: cumleler.map(({ ses, yazi }) => ({ ses, ...(yazi ? { yazi } : {}) })), aralar };
 
 console.log(`${tarih} ${yuva} · ${tur}${konuId ? ` (${konuId})` : ""} · nüfus ${N}, takipçi ${takipci}`);
@@ -365,24 +392,206 @@ const TASLAK = {};
     }
   }
 }
-const cekimler = kesitler.map((k, i) => {
-  const sure = +(k.t1 - k.t0 + (i < kesitler.length - 1 ? X : 0)).toFixed(3);
+/** Yer başına hareket seçenekleri (Driftwood kütüphanesi yörünge: doğal hareket "yorunge"). bayrak (alçaktan açılış) ve
+ *  zeplin2 sabit. drone/vertigo listede olsa da yalnız hikâye zorlarsa (SINIR 0). */
+const SECENEK = {
+  ucus: ["yorunge", "drone", "vertigo"], // yanKay yok: Town Green'e iniyordu, imzanın ada ölçeği kayboluyordu
+  iskele: ["yorunge", "yanKay", "tele", "vinc"], // alcak yok: iskelede gökyüzüne bakıyordu (feribot kadraj dışı)
+  iskele2: ["yorunge", "yanKay", "whip", "el"],
+  meydan: ["yorunge", "vinc", "alcak", "whip", "yanKay", "el"],
+  meydan2: ["yorunge", "vinc", "alcak", "whip", "yanKay", "el"],
+  kilise: ["yorunge", "vinc", "alcak", "yanKay", "whip"],
+  fener: ["yorunge", "tele", "vinc"],
+  fener2: ["yorunge", "whip", "yanKay"],
+  ilkev: ["yorunge", "vinc", "yanKay", "alcak"],
+  siradaki: ["yorunge", "vinc"],
+  zeplin: ["yorunge", "tele"],
+};
+/** Dönüştürmede yörünge yerine kullanılacak temel kadraj (uçuş 520 m'lik yörünge: başka harekette Town Green'e iner). */
+const TEMEL = {
+  ucus: { hedef: "meydan", a: -0.4, D: 120, H: 60, bak: 2 },
+};
+/** Olay çekimleri: temel kadraj ve hareket seçenekleri. */
+const OLAY_CEKIM = {
+  olay: { D: 45, H: 22, secenek: ["vinc", "yorunge", "yanKay"] },
+  "olay-yakin": { D: 32, H: 3, goz: 2.4, secenek: ["el", "alcak", "whip"], sarsinti: 0.5 },
+  "olay-kalabalik": { D: 14, H: 3, secenek: ["yanKay", "el"], sarsinti: 0.3 },
+  "olay-tele": { D: 45, H: 20, secenek: ["tele"], sarsinti: 0.2 },
+  "olay-hava": { D: 120, H: 6, secenek: ["yanKay", "tele"] },
+  "olay-arac": { D: 10, H: 3, secenek: ["takip", "yanTakip"] },
+};
+/** Saat verilmeyen olay çekiminin anı (olay türü → çekim → saat; araç: o aracın yolda olduğu evre). */
+const OLAY_ANI = {
+  kaza: { olay: "olay:polis", "olay-yakin": "olay+1.5", "olay-kalabalik": "olay:polis", "olay-tele": "olay:polis", "olay-hava": "olay:polis", arac: { polis: "olay+5.2", ambulans: "olay+7.4", itfaiye: "olay+5.2", cekici: "olay:cekici+3" } },
+  yangin: { olay: "olay:sondurme", "olay-yakin": "olay:sondurme", "olay-kalabalik": "olay:sondurme", "olay-tele": "olay:sondurme", "olay-hava": "olay:sondurme", arac: { itfaiye: "olay:alarm", polis: "olay:alarm", ambulans: "olay:alarm" } },
+  firtina: { olay: "olay:yagmur", "olay-yakin": "olay:yagmur", "olay-kalabalik": "olay:yagmur", "olay-tele": "olay:yagmur", "olay-hava": "olay:yagmur" },
+  sis: { olay: "olay:yogun", "olay-yakin": "olay:yogun", "olay-kalabalik": "olay:yogun", "olay-tele": "olay:yogun", "olay-hava": "olay:yogun" },
+  yunus: { olay: "olay:oyun" },
+  balina: { olay: "olay:oyun" },
+};
+const efektler = [];
+// Hareket dili (16 Kasım 2026, Mercanada kullanıcısı: "sürekli bir yerlere yaklaşan çekimler yerine daha karışık ve dikkat
+// çekici"): her çekime bir hareket türü atanır (kamera kaydet.mjs HAREKET'te). Seçim (yonet): hikâye "hareket" verdiyse
+// o; yoksa yerin seçenekleri (SECENEK) içinden, bir önceki çekimle AYNI AİLEDEN OLMAYAN ve videoda en az kullanılmış
+// olan. Elle kadraj (ayarli: aci/uzak/yuk, ham yörünge, taslak) kadrajını korur: yalnız yorunge, el, whip ya da küçük
+// yanKay. Sabit: bayrak, zeplin2, sakin, kapanış. Ardından geçişler (gecisSec) ve son süreler (önceki çekim sonraki geçiş
+// kadar uzun; kaydet.mjs aynı süreyi bindirir).
+const HAREKETLER = ["itme", "yorunge", "vinc", "yanKay", "alcak", "tele", "el", "whip", "vertigo", "drone", "takip", "yanTakip"];
+const AILE = (t) => (t === "yanTakip" ? "takip" : t === "itme" ? "yorunge" : t);
+// Drone ve vertigo yalnız hikâye zorlarsa ("hareket"): kendiliğinden seçildiklerinde çatı sıyıran/rastgele açılış veriyordu.
+const SINIR = { vertigo: 0, drone: 0, tele: 2, whip: 2, vinc: 3, el: 3 };
+const GECIS = { kesme: 0.1, solma: 0.25, kaydir: 0.2, flas: 0.3, yakinlas: 0.22 };
+const hs = { onceki: null, sayac: {}, grup: 0, flas: 0, duduk: -99, gok: -99, olayN: 0 };
+const ham = kesitler.map((k, i) => {
+  const sure = +(k.t1 - k.t0 + X).toFixed(3); // geçici; geçişler seçilince düzeltilir
   const anahtar = ckAnahtar(k.cekim);
   const v = (kullanim[anahtar] = (kullanim[anahtar] ?? -1) + 1);
   // "Taşın" karesi iskelenin geniş açısı (v çift): gövdede iskele kullanıldıysa kod ona sıradaki açıyı veriyordu.
-  if (k.tasin && k.cekim === "iskele") return { sure, ...canlandir(CEKIM({ yer: "iskele", varyant: 0 }, 0, sure, false), 0) };
+  if (k.tasin && k.cekim === "iskele") {
+    const shot = CEKIM("iskele", 0, sure, false);
+    shot.secenek = ["yorunge", "yanKay"];
+    return yonet(shot, k, 0, i);
+  }
   // Bölünen ayarlı çekimde parça başına kadraj (7 Kasım kod notu: 2. parçanın sabit sapması temiz kadrajı bozuyordu):
   // {"yer"|"yorunge": .., "parcalar": [{aci, uzak, yuk} | {yorunge}, ...]} → k. parça (k ≥ 1) parcalar[k − 1] ile.
   const pk = k.parca > 0 && k.cekim && typeof k.cekim === "object" ? k.cekim.parcalar?.[k.parca - 1] : null;
-  if (pk) return { sure, ...canlandir(CEKIM({ ...k.cekim, ...pk, parcalar: undefined }, v, sure, k.arayuz), 0) };
-  const shot = CEKIM(k.cekim, v, sure, k.arayuz);
-  return { sure, ...(k.cekim === "kapanis" ? shot : canlandir(shot, shot.ayarli ? k.parca : v)) };
+  if (pk) return yonet(Object.assign(CEKIM({ ...k.cekim, ...pk, parcalar: undefined, hareket: undefined }, v, sure, k.arayuz), { parcaKadraj: true }), k, 0, i);
+  return yonet(CEKIM(k.cekim, v, sure, k.arayuz), k, v, i);
 });
-// Art arda iki çekim aynı kalmasın (aynı adres + yörünge): olursa ikincisi döndürülür (güvenlik ağı).
-for (let i = 1; i < cekimler.length; i++) {
-  const ayni = (a, b) => a.adres === b.adres && JSON.stringify(a.kamera ?? a.yorunge ?? null) === JSON.stringify(b.kamera ?? b.yorunge ?? null);
-  if (ayni(cekimler[i - 1], cekimler[i]) && !cekimler[i].serbest) canlandir(cekimler[i], 3);
+/** Çekimin hareketini seçer ve uygular (bkz. yukarı). */
+function yonet(shot, k, v, i) {
+  const ck = k.cekim && typeof k.cekim === "object" ? k.cekim : null;
+  shot.sure = +(k.t1 - k.t0 + X).toFixed(3);
+  const bitir = (aile, ad) => { hs.onceki = aile; shot.hareketAd = ad; if (ad) hs.sayac[ad] = (hs.sayac[ad] ?? 0) + 1; return shot; };
+  if (k.cekim === "kapanis") return bitir("kapanis", "yorunge");
+  if (shot.serbest) return bitir("sakin", "sakin");
+  if (shot.sabit) { canlandir(shot, shot.ayarli ? k.parca : v); return bitir(shot.sabit, shot.sabit === "alcak" ? "alcak" : "sabit"); }
+  let zorla = k.parca === 0 ? ck?.hareket : null;
+  if (zorla && !HAREKETLER.includes(zorla)) { console.log(`UYARI: bilinmeyen hareket "${zorla}" (${HAREKETLER.join(", ")}): yok sayıldı`); zorla = null; }
+  const dogal = shot.hareket ? null : shot.kamera ? "itme" : "yorunge";
+  // Açılış çekimi (hikâyede ham yörünge ile bayrak benzeri): doğal hareketiyle, alçak açı ailesinden sayılır.
+  if (k.acilis && !zorla && !shot.hareket) { canlandir(shot, 0); return bitir("alcak", dogal); }
+  const zeplinMi = typeof shot.yorunge?.hedef === "string" && shot.yorunge.hedef.startsWith("zeplin");
+  // Elle kadrajda el kamerası yalnız alçak kadrajda (yüksek/uzak yörüngede sarsıntı tuhaf duruyor).
+  const alcakKadraj = (shot.yorunge?.h ?? 99) <= 12 && (shot.yorunge?.r ?? 99) <= 60;
+  const secenek = zorla ? [zorla] : zeplinMi ? ["yorunge", "tele"] : shot.ayarli && !shot.hareket ? [dogal, "whip", "yanKay", ...(alcakKadraj ? ["el"] : [])] : shot.secenek ?? [dogal ?? "yorunge"];
+  // Drone ve vertigo zaman ister: 2 sn'den kısa çekimde seçilmez.
+  const kisa = shot.sure < 2 && !zorla ? secenek.filter((t) => t !== "drone" && t !== "vertigo") : secenek;
+  const tur = sec(kisa.length ? kisa : secenek, v);
+  if (shot.hareket) shot.hareket.tur = tur;
+  else if (tur === dogal || (tur === "yorunge" && zeplinMi)) canlandir(shot, shot.parcaKadraj ? 0 : shot.ayarli ? k.parca : v);
+  else {
+    // Kütüphane kadrajından temel geometri: hedef, açı (yay ortası), uzaklık, yükseklik.
+    let t = shot.ayarli ? null : shot.temel; // elle kadrajda temel, verilen kadrajın kendisi
+    if (!t && shot.kamera) {
+      const [, kx, ky, kz, bx, by, bz] = shot.kamera[0];
+      t = { hedef: [bx, by, bz], a: +Math.atan2(kx - bx, kz - bz).toFixed(3), D: +Math.hypot(kx - bx, kz - bz).toFixed(2), Hb: +(ky - by).toFixed(2) };
+    } else if (!t) {
+      const y = shot.yorunge;
+      t = { hedef: y.hedef, a: +((y.a0 + y.a1) / 2).toFixed(3), D: y.r, H: y.h, bak: y.bak };
+    }
+    shot.hareket = { tur, ...t, ...(shot.ayarli ? { aciSabit: true } : {}) };
+    delete shot.kamera; delete shot.yorunge;
+  }
+  if (shot.hareket) {
+    shot.hareket.yon = ck?.yon ?? (i % 2 ? -1 : 1);
+    if (ck?.fov) shot.hareket.fov = ck.fov;
+  } else if (ck?.fov) shot.fov = ck.fov;
+  if (ck?.sarsinti != null) shot.sarsinti = ck.sarsinti;
+  if (tur === "el") shot.sarsinti = Math.max(shot.sarsinti ?? 0, 0.6);
+  return bitir(AILE(tur), tur);
 }
+function sec(secenek, v) {
+  if (secenek.length === 1) return secenek[0];
+  const n = secenek.length;
+  const sira = secenek.map((t, j) => [t, (hs.sayac[t] ?? 0) + (t === "itme" || t === "yorunge" ? 0.6 : 0), (((j - v) % n) + n) % n]);
+  const farkli = sira.filter(([t]) => AILE(t) !== hs.onceki);
+  const uygun = farkli.filter(([t]) => (hs.sayac[t] ?? 0) < (SINIR[t] ?? 9));
+  const izinli = (l) => l.filter(([t]) => (SINIR[t] ?? 9) > 0);
+  const L = (uygun.length ? uygun : izinli(farkli).length ? izinli(farkli) : izinli(sira).length ? izinli(sira) : sira).sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+  return L[0][0];
+}
+/** Çekime GİRİŞ geçişi. Hikâye "gecis" verirse o (ilk parçada); whip'e kaydırma, çarpma/gök efektine ve şimşek anına flaş
+ *  (videoda en çok 2), kapanışa solma, drone'a yakınlaşma; grup içi parçalar kesme; grup sınırlarında çoğunlukla kesme,
+ *  her üçüncüsü solma. */
+function gecisSec(k, shot) {
+  const ck = k.cekim && typeof k.cekim === "object" ? k.cekim : null;
+  if (k.parca === 0 && ck?.gecis) {
+    if (GECIS[ck.gecis]) return ck.gecis;
+    console.log(`UYARI: bilinmeyen geçiş "${ck.gecis}" (${Object.keys(GECIS).join(", ")}): otomatik`);
+  }
+  const efs = k.parca === 0 ? [ck?.efekt].flat().map((e) => (typeof e === "string" ? e : e?.ad)) : [];
+  if (shot.hareketAd === "whip") return "kaydir";
+  if (efs.includes("carpisma") || efs.includes("gok")) return "flas";
+  if (shot.anAni?.tur === "simsek" && hs.flas < 2) { hs.flas++; shot.anAni.flas = true; return "flas"; }
+  if (k.cekim === "kapanis") return "solma";
+  if (k.parca > 0) return "kesme";
+  if (shot.hareketAd === "drone") return "yakinlas";
+  return ++hs.grup % 3 === 0 ? "solma" : "kesme";
+}
+const gecisler = ham.map((shot, i) => (i ? gecisSec(kesitler[i], shot) : null));
+const cekimler = ham.map((shot, i) => {
+  const k = kesitler[i], sure = +(k.t1 - k.t0 + (i < ham.length - 1 ? GECIS[gecisler[i + 1]] : 0)).toFixed(3);
+  // Anahtar karelerin zamanı yeni süreye ölçeklenir.
+  if (shot.kamera) shot.kamera = shot.kamera.map(([t, ...r]) => [+((t * sure) / shot.sure).toFixed(3), ...r]);
+  shot.sure = sure;
+  if (i) shot.gecis = { tur: gecisler[i], sure: GECIS[gecisler[i]] };
+  return ozellik(k, i, shot);
+});
+// Fırtına çekimlerinde tek yağmur yatağı: art arda olay çekimleri boyunca (çekim başına ayrı başlayınca dalgalanıyordu).
+for (let i = 0; i < cekimler.length; i++) {
+  if (!cekimler[i].yagmur) continue;
+  let j = i;
+  while (j + 1 < cekimler.length && cekimler[j + 1].yagmur) j++;
+  const t0 = kesitler[i].t0, t1 = kesitler[j].t1 + 0.4;
+  efektler.push({ dosya: efekt("yagmur", resolve("cikti/efekt"), +(t1 - t0).toFixed(1)), bas: +t0.toFixed(3), ses: EFEKT_SES.yagmur, ad: "yagmur" });
+  i = j;
+}
+for (const c of cekimler) delete c.yagmur;
+/** Çekime hikâyeden gelen ekler: ses efekti (çekimin başında + "bas" sn; dizi olabilir; bölünmüş çekimde yalnız ilk
+ *  parçada; olay araçlarında siren, şimşekte gök gürültüsü, siste sis düdüğü kendiliğinden; "efekt": false kapatır).
+ *  Olay anı (şimşek/sıçrama) çekimin hangi saniyesine düşecek: flaşlı girişte 0,3 sn (beyazın hemen ardından), değilse
+ *  çekimin ~%35'i. */
+function ozellik(k, i, shot) {
+  const ck = k.cekim && typeof k.cekim === "object" ? k.cekim : null;
+  const kapali = ck && (ck.efekt === false || ck.efekt === null);
+  if (shot.anAni) {
+    shot.anAni.t = +(shot.anAni.flas ? 0.3 : Math.min(1.2, Math.max(0.3, shot.sure * 0.35))).toFixed(2);
+    // Gök gürültüsü üst üste binmesin (gürleme ~6 sn): öncekinden en az 4 sn sonra.
+    if (shot.anAni.tur === "simsek" && k.t0 + shot.anAni.t - hs.gok >= 4) { hs.gok = k.t0 + shot.anAni.t; (shot.otoEfekt ??= []).push({ ad: "gok", bas: shot.anAni.t + 0.15 }); }
+    delete shot.anAni.flas;
+  }
+  const efs = k.parca === 0 && ck?.efekt ? [ck.efekt].flat() : !kapali ? (shot.otoEfekt ?? []).filter((e) => k.parca === 0 || e.ad === "gok") : [];
+  for (const e0 of efs) {
+    const e = typeof e0 === "string" ? { ad: e0 } : e0;
+    if (!e?.ad) continue;
+    efektler.push({ dosya: efekt(e.ad, resolve("cikti/efekt"), e.sure), bas: +(k.t0 + (e.bas ?? 0)).toFixed(3), ses: e.ses ?? EFEKT_SES[e.ad] ?? null, ad: e.ad });
+  }
+  // Sis düdüğü (fenerin): siste olay çekiminin başında, en çok 9 sn'de bir.
+  if (shot.sisduduk && !kapali && !(k.parca === 0 && ck?.efekt) && k.t0 - hs.duduk >= 9) {
+    hs.duduk = k.t0;
+    efektler.push({ dosya: efekt("sisduduk", resolve("cikti/efekt")), bas: +(k.t0 + 0.1).toFixed(3), ses: EFEKT_SES.sisduduk, ad: "sisduduk" });
+  }
+  delete shot.sisduduk;
+  if (kapali) delete shot.yagmur;
+  delete shot.otoEfekt;
+  return shot;
+}
+// Art arda iki çekim aynı kalmasın (aynı adres + yörünge/hareket): olursa ikincisi döndürülür (güvenlik ağı).
+for (let i = 1; i < cekimler.length; i++) {
+  const ayni = (a, b) => a.adres === b.adres && JSON.stringify(a.kamera ?? a.yorunge ?? a.hareket ?? null) === JSON.stringify(b.kamera ?? b.yorunge ?? b.hareket ?? null);
+  if (ayni(cekimler[i - 1], cekimler[i]) && !cekimler[i].serbest) {
+    if (cekimler[i].hareket) { cekimler[i].hareket.yon = -(cekimler[i].hareket.yon ?? 1); cekimler[i].hareket.a = (cekimler[i].hareket.a ?? 0) + 0.6; }
+    else canlandir(cekimler[i], 3);
+  }
+}
+// Çekim listesi (her üretimde): yer, hareket, süre, ada saati (olay çekiminde çözülmüş saat), giriş geçişi, cümleler.
+kesitler.forEach((k, i) => {
+  const c = cekimler[i], sa = /saat=([^&]*)/.exec(c.adres)?.[1];
+  console.log(`  çekim ${i + 1}: ${JSON.stringify(k.cekim)} · ${c.hareketAd ?? "-"}${c.sarsinti ? ` (sarsıntı ${c.sarsinti})` : ""} · ${c.sure} sn · saat ${sa}${c.olayBek ? ` [olay ${c.olayEvreAd ?? ""}]` : ""}${c.anAni ? ` [${c.anAni.tur} @${c.anAni.t} sn]` : ""} · giriş ${c.gecis?.tur ?? "-"} · ${cumleler.slice(k.ilk, k.son + 1).map((x) => x.ses).join(" / ")}`);
+});
+const turSay = new Set(cekimler.map((c) => c.hareketAd).filter((t) => t && t !== "sakin" && t !== "sabit"));
+console.log(`  hareketler: ${turSay.size} tür (${[...turSay].join(", ")})`);
 
 /** Aynı yerin v. kullanımı başka kadraj: DUZEN[v] = [açı (rad, hedef çevresinde), uzaklık çarpanı] (geniş → yakın →
  *  daha geniş …; art arda aynı yer bile belirgin farklı görünür). Çekim içinde de hareket: çift v'de sona doğru içeri
@@ -413,7 +622,70 @@ function canlandir(shot, v) {
 /** Çekim kütüphanesi: gerçek adanın sabit ve dinamik açıları (koordinatlar: senaryolar/acilis.mjs notları). */
 function CEKIM(ad, v, sure, arayuz) {
   // Kadraj ayarı: kütüphane çekimi hedefi çevresinde döndürülür/uzaklaştırılır (hikâyeden, kod değişmeden).
-  if (ad && typeof ad === "object" && ad.yer) return kadraj(CEKIM(ad.yer, ad.varyant ?? v, sure, arayuz), ad);
+  // Yalnız "yer" (+ hareket/saat/efekt…) verilirse kadraj elle sayılmaz: hareket seçimi serbest kalır.
+  if (ad && typeof ad === "object" && ad.yer) {
+    const shot = CEKIM0(ad.yer, ad.varyant ?? v, sure, arayuz);
+    return zaman(ad.aci != null || ad.uzak != null || ad.yuk != null || ad.varyant != null ? kadraj(shot, ad) : shot, ad);
+  }
+  return zaman(CEKIM0(ad, v, sure, arayuz), ad);
+}
+// Çekimin saati/hızı hikâyeden ("saat": "HH:MM[:SS]" ya da olay saati, "hiz"); --tarih ile deneme günü.
+// Olay saati (16 Kasım): "saat": "olay+12" (olay başından 12 dk sonra; kesirli ve eksi olur: "olay-0.2"),
+// "olay:<evre>" (o evrenin ortası), "olay:<evre>+N" (evre başından N dk sonra). Olay çekimleri saat verilmezse
+// OLAY_ANI'ndaki ana göre. Bugün olay yoksa saat değişmez (UYARI).
+function zaman(shot, ad) {
+  const o = ad && typeof ad === "object" ? ad : {};
+  const spec = o.saat ?? shot.olayAni;
+  if (o.saat && shot.aracAni) shot.aracAni.oto = false;
+  if (spec) {
+    let hm = String(spec).startsWith("olay") ? olaySaati(spec, shot, o.saat ? 0 : shot.olayOfs ?? 0) : spec;
+    // Limana bakan olay çekimi (sis olay-hava): feribot iskelede olsun (açıktaysa sonraki yanaşmanın 0,5 dk sonrası).
+    if (hm && shot.vapurAni && !o.saat) {
+      const m = dakika(hm);
+      if (ferryOut(m) !== 0 || ferryOut(m + 0.7) !== 0) {
+        const y = nextArrival(m) + 0.5;
+        hm = `${saatYaz(y)}:30`;
+        if (olay && y > olay.son) console.log(`UYARI: feribot ${hm}'te iskelede ama olay ${saatYaz(olay.son)}'te bitiyor`);
+      }
+    }
+    if (hm) shot.adres = shot.adres.replace(/saat=[^&]*/, "saat=" + hm);
+  }
+  const hiz = o.hiz ?? shot.olayHiz;
+  if (hiz) shot.adres = shot.adres.replace(/hiz=[^&]*/, "hiz=" + hiz);
+  if (o.an === false) delete shot.anAni;
+  delete shot.olayOfs; delete shot.vapurAni;
+  if (opt("--tarih") && !shot.adres.includes("tarih=")) shot.adres += "&tarih=" + opt("--tarih");
+  if (olayAdres && !shot.adres.includes("&olay=")) shot.adres += olayAdres;
+  return shot;
+}
+/** Olay evrelerinin [baş, son] dakikaları (olayEvre taranır; "sonra" en çok 12 sa). */
+function olayEvreleri() {
+  const E = {};
+  for (let m = olay.bas; m <= olay.son + 720; m += 0.05) {
+    const e = olayEvre(olay, m);
+    if (!e) { if (m > olay.son) break; continue; }
+    (E[e.ad] ??= [m, m])[1] = m;
+  }
+  return E;
+}
+function olaySaati(spec, shot, ofs = 0) {
+  const m = /^olay(?::([a-z]+))?([+-]\d+(?:[.,]\d+)?)?$/.exec(String(spec).trim());
+  if (!m) { console.log(`UYARI: saat "${spec}" anlaşılmadı (olay+12 | olay:evre | olay:evre+3)`); return null; }
+  if (!olay) { console.log(`UYARI: saat "${spec}": bugün olay yok, ada saati değişmedi`); return null; }
+  const N = m[2] != null ? Number(m[2].replace(",", ".")) : null;
+  let dk;
+  if (m[1]) {
+    const E = olayEvreleri(), e = E[m[1]];
+    if (!e) { console.log(`UYARI: "${olay.tur}" olayında "${m[1]}" evresi yok (${Object.keys(E).join(", ")}): olay başı`); dk = olay.bas + (N ?? 0); }
+    else dk = N != null ? e[0] + N : m[1] === "sonra" ? e[0] + Math.min(10, (e[1] - e[0]) / 2) : (e[0] + e[1]) / 2;
+  } else dk = olay.bas + (N ?? 0);
+  dk = Math.max(0, Math.min(24 * 60 - 0.02, dk + ofs));
+  const sn = Math.round(dk * 60), hm = `${String(Math.floor(sn / 3600)).padStart(2, "0")}:${String(Math.floor(sn / 60) % 60).padStart(2, "0")}:${String(sn % 60).padStart(2, "0")}`;
+  shot.olayEvreAd = olayEvre(olay, dk)?.ad ?? "olay dışı";
+  if (!olayZorla && !opt("--saat") && dk > dakika(saat) + 0.5) console.log(`UYARI: ${spec} = ${hm} henüz gelmedi (ada saati ${saat}): olay o an sitede yok`);
+  return hm;
+}
+function CEKIM0(ad, v, sure, arayuz) {
   const vapurlu = typeof ad === "string" ? ad.startsWith("iskele") : !!(ad?.vapur || ad?.yorunge?.hedef === "iskele");
   // Bilgi kartlı (arayuz) çekim kartta saati gösterir: gerçek saatte kalır (iskele bile olsa).
   const a = `saat=${!arayuz && vapurlu ? vapurSaati : saat}&hiz=4`;
@@ -454,15 +726,64 @@ function CEKIM(ad, v, sure, arayuz) {
     zeplin2: () => yor("zeplin-yer", 0, 0, 0, 0, 0),
     kapanis: () => ({ ...yor([60, -80], 640, 320, -0.1, 0.1, 0), yazilar: [{ metin: "Follow,<br>move to the island.", alt: `on TikTok<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
   };
+  if (typeof ad === "string" && ad.startsWith("olay")) return Object.assign(olayCekimi(ad, a, L), arayuz ? { arayuz: true } : {});
   const shot = (L[ad] ?? L.ucus)();
+  // Hareket seçenekleri ve dönüştürmede temel kadraj (bkz. yonet).
+  if (typeof ad === "string" && SECENEK[ad]) shot.secenek = SECENEK[ad];
+  if (typeof ad === "string" && TEMEL[ad]) shot.temel = TEMEL[ad];
+  if (ad === "bayrak") shot.sabit = "alcak";
+  if (ad === "zeplin2") shot.sabit = "sabit";
   // Zeplin henüz açılmadıysa çekimde önizleme olarak gösterilir (?zeplin); metin bunu söylemeli ("150. sakinde").
   if (typeof ad === "string" && ad.startsWith("zeplin") && !sim.isOpen("zeplin")) shot.adres += "&zeplin";
   if (arayuz) shot.arayuz = true;
   return shot;
 }
 
+function olayCekimi(ad0, a, L) {
+  // Hava çekimi yalnız hava/deniz olayında anlamlı; kaza ve yangında geniş olay çekimi.
+  const ad = ad0 === "olay-hava" && (olay?.tur === "kaza" || olay?.tur === "yangin") ? "olay" : ad0;
+  const tur = ad.startsWith("olay-arac:") ? "olay-arac" : ad, b = OLAY_CEKIM[tur];
+  if (!b) { console.log(`UYARI: bilinmeyen olay çekimi "${ad}" (${Object.keys(OLAY_CEKIM).join(", ")}): meydan`); return Object.assign(L.meydan(), { secenek: SECENEK.meydan }); }
+  if (!olay) {
+    const yedek = ad === "olay-hava" || ad === "olay-tele" ? "ucus" : "meydan";
+    console.log(`UYARI: bugün olay yok: "${ad}" yerine ${yedek}`);
+    const shot = L[yedek]();
+    shot.secenek = SECENEK[yedek]; if (TEMEL[yedek]) shot.temel = TEMEL[yedek];
+    return shot;
+  }
+  const arac = tur === "olay-arac" ? ad.slice(10) : null, ani = OLAY_ANI[olay.tur] ?? {};
+  const cek = arac === "cekici", deniz = olay.tur === "yunus" || olay.tur === "balina";
+  // Sis: denizden limana bakan hava çekimi daha yüksekten (alçakta iskele kadrajı kapatıyordu).
+  const [D, H] = cek ? [20, 7] : olay.tur === "sis" && ad === "olay-hava" ? [90, 16] : [b.D, b.H];
+  const hava = olay.tur === "sis" || olay.tur === "firtina", sokakEv = hava && ad === "olay-kalabalik"; // seyirci yok: Town Green karşı yandan
+  const shot = { adres: a, hareket: { tur: null, hedef: ad, D, H, ...(b.goz ? { goz: b.goz } : {}) }, secenek: cek ? ["yorunge", "vinc", "alcak"] : sokakEv ? ["yanKay", "vinc"] : b.secenek, olayBek: olay.tur,
+    olayAni: arac ? ani.arac?.[arac] ?? ani.olay ?? "olay+5" : ani[ad] ?? ani.olay ?? "olay+5",
+    ...(b.sarsinti && !sokakEv ? { sarsinti: b.sarsinti } : {}),
+    // Hız: araç takibi 1,5; çekici yüklemesi 10; balina sıçraması gerçek zamanlı (~3,5 sn) → 1,2; fırtınada şimşek
+    // çakışı 1,3 sn → 2; yakın çekim 2; diğerleri 4 (sis akar).
+    olayHiz: cek ? 10 : arac ? 1.5 : deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null };
+  if (arac && !cek) shot.otoEfekt = [{ ad: "siren-arac", sure: 6 }];
+  if (arac) shot.aracAni = { ad: arac, oto: true };
+  if (olay.tur === "firtina") shot.yagmur = true;
+  // Olay anı (kaydet.mjs anAni): fırtınada sıradaki şimşek, balinada sıradaki sıçrama çekimin içine oturur.
+  if (olay.tur === "firtina" && ad !== "olay-kalabalik") shot.anAni = { tur: "simsek" };
+  if (deniz && ad !== "olay-hava") shot.anAni = { tur: "sicrama" };
+  if (olay.tur === "sis") shot.sisduduk = true;
+  // Limana/iskeleye bakan çekimler (sis hava; fırtına/sis yakın: iskelenin üstü): feribot iskelede olsun.
+  if ((olay.tur === "sis" && ad === "olay-hava") || ((olay.tur === "sis" || olay.tur === "firtina") && ad === "olay-yakin")) shot.vapurAni = true;
+  // Saati verilmeyen olay çekimleri aynı ana yığılmasın (fırtınada hep aynı şimşek, siste aynı kare): n. çekim kaydırılır.
+  shot.olayOfs = [0, 1.6, -1.2, 3, -2.4, 4.2, -3.6, 5.4][hs.olayN++ % 8];
+  return shot;
+}
+
 /** {aci, uzak, yuk}: yörünge açısı +aci, yarıçap ×uzak, yükseklik ×yuk (kamera çekiminde hedef çevresinde döndürme). */
 function kadraj(shot, { aci = 0, uzak = 1, yuk = 1 }) {
+  if (shot.hareket) {
+    // Olay çekimi: kadraj ayarı temel geometriyi değiştirir (hareket yine seçilir).
+    const h = shot.hareket;
+    h.a = (h.a ?? 0) + aci; h.D = +(h.D * uzak).toFixed(2); h.H = +(h.H * yuk).toFixed(2);
+    return shot;
+  }
   shot.ayarli = true;
   if (shot.kamera) {
     const c = Math.cos(aci), s = Math.sin(aci);
@@ -478,16 +799,15 @@ function kadraj(shot, { aci = 0, uzak = 1, yuk = 1 }) {
 }
 
 const MUZIK = "cikti/muzik/ada-1.mp3"; // müzik yoksa sessiz (anlatım standardı 7)
-const S = { ...S0, olcek: 2, gecis: X, ...(existsSync(MUZIK) ? { muzik: MUZIK } : {}), fps: 30, w: 1080, h: 1920, cekimler, aciklama };
+const S = { ...S0, olcek: 2, gecis: X, ...(existsSync(MUZIK) ? { muzik: MUZIK } : {}), ...(efektler.length ? { efektler } : {}), fps: 30, w: 1080, h: 1920, cekimler, aciklama };
 writeFileSync(`${out}/senaryo.json`, JSON.stringify(S, null, 2));
 
 if (dene) {
   // Çekim listesi (numara → yer, cümleler): kadrajı düzeltilecek çekimi seçmek için.
-  kesitler.forEach((k, i) => console.log(`  çekim ${i + 1}: ${JSON.stringify(k.cekim)} · ${cekimler[i].sure} sn · ${cumleler.slice(k.ilk, k.son + 1).map((x) => x.ses).join(" / ")}`));
   if (!cekimler[Number(dene) - 1]) { console.error(`çekim ${dene} yok (1–${cekimler.length})`); process.exit(1); }
 }
 // --- çizim: site derlenir, yerel önizleme sunucusu açılır, kaydet.mjs çalışır ---
-const PORT = 4189;
+const PORT = Number(process.env.ONIZLEME_PORT) || 4189;
 execFileSync("npx", ["vite", "build"], { cwd: resolve(HERE, "../web"), stdio: "ignore" });
 const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: resolve(HERE, "../web"), stdio: "ignore", detached: true });
 try {

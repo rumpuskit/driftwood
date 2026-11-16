@@ -363,8 +363,9 @@ let realBase = performance.now() / 1000;
 // ?tarih=2026-10-29 (test): o günün aynı saatine (ya da ?saat'e) gider.
 const dateDay = dev && /^\d{4}-\d{2}-\d{2}$/.test(params.get("tarih") ?? "") ? Date.parse(params.get("tarih") + "T00:00:00Z") / 86400000 : null;
 if (dateDay != null) simBase += (dateDay - today) * 86400;
-const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
-if (fixed) simBase = sim.unixOf(dateDay ?? today, Number(fixed[1]) * 60 + Number(fixed[2]));
+// Saniye de olabilir (HH:MM:SS; video: olay aracı/şimşek anına oturan çekim).
+const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+if (fixed) simBase = sim.unixOf(dateDay ?? today, Number(fixed[1]) * 60 + Number(fixed[2]) + Number(fixed[3] ?? 0) / 60);
 // Fotoğraf modunda saat kaydırıcısı yalnız bakılan anı kaydırır (viewShift, saniye); çıkınca sıfırlanır.
 let viewShift = 0;
 const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed + viewShift;
