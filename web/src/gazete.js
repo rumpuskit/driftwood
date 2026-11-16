@@ -26,6 +26,16 @@ export function gazete(d) {
   const first = residents.reduce((m, r) => Math.min(m, r.arrived_day), day);
   out.push(el("p", `${longDateText(day)} · Issue ${num(day - first + 1)}`, "muted"));
 
+  // Son dakika / manşet: günün olayı (olay.js).
+  const oy = d.olay?.yazi?.(d.minute?.() ?? 0);
+  if (oy) {
+    out.push(el("h3", d.olay.plan && (d.minute?.() ?? 0) < d.olay.plan.son ? "Breaking" : "Today's big story"));
+    const p = el("p");
+    const b = el("span", oy.kisa, "link");
+    b.addEventListener("click", () => d.flyToOlay?.());
+    p.append(b);
+    out.push(p, el("p", oy.uzun));
+  }
   // Manşet: günün olayı.
   const th = people.theme;
   if (th) {

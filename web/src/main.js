@@ -24,6 +24,7 @@ import { svg } from "./icons.js";
 import { buildBayram } from "./world/bayram.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
+import { buildOlay } from "./world/olay.js";
 import { startOnline } from "./online.js";
 import { Follower } from "./follow.js";
 import { TASINMA_SAATLERI, VERI_URL, ZEPLIN_REKLAM, hourText } from "./config.js";
@@ -263,6 +264,11 @@ if (zeplin) scene.add(zeplin.group);
 // Ortam sesleri: varsayılan açık; tarayıcılar sesi ancak bir dokunuşla başlatır, o dokunuş "Adaya gir".
 // Kapatan kişinin tercihi bu cihazda hatırlanır.
 const ambience = new Ambience();
+// Günün olayı (olay.js, 16 Kasım): fırtına, sis, balina (araç yolu ve itfaiye açılınca kaza, yangın).
+const olay = buildOlay({ world, scene, sky, params, traffic });
+people.olay = olay; // setDay: olaya göre seyirci/görevli planı (olay.planla)
+// Olay yerine uçuş: olayın en iyi göründüğü yandan (api.yon).
+olay.api.git = () => { const [x, z] = olay.api.odak; const a = olay.api.yon; flyTo(x, Math.max(0, world.height(x, z)) + (olay.api.odakY ?? 1), z, olay.api.kiyi ? 90 : 48, new THREE.Vector3(Math.sin(a), 0.85, Math.cos(a)), 1.6); };
 const soundBtn = document.getElementById("sound");
 const pref = { get: () => { try { return localStorage.getItem("ses") !== "kapali"; } catch { return true; } },
   set: (on) => { try { localStorage.setItem("ses", on ? "acik" : "kapali"); } catch {} } };
@@ -387,8 +393,8 @@ const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic, zeplin });
 const claim = {}; // "Bu benim" (karttan Benim evim'e): ben oluşturulunca doldurulur
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, claim, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
-if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, claim, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, olay: olay.api, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, olay: olay.api, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Video kaydı: hedeften kameraya giden ışında ilk opak engelin uzaklığı (yoksa Infinity). kaydet.mjs sakin çekiminde
 // kamerayı engelin önüne alır (7 Kasım: terastaki sakinde kamera tentenin içine düştü, kare düz mavi kaldı).
 if (globalThis.__ada) {
@@ -453,8 +459,9 @@ const anketAcik = () => {
 menu.add({ icon: "kitap", label: "News", badge: () => seen.get("gazete") !== todayKey(), run: () => {
   seen.set("gazete", todayKey());
   menu.sayfa.open("The Driftwood Gazette", gazete({
-    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Private neighbor" : "@" + (r?.handle ?? "?")),
+    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()), at: (r) => (r?.hidden ? "Private neighbor" : "@" + (r?.handle ?? "?")),
     select: (i) => { menu.sayfa.close(); ui.select(i); }, flyToTheme,
+    olay: olay.api, flyToOlay: () => { if (!olay.api.odak) return; menu.sayfa.close(); ui.close(); olay.api.git(); },
     sakli: () => ({ ...hidden.info(), bulundu: hidden.found() }), tur: () => { menu.sayfa.close(); ui.close(); tour.start(); },
   }));
 } });
@@ -703,6 +710,7 @@ function tick() {
   const simDtSec = lastSim == null ? 0 : unix - lastSim;
   lastSim = unix;
   const U0 = performance.now();
+  olay.setDay(day);
   people.setDay(day);
   const U1 = performance.now();
   people.update(minute, real);
@@ -719,6 +727,7 @@ function tick() {
   const vp = {};
   for (const v of traffic.active.values()) {
     v.route.position(v.s, vp);
+    if (olay.gizle(vp.x, vp.z, minute)) continue; // kaza yerine giren gerçek trafik çizilmez
     const y = world.surfaceY(vp.x, vp.z) + 0.06;
     const record = { kind: v.kind, key: v.key, owner: v.owner, line: v.line, dep: v.dep };
     if (v.kind === "car" || v.kind === "taxi") vehicles.addCar(vp.x, y, vp.z, vp.heading, v.color ?? 0, { taxi: v.kind === "taxi", lights: !v.parked, brake: v.braking, record });
@@ -730,6 +739,7 @@ function tick() {
     vehicles.addCar(s.x, world.surfaceY(s.x, s.z) + 0.06, s.z, s.heading, color, { lights: false, record: { kind: "car", owner, parked: true, slot } });
   }
   for (const c of people.staticCars) vehicles.addCar(c.x, world.surfaceY(c.x, c.z) + 0.06, c.z, c.heading, 0, { taxi: c.taxi, record: { kind: "taxi" } });
+  olay.vehicles(vehicles, real, minute);
 
   zeplin?.update(unix, real, zeplinNight); // takipten önce: kamera zeplinin bu karedeki yerini izler
   if (flight) {
@@ -757,6 +767,7 @@ function tick() {
   hidden.setDay(day);
   hidden.update(real);
   const skyState = sky.update(day, minute, controls.target);
+  olay.update(day, minute, real, { camera, light: skyState.light, sunDeg: skyState.sunDeg, dt });
   const light = skyState.light;
   zeplinNight = 1 - light;
   const dist = camera.position.distanceTo(controls.target);
@@ -768,11 +779,11 @@ function tick() {
     sc.near = 1; sc.far = 2400;
     sc.updateProjectionMatrix();
   }
-  if (frame % 6 === 0) updateWindows(minute, light, skyState.sunDeg);
+  if (frame % 6 === 0) updateWindows(minute, light * (1 - 0.6 * (olay.api.hava?.karanlik ?? 0)), skyState.sunDeg); // fırtınada ışıklar yanar
   dollhouse.update(1 - light, real);
   vehicles.end();
   if (frame % 15 === 0) ui.tick(unix, minute, day, skyState.times);
-  if (frame % 8 === 0 && ambience.enabled) ambience.update(soundEnv(dist, light, minute));
+  if (frame % 8 === 0 && ambience.enabled) ambience.update({ ...soundEnv(dist, light, minute), olay: olay.ses() });
   driftClouds(clouds, dt);
   water.userData.tick(real);
   city.tick(real);

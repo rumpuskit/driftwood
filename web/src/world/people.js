@@ -477,6 +477,7 @@ export class People {
   /** Bir sakinin bir yerdeki modu: ne yapacak? */
   _mode(i, seg, k) {
     const s = this.residents[i].seed;
+    if (seg.ne === "olay") return "olay";
     if (seg.ne === "is") return `work:${this.works[i].wp.kind}:${this.works[i].wp.index}`;
     if (seg.ne === "hobi") {
       const mode = {
@@ -623,6 +624,7 @@ export class People {
       const s = this.residents[i].seed;
       let mode = q.mode;
       let role = { mode };
+      if (mode === "olay") { this.roles[i][k] = { mode, item: seg.olay ?? null }; continue; }
       const pool = this.pools[mode] ?? (mode.startsWith("seat:") ? this.pools[mode] : null);
       if (pool?.length) {
         const start = roll(s, "yer" + mode, this.day) % pool.length;
@@ -735,6 +737,8 @@ export class People {
     if (day === this.day) return;
     this.day = day;
     this.plans = this.residents.map((r) => dayPlan(r, day));
+    // Günün olayı (olay.js, 16 Kasım): seyirciler olay yerine yürür, görevdekiler olay yerinde.
+    if (this.olay) this.plans = this.olay.planla(this, day) ?? this.plans;
     // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
     this.homeWork = this.residents.map((r, i) => this.works[i].job === "uzaktan" && worksOn(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Dog");
@@ -1094,6 +1098,7 @@ export class People {
     const sec = minute * 60;
     const at = this._at;
     const stand = (x, z, heading) => { p.x = x; p.z = z; p.heading = heading; p.y = w.groundY(x, z); };
+    if (role.mode === "olay") return this.olay?.durus(i, role.item, minute, t, p, ph, stand) ?? false;
     const pingPong = (pts, speed, offset = 0) => {
       const lens = lengths(pts);
       const L = lens[lens.length - 1];
@@ -1979,7 +1984,7 @@ export class People {
           continue;
         }
         if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
-        atWork = seg.ne === "is";
+        atWork = seg.ne === "is" || (seg.ne === "olay" && !!seg.olay?.gorevli);
         p.phase = time * 2;
       }
       p.atWork = atWork;

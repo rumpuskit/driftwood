@@ -32,7 +32,7 @@ const $ = (id) => document.getElementById(id);
 // Sakinin görünen adı: adını gizlemek isteyenler "Private neighbor" olarak görünür.
 export const at = (r) => (r.hidden ? "Private neighbor" : "@" + r.handle);
 
-export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, capture = null, claim = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, capture = null, claim = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null, olay = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   $("cta").href = TIKTOK_URL;
   // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
@@ -156,6 +156,13 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         const near = company(i);
         const kim = pl.startsWith("mahalle:") ? "with the neighbors" : "with friends";
         return `${yer}, ${near.length === 0 ? "alone" : near.length === 1 ? `with ${at(residents[near[0]])}` : kim}`;
+      }
+      case "olay": {
+        const it = seg.olay ?? {};
+        if (it.gorevli === "polis") return it.rol === "trafik" ? "On duty · directing traffic at the crash" : "On duty · taking the report at the crash";
+        if (it.gorevli === "itfaiyeci") return "On duty · fighting the fire";
+        const ad = olay?.plan?.en?.toLowerCase() ?? "the scene";
+        return it.tavir === "cek" ? `Watching the ${ad}, filming on the phone` : `Watching the ${ad}`;
       }
       default: return seg.ne;
     }
@@ -431,6 +438,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     showCard();
   }
 
+  $("olaybtn")?.addEventListener("click", () => { if (olay?.odak) { close(); olay.git?.(); } });
   $("gunun").addEventListener("click", () => {
     const th = people.theme;
     if (!th) return;
@@ -603,7 +611,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     hudAc.setAttribute("aria-expanded", String(on));
     hudAc.setAttribute("aria-label", on ? "Hide details" : "Show details");
   });
-  const SIRA = ["secim", "next", null, "waiting", "gunun", "online"].map((id) => (id ? $(id) : document.querySelector("#hud .links")));
+  const SIRA = ["olaybtn", "secim", "next", null, "waiting", "gunun", "online"].map((id) => (id ? $(id) : document.querySelector("#hud .links")));
   let siradaki = null;
   function dondur() {
     const vis = SIRA.filter((el) => el && !el.hidden);
@@ -670,6 +678,17 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
           gun.innerHTML = svg(ic);
           gun.append(`Today: ${th.ad}${th.bas != null ? ` · ${clockText(th.bas)}` : ""}`);
           gun.title = gun.textContent;
+        }
+      }
+      // Günün olayı (olay.js): üst panelde ilk satır; dokununca olay yerine uçar.
+      const ob = $("olaybtn"), oy = olay?.yazi?.(minuteNow);
+      if (ob) {
+        ob.hidden = !oy;
+        if (oy && ob.dataset.t !== oy.kisa) {
+          ob.dataset.t = oy.kisa;
+          ob.innerHTML = svg(olay.plan?.tur === "firtina" ? "dalga" : olay.plan?.tur === "balina" || olay.plan?.tur === "yunus" ? "balik" : "uyari");
+          ob.append(oy.kisa);
+          ob.title = oy.uzun;
         }
       }
       if (!siradaki || siradaki.hidden) dondur();

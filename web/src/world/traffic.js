@@ -744,10 +744,12 @@ export class Traffic {
       // Trafik ışığı.
       if (!v.emergency && piece.kind === "lane" && route.pieces[k + 1]?.kind === "conn") {
         const conn = route.pieces[k + 1];
-        if (conn.node?.signal && conn.end) {
+        // Olay (olay.js, kaza): kapatılan kavşakta her koldan gelen durur, kuyruk birikir.
+        const kapali = this.kapali?.has(conn.node?.id);
+        if ((conn.node?.signal || kapali) && conn.end) {
           const gs = piece.s1 - STOP_INSET + 0.8 - v.s - v.L / 2;
           if (gs > -0.5) {
-            const st = signalState(conn.node, conn.end.group, tSec);
+            const st = kapali ? "r" : signalState(conn.node, conn.end.group, tSec);
             const canGo = st === "g" || (st === "y" && (v.v * v.v) / 7 > gs);
             if (!canGo && gs < gap) { gap = Math.max(0.01, gs); lv = 0; }
           }
@@ -908,6 +910,24 @@ const MODELS = {
   }),
 };
 
+// Olay araçları (olay.js): polis otosu (beyaz-lacivert, tepe lambası) ve çekici (kasalı, sarı tepe lambası).
+MODELS.polis = () => ({
+  body: merged([box(1.84, 0.64, 4.5, 0, 0.32, 0, "#f4f5f7"), box(1.66, 0.1, 1.2, 0, 0.96, 1.5, "#f4f5f7"), box(1.66, 0.1, 0.85, 0, 0.96, -1.8, "#f4f5f7")]),
+  glass: merged([box(1.62, 0.5, 2.1, 0, 0.96, -0.25, "#3a4a5c")]),
+  fixed: merged([...wheels(2.7, 1.62, 0.34), box(1.86, 0.18, 4.52, 0, 0.62, 0, "#1d3d8f"), box(1.86, 0.14, 0.2, 0, 0.34, 2.2, "#22262c"), box(1.86, 0.14, 0.2, 0, 0.34, -2.2, "#22262c"), box(1.55, 0.07, 1.8, 0, 1.46, -0.3, "#f4f5f7"), box(1.2, 0.12, 0.34, 0, 1.55, -0.1, "#1a1a1e")]),
+  head: merged([box(0.32, 0.12, 0.06, -0.6, 0.72, 2.26, "#fff6d8"), box(0.32, 0.12, 0.06, 0.6, 0.72, 2.26, "#fff6d8")]),
+  tail: merged([box(0.32, 0.12, 0.06, -0.6, 0.72, -2.26, "#d8302c"), box(0.32, 0.12, 0.06, 0.6, 0.72, -2.26, "#d8302c")]),
+  flash: merged([box(0.5, 0.16, 0.3, -0.32, 1.66, -0.1, "#ffffff"), box(0.5, 0.16, 0.3, 0.32, 1.66, -0.1, "#ffffff")]),
+});
+MODELS.cekici = () => ({
+  body: merged([box(2.3, 1.7, 2.1, 0, 0.55, 2.7, "#f0b429")]),
+  glass: merged([box(2.1, 0.75, 0.9, 0, 1.55, 3.4, "#3a4a5c")]),
+  fixed: merged([...wheels(4.6, 2.0, 0.48), box(2.4, 0.22, 5.4, 0, 1.1, -1.25, "#3c4148"), box(0.12, 0.5, 5.2, -1.14, 1.42, -1.25, "#3c4148"), box(0.12, 0.5, 5.2, 1.14, 1.42, -1.25, "#3c4148"), box(0.5, 0.5, 0.5, 0, 1.0, -4.05, "#2a2d31"), box(2.2, 0.6, 0.12, 0, 0.75, -3.98, "#f0b429")]),
+  head: merged([box(0.36, 0.16, 0.06, -0.8, 0.95, 3.77, "#fff6d8"), box(0.36, 0.16, 0.06, 0.8, 0.95, 3.77, "#fff6d8")]),
+  tail: merged([box(0.3, 0.2, 0.06, -1.0, 1.0, -4.0, "#d8302c"), box(0.3, 0.2, 0.06, 1.0, 1.0, -4.0, "#d8302c")]),
+  flash: merged([box(1.3, 0.16, 0.3, 0, 2.48, 2.5, "#ffffff")]),
+});
+
 const CAR_COLORS = ["#e9e9e6", "#2b2d31", "#8d9399", "#b8312f", "#2f4f7a", "#c9c3b5", "#5b6e4f", "#a8a29a", "#1f3b5c", "#7d2b2b"].map((c) => new THREE.Color(c));
 export const TAXI_COLOR = new THREE.Color("#f2c230");
 const ON = new THREE.Color(1, 1, 1), OFF = new THREE.Color(0.12, 0.12, 0.12), DIM = new THREE.Color(0.5, 0.5, 0.5), BRAKE = new THREE.Color(1.7, 1.7, 1.7);
@@ -920,7 +940,7 @@ export class Vehicles {
     const lightMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
     this.group = new THREE.Group();
     this.types = {};
-    const caps = { car: capacity, pickup: capacity, bus: 40, ambulans: 6, itfaiye: 3, cop: 3 };
+    const caps = { car: capacity, pickup: capacity, bus: 40, ambulans: 6, itfaiye: 3, cop: 3, polis: 4, cekici: 2 };
     for (const [type, f] of Object.entries(MODELS)) {
       const meshes = {};
       for (const [name, geo] of Object.entries(f())) {
@@ -964,12 +984,14 @@ export class Vehicles {
       T.meshes.roof?.setColorAt(i, opts.color);
     }
     const lit = opts.lights !== false;
-    T.meshes.head.setColorAt(i, lit ? ON : OFF);
-    T.meshes.tail.setColorAt(i, lit ? (opts.brake ? BRAKE : DIM) : OFF);
+    // Dörtlüler (olay.js: kaza): ön ve arka lambalar turuncu yanıp söner (opts.hazard = zaman).
+    const dortlu = opts.hazard != null && Math.floor(opts.hazard * 1.6) % 2 === 0;
+    T.meshes.head.setColorAt(i, dortlu ? AMBER : lit ? ON : OFF);
+    T.meshes.tail.setColorAt(i, dortlu ? AMBER : lit ? (opts.brake ? BRAKE : DIM) : OFF);
     if (T.meshes.flash) {
       const on = opts.flash != null;
       const blink = on && Math.floor(opts.flash * 4) % 2 === 0;
-      T.meshes.flash.setColorAt(i, !on ? OFF : type === "cop" ? (blink ? AMBER : OFF) : blink ? FLASH_A : FLASH_B);
+      T.meshes.flash.setColorAt(i, !on ? OFF : type === "cop" || type === "cekici" ? (blink ? AMBER : OFF) : type === "polis" ? (blink ? FLASH_B : FLASH_A) : blink ? FLASH_A : FLASH_B);
     }
     if (opts.taxi && this.nt < this.taxiSign.instanceMatrix.count) this.taxiSign.setMatrixAt(this.nt++, this._m);
     T.records[i] = opts.record ?? null;

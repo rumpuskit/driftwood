@@ -1384,3 +1384,6 @@ body.tur #hud, body.tur #card, body.tur #arama, body.tur #navbtns, body.tur #doc
   body:not(.kayit) #card { bottom: auto !important; max-height: calc(100vh - 146px); max-height: calc(100dvh - 146px); } /* soldaki sekme şeridinin üstünde biter */
   #floorbar, body.kart-acik:not(.kayit) #floorbar { bottom: auto !important; }
 }
+
+/* Günün olayı satırı (olay.js): vurgulu, dokununca olay yerine uçar. */
+#hud .waiting.olay { background: var(--accent-soft); color: var(--accent); font-weight: 800; }
