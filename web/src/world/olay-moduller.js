@@ -81,4 +81,19 @@ export const MODULLER = {
   film: buildFilmOlay,
   yaris: buildYarisOlay,
   marti: buildMartiOlay,
+// --- ajan A (deniz ve kıyı) ---
+import { buildFokOlay } from "./olay-fok.js";
+import { buildHortumOlay } from "./olay-hortum.js";
+import { buildDalgaOlay } from "./olay-dalga.js";
+import { buildKopekbaligiOlay } from "./olay-kopekbaligi.js";
+// --- ajan A sonu ---
+
+export const MODULLER = {
+  zeplin: buildZeplinOlay,
+  // --- ajan A ---
+  fok: buildFokOlay,
+  hortum: buildHortumOlay,
+  dalga: buildDalgaOlay,
+  kopekbaligi: buildKopekbaligiOlay,
+  // --- ajan A sonu ---
 };

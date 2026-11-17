@@ -58,3 +58,15 @@ export const UCURTMA = { yer: "cimen", ad: "the Town Green" };
 // --- ajan D sonu ---
 /** Adaya özgü olay adları (olay-plan.js ADLAR: [tr, en]). --- ajan C --- */
 export const ADLAR = { yaris: ["Koşu (fun run)", "Fun run"], marti: ["Martı sosisli kaptı", "Seagull steals a hot dog"] };
+// --- ajan A (deniz ve kıyı olayları: olay-fok.js, olay-kopekbaligi.js, olay-hortum.js, olay-dalga.js) ---
+/** Adaya özgü olay adları ({ tur: [ad, en] }). */
+export const ADLAR = { fok: ["Liman fokları", "Harbor seals"], kopekbaligi: ["Köpekbalığı", "Shark sighting"], hortum: ["Su hortumu", "Waterspout"], dalga: ["Dev dalgalar", "Big waves"] };
+/** Fok: bir grup liman foku (benekli, küçük). */
+export const FOK = { tur: "liman", sayi: 5 };
+/** Su hortumu: kıyıdan uzaklık (m) ve bulut tabanı yüksekliği (m). */
+export const HORTUM = { uzak: 480, H: 320 };
+/** Pencereler (ET dk; takvime alınınca geçerli): sabah olayları SABAH_SON'dan (11:20) önce, öğleden sonrakiler 15:50'den
+ *  (gün batımı ~16:20) önce biter. fok/köpekbalığı/dalga 40–55 dk, hortum 25–35 dk. */
+Object.assign(PENCERE, { fok: [480, 610], kopekbaligi: [480, 610], hortum: [480, 630], dalga: [470, 610] });
+Object.assign(IKINCI.pencere, { fok: [740, 860], kopekbaligi: [740, 860], hortum: [740, 880], dalga: [740, 860] });
+// --- ajan A sonu ---

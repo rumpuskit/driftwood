@@ -467,6 +467,13 @@ const OLAY_ANI = {
   yaris: { olay: "olay:yaris+6", "olay-yakin": "olay:yaris+0.05", "olay-kalabalik": "olay:bitis+0.3", "olay-tele": "olay:yaris+12", "olay-hava": "olay:yaris+9", arac: { lider: "olay:yaris+4" } },
   // Martı: dalış kapma evresinin başından 3 sn sonra simidi kapar (çekim 2× hızda ~5 sn'yi kapsar), kahkahalar, kovalama.
   marti: { olay: "olay:kapma+0", "olay-yakin": "olay:kapma+0", "olay-kalabalik": "olay:kapma+0.12", "olay-tele": "olay:kovalama+0.6", "olay-hava": "olay:kovalama+1.5" },
+  // --- ajan A (deniz ve kıyı: olay-fok.js, olay-kopekbaligi.js, olay-hortum.js, olay-dalga.js); hiz: çekim hızı (deniz ve dalga
+  // hareketi gerçek zamanlıya yakın okunsun) ---
+  fok: { olay: "olay:kayada+6", "olay-yakin": "olay:kayada+3", "olay-kalabalik": "olay:kayada+8", "olay-tele": "olay:kayada+12", "olay-hava": "olay:kayada+10", hiz: 1.5 },
+  kopekbaligi: { olay: "olay:kapali+4", "olay-yakin": "olay:kapali+8", "olay-kalabalik": "olay:kapali+6", "olay-tele": "olay:gorundu+2", "olay-hava": "olay:bosaltma+2", hiz: 1.5 },
+  hortum: { olay: "olay:hortum+3", "olay-yakin": "olay:hortum+6", "olay-kalabalik": "olay:hortum+5", "olay-tele": "olay:hortum+12", "olay-hava": "olay:hortum+8", hiz: 2 },
+  dalga: { olay: "olay:dovme+5", "olay-yakin": "olay:dovme+9", "olay-kalabalik": "olay:dovme+7", "olay-tele": "olay:dovme+12", "olay-hava": "olay:yukselme+4", hiz: 2 },
+  // --- ajan A sonu ---
 };
 const efektler = [];
 // Hareket dili (16 Kasım 2026, Mercanada kullanıcısı: "sürekli bir yerlere yaklaşan çekimler yerine daha karışık ve dikkat
@@ -835,6 +842,8 @@ function olayCekimi(ad0, a, L) {
     // çakışı 1,3 sn → 2; yakın çekim 2; diğerleri 4 (sis akar).
     olayHiz: cek ? 10 : arac ? 1.5 : olay.tur === "marti" && ad !== "olay-tele" && ad !== "olay-hava" ? 2 : deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null };
   if (arac && !cek) shot.otoEfekt = arac === "gelin" ? [{ ad: "korna", sure: 4 }] : arac === "lider" ? [] : [{ ad: "siren-arac", sure: 6 }];
+    olayHiz: cek ? 10 : arac ? 1.5 : ani.hiz ?? (deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null) };
+  if (arac && !cek) shot.otoEfekt = [{ ad: "siren-arac", sure: 6 }];
   if (arac) shot.aracAni = { ad: arac, oto: true };
   if (olay.tur === "firtina") shot.yagmur = true;
   // Olay anı (kaydet.mjs anAni): fırtınada sıradaki şimşek, balinada sıradaki sıçrama çekimin içine oturur.
