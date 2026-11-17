@@ -69,7 +69,7 @@ function karYama(m, kat, agac = false) {
         if (uKar > 0.001) {
           // Yukarı bakan yüzey (çatı, zemin, ağaç tepesi) beyazlar; deniz altındaki zemin (sığ suyun dibi) beyazlamaz.
           float karUst = smoothstep(0.45, 0.8, normalize(vKarN).y) * smoothstep(0.15, 0.7, vKarW.y);
-          float karN = karV(vKarW.xz * 0.19) * 0.6 + karV(vKarW.xz * 1.7) * 0.4;
+          float karN = karV(vKarW.xz * 0.19) * 0.65 + karV(mat2(0.8, 0.6, -0.6, 0.8) * vKarW.xz * 0.8) * 0.35; // ikinci kat döndürülmüş: ızgara izi yok
           float karA = smoothstep(karN * 0.78, karN * 0.78 + 0.24, uKar * uKarKat) * karUst;
           diffuseColor.rgb = mix(diffuseColor.rgb, uKarRenk, karA);
         }`);
