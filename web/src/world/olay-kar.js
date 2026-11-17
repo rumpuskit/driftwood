@@ -84,8 +84,10 @@ function karYama(m, kat, agac = false) {
  *  Izgara taranır; puan: yakın engel (sert) + 18 m içindeki ağaç (kadrajı kapatır) + meydana uzaklık. Döner { x, z, h, tur }. */
 function oyunYeri(world, traffic) {
   const m = world.placeOf?.("meydan")?.anchors?.[0] ?? [0, 0];
-  const agac = [...(world.trees ?? []).map((t) => [t.x, t.z]), ...world.features.filter((f) => f.type === "agac").map((f) => [f.x, f.z])];
-  const engel = [...world.features.filter((f) => f.type !== "agac" && f.x != null).map((f) => [f.x, f.z, f.type === "cesme" || f.type === "bandstand" || f.type === "havuz" ? 7 : 1.5]),
+  const yakin = (x, z) => Math.abs(x - m[0]) < 270 && Math.abs(z - m[1]) < 270; // arama karesi + pay (açılışta hızlı)
+  const agac = [...(world.trees ?? []).map((t) => [t.x, t.z]), ...world.features.filter((f) => f.type === "agac").map((f) => [f.x, f.z])].filter(([x, z]) => yakin(x, z));
+  const bina = world.buildings.filter((b) => yakin(b.x, b.z));
+  const engel = [...world.features.filter((f) => f.type !== "agac" && f.x != null && yakin(f.x, f.z)).map((f) => [f.x, f.z, f.type === "cesme" || f.type === "bandstand" || f.type === "havuz" ? 7 : 1.5]),
     ...(world.plazas ?? []).filter((p) => p.r != null && p.r < 16).map((p) => [p.x, p.z, p.r + 1])];
   const alanlar = (world.plazas ?? []).filter((p) => (p.kind === "park" || p.kind === "cimen") && p.x0 != null);
   const meydan = (world.plazas ?? []).find((p) => p.kind === "meydan" && p.r >= 20);
@@ -99,7 +101,7 @@ function oyunYeri(world, traffic) {
     if (!ok) continue;
     for (const [ax, az] of agac) { const d = Math.hypot(ax - x, az - z); if (d < 7.5) { ok = false; break; } if (d < 18) puan += 1.5; }
     if (!ok) continue;
-    for (const b of world.buildings) if (Math.hypot(b.x - x, b.z - z) < Math.max(b.w ?? 6, b.d ?? 6) / 2 + 9) { ok = false; break; }
+    for (const b of bina) if (Math.hypot(b.x - x, b.z - z) < Math.max(b.w ?? 6, b.d ?? 6) / 2 + 9) { ok = false; break; }
     if (!ok || traffic?.locate?.([x, z], 9, ["cadde", "sokak", "koy", "giris"])) continue;
     if (!en || puan < en.puan) en = { x, z, puan, tur: alan.kind === "meydan" ? "meydan" : alan.kind };
   }
