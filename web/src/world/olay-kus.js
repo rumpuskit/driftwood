@@ -236,7 +236,8 @@ export function buildKusOlay({ world, scene, group }) {
       .sort((a, b) => Math.hypot(a.x - P[0], a.z - P[1]) - Math.hypot(b.x - P[0], b.z - P[1]))[0];
     if (!agac) return null;
     const t0 = o.bas * 60, t1 = o.son * 60, D = t1 - t0;
-    const T = { gel: t0 + 0.04 * D, alcal: t0 + 0.14 * D, dal: t0 + 0.2 * D, kon: t0 + 0.3 * D, kalk: t0 + 0.86 * D };
+    // Dalış "dalis" evresinin (0,14) başından tam 150 sn sonra: video "olay:dalis+2.45" o anı yakalar (süreden bağımsız).
+    const T = { gel: t0 + 0.04 * D, alcal: t0 + 0.14 * D, dal: t0 + 0.14 * D + 150, kon: t0 + 0.3 * D, kalk: t0 + 0.86 * D };
     T.su = T.dal + 5; T.cik = T.su + 8; T.son = T.kon - 25;
     const tepe = [agac.x, agacTepe(scene, agac.x, agac.z, agac.y + agac.h * 0.9) + 0.1, agac.z]; // taç tepesi (ışınla)
     // Kaçış yönü (uzaklaşma): karaya doğru, iskeleden uzağa.
@@ -250,8 +251,9 @@ export function buildKusOlay({ world, scene, group }) {
     kartalGorunum();
     G.g.visible = false;
     const kal = [P[0], P[1]];
-    return { odak: [sp[0], sp[1]], odakY: 25, kalabalik: kal, kiyi: [P[0], P[1]], yon: Math.atan2(P[0] - sp[0], P[1] - sp[1]), yerAdi: K.yer, zaman: null,
-      gitD: 75, gitEgim: 0.3, gitCanli: true, cekimOlcek: 0.55, cekimOlcekH: 0.6, kalabalikArkadan: true };
+    // Kalabalık çekimi yüzlerden (kalabalikArkadan yok): arkadan çekimde kamera koyun üstündeki boş gökyüzüne bakıyordu.
+    return { odak: [sp[0], sp[1]], odakY: 3, kalabalik: kal, kiyi: [P[0], P[1]], yon: Math.atan2(P[0] - sp[0], P[1] - sp[1]), yerAdi: K.yer, zaman: null,
+      gitD: 75, gitEgim: 0.3, gitCanli: true, cekimOlcek: 0.55, cekimOlcekH: 0.6, kalabalikArkadan: false };
   }
 
   /** Kartalın duruşu: p = { x, y, z, yon, egim, yatis, kanat (0 kapalı … 1 açık), cirp, ayak (0 toplu … 1 uzanık), balik, gor }. */
@@ -364,8 +366,15 @@ export function buildKusOlay({ world, scene, group }) {
 
   /** Hareketli hedef: leylekte termiğin ortası (sürünün o anki ortalama yüksekliği), ayrılışta sürünün ortası;
    *  kartalda kuşun kendisi. */
+  let sonDk = null, sonC = null; // aynı karede seyircilerin her biri yeniden hesaplamasın
   function canli(minute) {
     if (!K) return null;
+    if (minute === sonDk && sonC?.K === K) return sonC.v;
+    const v = canli0(minute);
+    sonDk = minute; sonC = { K, v };
+    return v;
+  }
+  function canli0(minute) {
     const sec = minute * 60;
     if (sec < K.t0 || sec > K.t1) return null;
     if (K.tur === "kartal") { kartalPoz(sec, KP); return [KP.x, KP.y + 0.3, KP.z]; }

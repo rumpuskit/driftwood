@@ -189,19 +189,21 @@ export function buildBalonOlay({ world, scene, group }) {
     // Uzaklaşanların varacağı yer deniz mi (metin): bitişteki konumun zemini.
     const son = B.slice(1).map((b) => { const d = b.hiz * (t1 - b.kalk); return [b.sx + b.dx * d, b.sz + b.dz * d]; });
     const denizde = son.filter(([x, z]) => (world.height?.(x, z) ?? 1) < 0).length > son.length / 2;
-    // Kamera yönü: rüzgâra dik, meydanın tersi tarafından değil kasabaya bakar (arka plan kasaba); biraz rüzgâr altından.
-    let cx = nx, cz = nz;
-    if ((M[0] - C.x) * cx + (M[1] - C.z) * cz > 0) { cx = -cx; cz = -cz; }
-    const odak = [C.x, C.z], kal = [C.x - cx * 46, C.z - cz * 46];
+    // Kamera yönü: rüzgârın üstünden (seyircilerin arkasından), biraz yandan: kalkış sırası enine görünür (sıranın ucundan
+    // bakınca yakındaki balon kadrajı dolduruyordu), uçuşta balonlar kasabanın üstüne doğru uzaklaşır.
+    const yan = kesir("balonYan", o.tohum) < 0.5 ? 1 : -1;
+    const cx = -wx + nx * 0.35 * yan, cz = -wz + nz * 0.35 * yan;
+    const odak = [C.x, C.z], kal = [C.x - wx * 40, C.z - wz * 40];
     // Kalkış seyircileri kalkış hattının kasaba tarafında (kamera karşısında); iniş seyircileri iniş yerinin meydan tarafında.
     let lx = M[0] - L.x, lz = M[1] - L.z; const ld = Math.hypot(lx, lz) || 1; lx /= ld; lz /= ld;
     let kalD = 30;
     if (L.tur === "saha") {
-      // Sahada seyirciler meydan tarafındaki uzun kenar çizgisinin dibinde (saha boşaltılır: tahliye).
+      // Sahada seyirciler meydan tarafında, sahanın içinde (saha boşaltılır: tahliye; seyirciler görevli, boşaltılmaz).
       const pt = world.pitch, boyunaX = pt.x1 - pt.x0 >= pt.z1 - pt.z0;
-      if (boyunaX) { lx = 0; lz = Math.sign(M[1] - L.z) || 1; kalD = (pt.z1 - pt.z0) / 2 - 2; } else { lz = 0; lx = Math.sign(M[0] - L.x) || 1; kalD = (pt.x1 - pt.x0) / 2 - 2; }
+      if (boyunaX) { lx = 0; lz = Math.sign(M[1] - L.z) || 1; } else { lz = 0; lx = Math.sign(M[0] - L.x) || 1; }
+      kalD = 21; // sahanın içinde, balondan 21 m (arkadan çekimde kamera 35 m: tribünün arkasına düşmesin)
     }
-    K = { o, C, L, Lgy, T, B, n, t0, t1, D, wx, wz, nx, nz, denizde, odak, kal, kal1: [C.x - cx * 46, C.z - cz * 46], kal2: [L.x + lx * kalD, L.z + lz * kalD],
+    K = { o, C, L, Lgy, T, B, n, t0, t1, D, wx, wz, nx, nz, denizde, odak, kal, kal1: [C.x - wx * 40, C.z - wz * 40], kal2: [L.x + lx * kalD, L.z + lz * kalD],
       yonAd: pusula(Math.atan2(wx, wz), DIL), izleyen: [0, 0] };
     K.yer = DIL === "en"
       ? { kalkis: C.tur === "tarla" ? "the farm fields" : `the meadow ${pusula(Math.atan2(C.x - M[0], C.z - M[1]), "en")} of town`, inis: L.tur === "saha" ? AD.saha.ad : L.tur === "cimen" ? AD.yedekSaha.ad : "the park" }
@@ -296,7 +298,9 @@ export function buildBalonOlay({ world, scene, group }) {
     const sec = minute * 60;
     if (sec < K.t0 || sec > K.t1) return null;
     const b = K.B[0];
-    if (sec < b.kalk - 20) return [K.C.x, b.gy + 6, K.C.z];
+    // Yerde: sepet sırasının 6 m önü (rüzgâr üstü), 3 m yükseklik: hedef zarfların içinde kalmasın (video kamerası engel sanıp
+    // zarfın dibine giriyordu).
+    if (sec < b.kalk - 20) { const x = K.C.x - K.wx * 16, z = K.C.z - K.wz * 16; return [x, (world.groundY?.(x, z) ?? b.gy) + 3, z]; }
     poz(b, sec, P);
     return [P.x, P.y + (P.yatik > 0.5 ? 4 : 11), P.z];
   }

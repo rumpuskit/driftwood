@@ -192,8 +192,11 @@ export function buildMooseOlay({ world, scene, group, traffic }) {
     const H = R.hedef;
     // Camera: from the town side across the street toward the browse spot.
     const yonK = Math.atan2(C[0] - H[0], C[1] - H[1]) + 0.6;
-    return { odak: [H[0], H[1]], odakY: 1.6, kalabalik: [H[0], H[1]], kiyi: null, yon: yonK, yerAdi: "Main Street", zaman: null,
-      gitD: 34, gitEgim: 0.45, gitCanli: true, cekimOlcek: 0.75, cekimOlcekH: 0.7 };
+    // Watchers stand on the town side of the browse spot, 18–28 m away (crowd shot from behind them, moose beyond).
+    let cx = C[0] - H[0], cz = C[1] - H[1]; const cd = Math.hypot(cx, cz) || 1; cx /= cd; cz /= cd;
+    K.kal = [H[0] + cx * 22, H[1] + cz * 22];
+    return { odak: [H[0], H[1]], odakY: 1.6, kalabalik: K.kal, kiyi: null, yon: yonK, yerAdi: "Main Street", zaman: null,
+      gitD: 34, gitEgim: 0.45, gitCanli: true, cekimOlcek: 0.75, cekimOlcekH: 0.7, kalabalikArkadan: true };
   }
 
   /** Moose pose at second sec: { x, z, h, yd (gait distance), dur ("" walking | bak | ye), gor }. */
@@ -253,13 +256,13 @@ export function buildMooseOlay({ world, scene, group, traffic }) {
     return [MP.x, K.gy(MP.x, MP.z) + 1.6, MP.z];
   }
 
-  /** Watchers: along Main Street around the browse spot, at a respectful distance (16–28 m), filming. */
+  /** Watchers: on the town side of the browse spot, at a respectful distance (18–28 m), filming. */
   function gorev(people, day, S, plans) {
     if (!K) return [];
     const { o } = K, H = K.R.hedef;
     const T0 = K.tVar / 60 - 4, T1 = K.tDon / 60 + 3;
     const a = adaylar(people, day, plans, world, { T: T0, odak: H, isR: 260, uzak: 3, disari: true });
-    const y = yerlerSec(world, null, H, H, Math.min(16, a.length), 16, 28, o.tohum, { kiyida: true, yay: 6.28, araliK: 1.4 })
+    const y = yerlerSec(world, traffic, K.kal, H, Math.min(16, a.length), 18, 28, o.tohum, { yay: 2.0, araliK: 1.4 })
       .filter((q) => !world.buildings.some((b) => Math.abs(q.x - b.x) < b.w / 2 + 1 && Math.abs(q.z - b.z) < b.d / 2 + 1));
     const kal = Math.max(6, Math.round(T1 - T0));
     const g = gorevler(people, day, a, y, { T0, dagilim: 3, kal: [kal - 2, kal], Tson: T1 + 2, modul: "moose", tavirlar: ["cek", "cek", "goster", "bak", "cek", "konus"], tuz: "m" });
