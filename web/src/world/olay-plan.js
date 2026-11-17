@@ -24,7 +24,9 @@ function surum(day) { let r = null; for (const s of SURUMLER) if (s.d <= day) r 
 export const sabahTurleri = (day) => surum(day)?.sabah ?? ADA_TURLERI;
 export const ikinciTurleri = (day) => surum(day)?.ikinci ?? IKINCI?.turler ?? [];
 
-// Tür tablosu: pencere [en erken, en geç başlangıç] (yerel dakika; olay-ayar.js PENCERE ezer), süre (dk), gerek (isOpen).
+// Tür tablosu: pencere [en erken, en geç başlangıç] (yerel dakika; olay-ayar.js PENCERE ezer), süre (dk),
+// gerek(open, day) (isOpen ve gün: mevsimlik türler o gün uygun mu; gün verilmeyen eski türler yalnız open'a bakar),
+// yuva (1: yalnız öğleden sonra), pencereGun(P, day) (o günün penceresi: gün batımına bağlı türler; yoksa P).
 const TURLER = {
   firtina: { ad: "Fırtına", en: "Storm", pencere: [510, 640], sure: [85, 110], gerek: () => true },
   sis: { ad: "Sis", en: "Fog", pencere: [370, 420], sure: [230, 280], gerek: () => true },
@@ -35,14 +37,49 @@ const TURLER = {
   // Yeni türler (17 Kasım akşamı, kullanıcı: "olay çeşitliliği ve dikkat çekicilik çok önemli"); görünüm modülleri
   // olay-moduller.js. Adada çıkması için olay-ayar.js ADA_TURLERI / IKINCI.turler listesine girmeleri gerekir.
   zeplin: { ad: "Zeplin acil inişi", en: "Blimp emergency landing", pencere: [600, 740], sure: [45, 60], gerek: () => true },
-  dugun: { ad: "Düğün konvoyu", en: "Wedding convoy", pencere: [600, 740], sure: [35, 45], gerek: (open) => open("cevre_yolu") },
+  dugun: { ad: "Düğün konvoyu", en: "Wedding convoy", pencere: [580, 720], sure: [38, 44], gerek: (open) => open("cevre_yolu") },
   fok: { ad: "Fok", en: "Seals", pencere: [560, 730], sure: [40, 55], gerek: () => true },
   hortum: { ad: "Su hortumu", en: "Waterspout", pencere: [560, 720], sure: [25, 35], gerek: () => true },
   gemi: { ad: "Dev gemi", en: "Giant ship", pencere: [560, 700], sure: [55, 70], gerek: () => true },
   moose: { ad: "Geyik", en: "Moose in town", pencere: [480, 690], sure: [35, 45], gerek: () => true },
   kopekbaligi: { ad: "Köpekbalığı", en: "Shark sighting", pencere: [560, 700], sure: [40, 55], gerek: () => true },
+  // --- ajan E ---
+  // Kar (mevsimlik: yalnız 1 Aralık–28 Şubat): kar yağar, ada beyazlar, kar gün boyu kalır (olay-kar.js).
+  kar: { ad: "Kar", en: "Snow", pencere: [480, 600], sure: [70, 95], gerek: (open, day) => karMevsimi(day) },
+  // Elektrik kesintisi (yalnız öğleden sonra, yalnız gün batımından sonra sığan kısa günlerde; olay-elektrik.js). Pencere
+  // her gün gün batımından hesaplanır (olay-ayar.js gunBatimi; tanımlı olmayan adada hiç çıkmaz).
+  elektrik: { ad: "Elektrik kesintisi", en: "Power outage", pencere: [1050, 1090], sure: [30, 38], yuva: 1,
+    gerek: (open, day) => elektrikPenceresi(day) != null, pencereGun: (P, day) => elektrikPenceresi(day, P) ?? P },
+  // --- ajan E sonu ---
+  // --- ajan D --- gökyüzü ve doğa (olay-balon.js, olay-ucurtma.js, olay-kus.js; moose: olay-moose.js, yalnız Driftwood).
+  // kus: adaya göre (olay-ayar.js KUS, ADLAR): Mercanada leylek göçü, Driftwood kel kartal; evreleri KUS.evre ezer.
+  balon: { ad: "Sıcak hava balonları", en: "Hot air balloons", pencere: [480, 640], sure: [55, 70], gerek: () => true },
+  ucurtma: { ad: "Uçurtma şenliği", en: "Kite festival", pencere: [600, 700], sure: [45, 60], gerek: () => true },
+  kus: { ad: "Kuşlar", en: "Birds", pencere: [540, 680], sure: [35, 50], gerek: () => true },
+  // --- ajan D sonu ---
+  // --- ajan C (kasaba ve insan olayları; görünüm olay-film/yaris/marti.js) ---
+  film: { ad: "Film çekimi", en: "Film shoot", pencere: [570, 700], sure: [45, 55], gerek: () => true },
+  yaris: { ad: "Bisiklet yarışı", en: "Fun run", pencere: [570, 710], sure: [40, 46], gerek: () => true },
+  marti: { ad: "Martı simit kaptı", en: "Seagull steals a hot dog", pencere: [570, 730], sure: [18, 24], gerek: () => true },
 };
 // Ada adları (olay-ayar.js ADLAR: { tur: [ad, en] }; ör. Mercanada "Akdeniz foku", Driftwood "Seals on the dock").
+/** Kar mevsimi: 1 Aralık–28 Şubat (29 Şubat yok). Gün verilmezse (eski çağrı) false. */
+function karMevsimi(day) {
+  if (day == null) return false;
+  const d = new Date(day * 86400000), m = d.getUTCMonth() + 1;
+  return m === 12 || m === 1 || (m === 2 && d.getUTCDate() <= 28);
+}
+/** Elektrik kesintisinin o günkü başlangıç penceresi [en erken, en geç] (yerel dk) ya da null (o gün sığmaz): kesinti
+ *  lambalar yandıktan sonra başlar (gün batımı + 7 dk: güneş −1,5°'nin altında) ve öğleden sonra sınırından (IKINCI.son,
+ *  yaz saatinde yazSon) önce biter; karanlık olsun diye sınıra en yakın 10 dk'lık dilimde başlar. P (ayardaki pencere) verilirse kesişim alınır (boşsa hesaplanan). */
+function elektrikPenceresi(day, P) {
+  if (day == null || !AYAR.gunBatimi || !IKINCI) return null;
+  const sinir = avrupaYazi(day) && IKINCI.yazSon ? IKINCI.yazSon : IKINCI.son;
+  const b = sinir - TURLER.elektrik.sure[1], a = Math.max(AYAR.gunBatimi(day) + 7, b - 10); // olabildiğince geç: karanlık
+  if (a > b) return null;
+  if (P && Math.max(a, P[0]) <= Math.min(b, P[1])) return [Math.max(a, P[0]), Math.min(b, P[1])];
+  return [a, b];
+}
 export const OLAYLAR = Object.fromEntries(Object.entries(TURLER).map(([k, v]) => [k, { ...v, pencere: PENCERE[k] ?? v.pencere, ad: AYAR.ADLAR?.[k]?.[0] ?? v.ad, en: AYAR.ADLAR?.[k]?.[1] ?? v.en }]));
 
 // Küçük, kararlı karma (xmur3 + mulberry32): aynı (gün, tuz) her yerde aynı sayıyı verir.
@@ -64,7 +101,8 @@ export const kesir = (...p) => karma(...p) / 4294967296;
 export function olayGunu(day, open, o = {}) {
   if (o.yuva === 1) return ikinciOlay(day, open, o);
   if ((o.ozel ?? ozelGun)(day) && !o.zorla) return null;
-  const turler = (o.turler ?? sabahTurleri(day)).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
+  const uygun = (d) => (t) => OLAYLAR[t] && OLAYLAR[t].yuva !== 1 && OLAYLAR[t].gerek(open, d);
+  const taban = o.turler ?? sabahTurleri(day), turler = taban.filter(uygun(day));
   if (!turler.length) return null;
   let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
   if (!tur) {
@@ -78,7 +116,15 @@ export function olayGunu(day, open, o = {}) {
       if (n > 2 && s[0] === ham(blok - 1)[n - 1]) [s[0], s[1]] = [s[1], s[0]];
       return s;
     };
-    tur = sira(Math.floor(day / n))[((day % n) + n) % n];
+    const s = sira(Math.floor(day / n)), k = ((day % n) + n) % n;
+    tur = s[k];
+    // Mevsim sınırı (kar 1 Aralık'ta girer, 1 Mart'ta çıkar): liste dünden farklıysa blok kayar ve dünkü tür yeniden
+    // gelebilir; o gün bloktan ne dünkü ne yarınki (aynı bloktaki sıradaki) olan bir tür seçilir. Mevsimlik tür yoksa
+    // listeler hep aynıdır: takvim değişmez.
+    if (!o.ic && n > 2 && taban.filter(uygun(day - 1)).length !== n) {
+      const dun = olayGunu(day - 1, open, { ...o, ic: true, saat: undefined })?.tur;
+      if (dun === tur) tur = [2, 3, 1].map((j) => s[(k + j) % n]).find((t) => t !== dun && (k === n - 1 || t !== s[k + 1])) ?? tur;
+    }
   }
   const T = OLAYLAR[tur];
   const bas = o.saat ?? Math.round(T.pencere[0] + kesir("olaySaat", day, tur) * (T.pencere[1] - T.pencere[0]));
@@ -103,7 +149,7 @@ export function gunOlaylari(day, open, o = {}) {
 /** Öğleden sonra olayı: türü sabahkinden farklı (sis yok: IKINCI.turler), kendi blok karıştırması ve saat penceresi. */
 function ikinciOlay(day, open, o) {
   if (!IKINCI || ((o.ozel ?? ozelGun)(day) && !o.zorla)) return null;
-  const liste = (d) => ikinciTurleri(d).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
+  const liste = (d) => ikinciTurleri(d).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open, d));
   let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
   if (!tur) {
     // Blok karıştırma (ayrı tuz) + iki kısıt: sabahkinden farklı, önceki günün öğleden sonrakinden farklı. Önceki gün
@@ -124,7 +170,8 @@ function ikinciOlay(day, open, o) {
   }
   // Penceresi verilmemiş tür öğleden sonra varsayılanına (IKINCI.varsayilan) düşer, sabah penceresine DEĞİL (17 Kasım akşamı:
   // öğleden sonra yuvasındaki zeplin 10:55'te başlıyordu).
-  const T = OLAYLAR[tur], P = IKINCI.pencere[tur] ?? IKINCI.varsayilan ?? [IKINCI.son - 240, IKINCI.son - 120];
+  const T = OLAYLAR[tur], P0 = IKINCI.pencere[tur] ?? IKINCI.varsayilan ?? [IKINCI.son - 240, IKINCI.son - 120];
+  const P = T.pencereGun ? T.pencereGun(P0, day) : P0;
   const sure = Math.round(T.sure[0] + kesir("olaySure2", day, tur) * (T.sure[1] - T.sure[0]));
   let bas = o.saat ?? Math.round(P[0] + kesir("olaySaat2", day, tur) * (P[1] - P[0]));
   // En geç bitiş (akşam üretiminden önce): kışın IKINCI.son, Avrupa yaz saatinde IKINCI.yazSon (yerel dk).
@@ -145,7 +192,8 @@ export function olayEvre(o, minute) {
   if (!o) return null;
   const sure = o.son - o.bas, u = (minute - o.bas) / sure;
   // Fırtınanın ardından gökkuşağı (20 dk), yangının ardından gün boyu is izi: "sonra" evresi.
-  const sonra = { firtina: 20, yangin: 24 * 60 }[o.tur] ?? 0;
+  // Kar yağışı bitince kar gün boyu yerde kalır ("sonra"; ertesi gün yeni plan: kar yok).
+  const sonra = { firtina: 20, yangin: 24 * 60, kar: 24 * 60 }[o.tur] ?? 0;
   if (minute < o.bas || minute > o.son + sonra) return null;
   if (minute > o.son) return { ad: "sonra", u: (minute - o.son) / Math.max(1, sonra), t: minute - o.bas };
   const E = {
@@ -156,12 +204,24 @@ export function olayEvre(o, minute) {
     yunus: [[0.15, "gorundu"], [0.85, "oyun"], [1, "uzaklasma"]],
     balina: [[0.15, "gorundu"], [0.85, "oyun"], [1, "uzaklasma"]],
     zeplin: [[0.18, "alcalma"], [0.3, "inis"], [0.78, "yerde"], [1, "kalkis"]],
-    dugun: [[0.15, "toplanma"], [0.7, "konvoy"], [1, "halay"]],
+    dugun: [[0.15, "toplanma"], [0.4, "konvoy"], [1, "halay"]],
     fok: [[0.15, "gorundu"], [0.85, "kayada"], [1, "uzaklasma"]],
     hortum: [[0.2, "olusma"], [0.8, "hortum"], [1, "dagilma"]],
     gemi: [[0.15, "gorundu"], [0.5, "yanasma"], [1, "limanda"]],
     moose: [[0.15, "gorundu"], [0.85, "kasabada"], [1, "uzaklasma"]],
     kopekbaligi: [[0.12, "gorundu"], [0.3, "bosaltma"], [0.88, "kapali"], [1, "acildi"]],
+    // --- ajan E ---
+    kar: [[0.15, "baslangic"], [0.75, "yogun"], [1, "seyrelme"]],
+    elektrik: [[0.08, "kesinti"], [0.84, "karanlik"], [1, "donus"]],
+    // --- ajan D ---
+    balon: [[0.22, "sisirme"], [0.32, "kalkis"], [0.72, "suzulme"], [0.84, "inis"], [1, "yerde"]],
+    ucurtma: [[0.12, "toplanma"], [0.5, "senlik"], [0.76, "takildi"], [1, "kurtuldu"]],
+    kus: AYAR.KUS?.evre ?? [[0.15, "gelis"], [0.75, "termik"], [1, "gidis"]],
+    // --- ajan D sonu ---
+    // --- ajan C ---
+    film: [[0.15, "kurulum"], [0.85, "cekim"], [1, "toplama"]],
+    yaris: [[0.15, "hazirlik"], [0.8, "yaris"], [1, "bitis"]],
+    marti: [[0.3, "simit"], [0.36, "kapma"], [0.8, "kovalama"], [1, "dagilma"]],
   }[o.tur] ?? [[1, "olay"]];
   const [, ad] = E.find(([s]) => u <= s) ?? E[E.length - 1];
   return { ad, u, t: minute - o.bas };

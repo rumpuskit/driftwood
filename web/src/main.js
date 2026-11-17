@@ -402,6 +402,10 @@ if (fixed) simBase = sim.unixOf(dateDay ?? today, Number(fixed[1]) * 60 + Number
 // Fotoğraf modunda saat kaydırıcısı yalnız bakılan anı kaydırır (viewShift, saniye); çıkınca sıfırlanır.
 let viewShift = 0;
 const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed + viewShift;
+// Video kaydı (kaydet.mjs): sanal saate geçince sim saati ?saat'e geri alınır (17 Kasım akşamı: sayfa yüklenirken saat
+// akıyordu, hız 2'de çekim ~10 sn geç başlıyordu; martının 3 sn'lik dalışı kaçıyordu). ofs: ısınma süresi (gerçek sn).
+const simBase0 = simBase;
+if (dev && fixed) globalThis.__saatBasaAl = (ofs = 0) => { simBase = simBase0 - ofs * speed; realBase = performance.now() / 1000; viewShift = 0; lastSim = null; };
 function setSpeed(next) {
   simBase = simNow();
   realBase = performance.now() / 1000;

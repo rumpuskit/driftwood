@@ -189,6 +189,25 @@ const PROPS = {
     tint(new THREE.BoxGeometry(0.03, 1.4, 0.01).translate(0, -1.1, 0), "#f2c230"),
   ]),
   ip: () => merge([tint(new THREE.CylinderGeometry(0.006, 0.006, 1, 3).translate(0, 0.5, 0), "#f4f4f4")]),
+  // Olay eşyaları (17 Kasım akşamı; olay-dugun/film/marti.js): simit, sosisli, halay mendili, davul, zurna, klaket, boom.
+  simit: () => merge([tint(new THREE.TorusGeometry(0.075, 0.024, 6, 14).rotateX(Math.PI / 2).translate(0, -0.02, 0.06), "#b8752f"),
+    tint(new THREE.TorusGeometry(0.075, 0.02, 4, 14).rotateX(Math.PI / 2).translate(0, -0.006, 0.06), "#e8d7a8")]),
+  sosisli: () => merge([tint(new THREE.CapsuleGeometry(0.032, 0.15, 3, 8).rotateX(Math.PI / 2).translate(0, -0.03, 0.06), "#e3b46a"),
+    tint(new THREE.CapsuleGeometry(0.02, 0.17, 3, 8).rotateX(Math.PI / 2).translate(0, -0.005, 0.06), "#b4442c"),
+    tint(new THREE.BoxGeometry(0.012, 0.004, 0.14).translate(0, 0.016, 0.06), "#e8c22a")]),
+  mendil: () => merge([tint(new THREE.BoxGeometry(0.26, 0.24, 0.006).rotateZ(0.2).translate(0.02, 0.1, 0.02), "#d4202c")]),
+  davul: () => merge([tint(new THREE.CylinderGeometry(0.27, 0.27, 0.3, 14).rotateZ(Math.PI / 2), "#c9a46a"),
+    tint(new THREE.CylinderGeometry(0.275, 0.275, 0.02, 14).rotateZ(Math.PI / 2).translate(0.155, 0, 0), "#f2ead8"),
+    tint(new THREE.CylinderGeometry(0.275, 0.275, 0.02, 14).rotateZ(Math.PI / 2).translate(-0.155, 0, 0), "#f2ead8"),
+    tint(new THREE.TorusGeometry(0.27, 0.012, 4, 14).rotateY(Math.PI / 2).translate(0.15, 0, 0), "#8b2a20"),
+    tint(new THREE.TorusGeometry(0.27, 0.012, 4, 14).rotateY(Math.PI / 2).translate(-0.15, 0, 0), "#8b2a20")]),
+  zurna: () => merge([tint(new THREE.CylinderGeometry(0.012, 0.045, 0.42, 8).translate(0, 0.16, 0), "#6b3f22"),
+    tint(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 8).translate(0, 0.37, 0), "#c9a14a")]),
+  klaket: () => merge([tint(new THREE.BoxGeometry(0.26, 0.2, 0.015).translate(0, 0.06, 0.03), "#1c1c20"),
+    tint(new THREE.BoxGeometry(0.27, 0.04, 0.02).rotateZ(0.25).translate(0, 0.19, 0.03), "#f2f2f2"),
+    tint(new THREE.BoxGeometry(0.2, 0.012, 0.017).translate(0, 0.08, 0.035), "#f2f2f2")]),
+  boom: () => merge([tint(new THREE.CylinderGeometry(0.014, 0.014, 3.2, 5).translate(0, 1.4, 0), "#2a2a2e"),
+    tint(new THREE.CapsuleGeometry(0.06, 0.22, 3, 8).translate(0, 3.05, 0), "#7d776c")]),
 };
 
 /** Köpek parçaları: gövde, baş (boyundan döner), kuyruk (kökünden döner), bacak (omuzdan/kalçadan). */
@@ -390,6 +409,11 @@ export class Crowd {
           break;
         }
         case "mat": this._prop("mat", this._joint(propM, root, 0, 0.01, 0.3)); break;
+        // Olay eşyaları: simit/sosisli/mendil/klaket elde; zurna ağıza doğru; boom havaya; davul göğsün önünde.
+        case "simit": case "sosisli": case "mendil": case "klaket": this._prop(prop, this._joint(propM, handR, 0, -0.06, 0.03, -1.2)); break;
+        case "zurna": this._prop("zurna", this._joint(propM, handR, -0.03, -0.05, 0.04, -2.2)); break;
+        case "boom": this._prop("boom", this._joint(propM, handR, 0, -0.04, 0, -2.6)); break;
+        case "davul": this._prop("davul", this._joint(propM, torso, 0, 1.1, 0.3)); break;
         case "valiz": {
           // Valiz yerde, sağ elin yanında; sapı ele doğru.
           this._q.setFromAxisAngle(AY, p.heading);

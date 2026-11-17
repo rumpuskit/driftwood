@@ -93,6 +93,9 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
   function etkinYap(m) {
     const S = etkin(m); // her karede kopyalanır (planla yuvanın seyirci/itfaiyeci sayısını sonradan yazar)
     for (const k of ALANLAR) api[k] = S ? S[k] : k === "odakY" ? 2 : k === "yon" || k === "seyirci" || k === "itfaiyeci" ? 0 : null;
+    // Hareketli olayın o anki yeri/bakışı (olay modülü anlik: düğün konvoyu, yarış): "Olaya git" ve video olayı gösterir.
+    const an = S?.plan && mod[S.plan.tur]?.anlik?.(S.plan, m);
+    if (an) Object.assign(api, an);
   }
   api.evre = (m) => olayEvre(etkin(m)?.plan ?? null, m);
   api.arac = (ad) => api.araclar.get(ad) ?? null;
@@ -165,7 +168,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
   }
 
   /** Seyirci yerleri: odak çevresinde yay, yürünebilir, yolun dışında; odağa dönük. */
-  function seyirciYerleri(merkez, odak, n, r0, r1, seed, kiyida = false) {
+  function seyirciYerleri(merkez, odak, n, r0, r1, seed, kiyida = false, yasak = null) {
     const out = [];
     const a0 = yon(merkez[0] - odak[0], merkez[1] - odak[1]);
     // Deniz olayında yay kıyı noktasının kara tarafında (17 Kasım QC: odak açıkta, bütün yerler suya düşüyordu).
@@ -176,6 +179,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
       if (!world.isWalkable?.(x, z)) continue;
       if (traffic?.locate([x, z], 3.6, ["cadde", "sokak", "koy", "giris"])) continue; // taşıt yolunun üstünde durmaz
       if (out.some((q) => Math.hypot(q.x - x, q.z - z) < 0.85)) continue;
+      if (yasak?.(x, z)) continue; // modülün kapattığı alan (ör. film setinin bandı içi)
       out.push({ x, z, heading: yon(odak[0] - x, odak[1] - z), look: odak });
     }
     return out;
@@ -191,7 +195,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
   function planlaYuva(people, day, S) {
     const o = S.plan;
     // Fırtına ve siste seyirci yok (17 Kasım QC: sakinler fırtınada meydana yürüyüp "izliyor"du).
-    const M = mod[o.tur];
+    const M = o ? mod[o.tur] : null; // kur'u null dönen modül: S.plan null (17 Kasım: o.tur'da çöküyordu)
     if (!o || !S.odak || o.tur === "firtina" || o.tur === "sis" || (M && !M.seyirci)) return null;
     const plans = people.plans;
     const R = people.residents;
@@ -221,7 +225,8 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
     if (M?.gorev) gorev.push(...(M.gorev(people, day, S, plans) ?? []));
     for (const g of gorev) plans[g.i] = araEkle(plans[g.i], g.T0, g.T1, { ne: "olay", yer: "olay", olay: g.item }, g.commute ?? 0);
     // Seyirciler: olay sırasında dışarıda (meydan, hobi) olup yeri olaya yakın olanlar yürüyüp gelir.
-    const T = o.bas + 3;
+    // Seyircilerin geliş başlangıcı: modül verebilir (seyirciBas: ör. düğünde halay, olayın başında değil).
+    const B0 = M?.seyirciBas?.(o) ?? o.bas, T = B0 + 3;
     const secili = new Set(gorev.map((g) => g.i));
     const adaylar = [];
     plans.forEach((plan, i) => {
@@ -247,16 +252,17 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
     const merkez = S.kalabalik ?? S.odak;
     const kiyida = M ? !!M.seyirci.kiyida : !!S.kiyi;
     const [r0, r1] = M ? [M.seyirci.r0, M.seyirci.r1] : [kiyida ? 1.5 : o.tur === "kaza" ? 8.5 : o.tur === "yangin" ? 16 : 14, kiyida ? 12 : o.tur === "kaza" ? 15 : o.tur === "yangin" ? 28 : 26];
-    const yerler = seyirciYerleri(merkez, S.odak, Math.min(M?.seyirci.en ?? 30, adaylar.length), r0, r1, o.tohum, kiyida);
+    const yerler = seyirciYerleri(merkez, S.odak, Math.min(M?.seyirci.en ?? 30, adaylar.length), r0, r1, o.tohum, kiyida, M?.seyirci.yasak);
     S.seyirci = Math.min(adaylar.length, yerler.length);
     adaylar.slice(0, yerler.length).forEach(({ i, d }, k) => {
       const commute = Math.max(3, Math.round(d / 1.25 / 60) + 2);
-      const T0 = o.bas + 3 + (roll(R[i].seed, "olayVaris", day) % 9) + commute * 0.2;
+      const T0 = B0 + 3 + (roll(R[i].seed, "olayVaris", day) % 9) + commute * 0.2;
       const kal = 10 + (roll(R[i].seed, "olayKal", day) % 16);
       const T1 = Math.min(o.son + 6, T0 + kal);
       const tavirlar = M?.seyirci.tavirlar ?? ["cek", "konus", "goster", "konus", "cek", "bak", "sasir"];
       const tavir = tavirlar[roll(R[i].seed, "olayTavir", day) % tavirlar.length];
-      plans[i] = araEkle(plans[i], T0, T1, { ne: "olay", yer: "olay", olay: { ...yerler[k], tavir } }, commute);
+      // Modül seyircinin duruşunu kendisi çizebilir (seyirci.ozel: ör. martıda gülen, yarışta alkışlayan seyirci).
+      plans[i] = araEkle(plans[i], T0, T1, { ne: "olay", yer: "olay", olay: { ...yerler[k], tavir, ...(M?.seyirci.ozel ? { modul: o.tur } : {}) } }, commute);
     });
     return plans;
   }
@@ -336,6 +342,8 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
     planla, durus,
     /** Gün değişince planı kurar (people.setDay'den önce çağrılır). */
     setDay(day) { if (day !== gun) gunuKur(day); },
+    /** Olay modüllerinin sakin olmayan figürleri (ör. karda kartopu oynayan çocuklar; people.js kalabalık çiziminde). */
+    ekstra(crowd, minute, time) { for (const m of Object.values(mod)) m.ekstra?.(crowd, minute, time); },
     /** Olayın boşalttığı alanda duran sakinin yeri (people.js): { x, z, heading, yuru } ya da null. */
     tahliye(x, z, minute) {
       for (const m of Object.values(mod)) { const q = m.tahliye?.(x, z, minute); if (q) return q; }

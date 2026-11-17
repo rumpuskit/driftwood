@@ -428,7 +428,7 @@ const OLAY_CEKIM = {
 const uyarilan = new Set();
 const birKez = (m) => { if (!uyarilan.has(m)) { uyarilan.add(m); console.log(m); } };
 /** Olay türüne göre sahnedeki araçlar (olay.js: kazada polis/ambulans/çekici, yangında itfaiye). */
-const OLAY_ARACLARI = { kaza: ["polis", "ambulans", "cekici"], yangin: ["itfaiye"] };
+const OLAY_ARACLARI = { kaza: ["polis", "ambulans", "cekici"], yangin: ["itfaiye"], dugun: ["gelin"], yaris: ["lider"] }; // gelin: gelin arabası, lider: yarışta önde giden
 /** Saat verilmeyen olay çekiminin anı (olay türü → çekim → saat; araç: o aracın yolda olduğu evre). */
 const OLAY_ANI = {
   kaza: { olay: "olay:polis", "olay-yakin": "olay+1.5", "olay-kalabalik": "olay:polis", "olay-tele": "olay:polis", "olay-hava": "olay:polis", arac: { polis: "olay+5.2", ambulans: "olay+7.4", itfaiye: "olay+5.2", cekici: "olay:cekici+3" } },
@@ -439,6 +439,15 @@ const OLAY_ANI = {
   balina: { olay: "olay:oyun" },
   // Olay modülleri (17 Kasım akşamı; web/src/world/olay-moduller.js): hareketli hedefi olanlarda kamera onu izler.
   zeplin: { olay: "olay:yerde", "olay-yakin": "olay:inis", "olay-kalabalik": "olay:yerde+4", "olay-tele": "olay:alcalma+3", "olay-hava": "olay:alcalma+2" },
+  // --- ajan C (olay-dugun/film/yaris/marti.js) ---
+  // Düğün: konvoy yolda (gelin arabası izlenir), halay meydanda (halay sırasının ortası izlenir).
+  dugun: { olay: "olay:konvoy+3", "olay-yakin": "olay:halay+4", "olay-kalabalik": "olay:halay+6", "olay-tele": "olay:konvoy+5", "olay-hava": "olay:halay+3", arac: { gelin: "olay:konvoy+2" } },
+  // Film: çekim döngüsü 1,5 dk, "motor"dan 0,12–0,57 dk sonra aksiyon (oyuncular oynar, figüranlar yürür, vinç kalkar).
+  film: { olay: "olay:cekim+3.2", "olay-yakin": "olay:cekim+4.7", "olay-kalabalik": "olay:cekim+6.25", "olay-tele": "olay:cekim+1.75", "olay-hava": "olay:kurulum+5" },
+  // Yarış: start takın altından (yakın), yolda önde gidenler, bitişte seyirci.
+  yaris: { olay: "olay:yaris+6", "olay-yakin": "olay:yaris+0.05", "olay-kalabalik": "olay:bitis+0.3", "olay-tele": "olay:yaris+12", "olay-hava": "olay:yaris+9", arac: { lider: "olay:yaris+4" } },
+  // Martı: dalış kapma evresinin başından 3 sn sonra simidi kapar (çekim 2× hızda ~5 sn'yi kapsar), kahkahalar, kovalama.
+  marti: { olay: "olay:kapma+0", "olay-yakin": "olay:kapma+0", "olay-kalabalik": "olay:kapma+0.12", "olay-tele": "olay:kovalama+0.6", "olay-hava": "olay:kovalama+1.5" },
 };
 const efektler = [];
 // Hareket dili (16 Kasım 2026, Mercanada kullanıcısı: "sürekli bir yerlere yaklaşan çekimler yerine daha karışık ve dikkat
@@ -693,10 +702,17 @@ function zaman(shot, ad) {
 /** Olay evrelerinin [baş, son] dakikaları (olayEvre taranır; "sonra" en çok 12 sa). */
 function olayEvreleri() {
   const E = {};
-  for (let m = olay.bas; m <= olay.son + 720; m += 0.05) {
+  for (let i = 0, m = olay.bas; m <= olay.son + 720; m = olay.bas + ++i * 0.05) {
     const e = olayEvre(olay, m);
     if (!e) { if (m > olay.son) break; continue; }
     (E[e.ad] ??= [m, m])[1] = m;
+  }
+  // Evre başları ikiye bölmeyle kesinleşir (17 Kasım: 3 sn'lik ızgara martının 3 sn'lik dalışını kaçırıyordu).
+  for (const [ad, e] of Object.entries(E)) {
+    let a = e[0] - 0.05, b = e[0];
+    if (a < olay.bas) continue;
+    for (let k = 0; k < 24; k++) { const c = (a + b) / 2; if (olayEvre(olay, c)?.ad === ad) b = c; else a = c; }
+    e[0] = b;
   }
   return E;
 }
@@ -798,8 +814,8 @@ function olayCekimi(ad0, a, L) {
     ...(b.sarsinti && !sokakEv ? { sarsinti: b.sarsinti } : {}),
     // Hız: araç takibi 1,5; çekici yüklemesi 10; balina sıçraması gerçek zamanlı (~3,5 sn) → 1,2; fırtınada şimşek
     // çakışı 1,3 sn → 2; yakın çekim 2; diğerleri 4 (sis akar).
-    olayHiz: cek ? 10 : arac ? 1.5 : deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null };
-  if (arac && !cek) shot.otoEfekt = [{ ad: "siren-arac", sure: 6 }];
+    olayHiz: cek ? 10 : arac ? 1.5 : olay.tur === "marti" && ad !== "olay-tele" && ad !== "olay-hava" ? 2 : deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null };
+  if (arac && !cek) shot.otoEfekt = arac === "gelin" ? [{ ad: "korna", sure: 4 }] : arac === "lider" ? [] : [{ ad: "siren-arac", sure: 6 }];
   if (arac) shot.aracAni = { ad: arac, oto: true };
   if (olay.tur === "firtina") shot.yagmur = true;
   // Olay anı (kaydet.mjs anAni): fırtınada sıradaki şimşek, balinada sıradaki sıçrama çekimin içine oturur.

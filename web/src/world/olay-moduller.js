@@ -21,8 +21,24 @@
 //   ses?(minute) → { siren, korna, kalabalik, ... }   canli?(minute) → [x, y, z] | null (hareketli hedef: video).
 //   tahliye?(x, z, minute) → { x, z, heading, yuru } | null   boşaltılan alan: o anda (x, z)'de duracak sakinin yeni yeri
 //            (yuru: yürüme evresi radyan, kenara yürürken; null: alan dışında). Saf işlev; people.js her karede çağırır.
+//   anlik?(o, minute) → { odak?, yon?, odakY?, gitD?, gitEgim? } | null   hareketli olayın o anki yeri ("Olaya git" ve
+//            video: düğün konvoyu, yarışın önü); api alanlarını o kare için ezer.
+//   ekstra?(crowd, minute, time)  sakin olmayan figürler: crowd.add(-1, poz) (people.js her karede çağırır).
+//   (ajan C modülleri sakin olmayan figürleri ekstra ile çizer; yardımcılar: olay-yardim.js.)
+//   seyirciBas?(o) → dakika   seyircilerin gelmeye başladığı an (varsayılan o.bas; düğünde halay).
+//   seyirci.ozel: true → seyirci kalemleri modul alanı taşır, duruşlarını modülün durus'u çizer (alkış, gülme…).
 import { buildZeplinOlay } from "./olay-zeplin.js";
+// --- ajan C: kasaba ve insan olayları (düğün, film, yarış, martı) ---
+import { buildDugunOlay } from "./olay-dugun.js";
+import { buildFilmOlay } from "./olay-film.js";
+import { buildYarisOlay } from "./olay-yaris.js";
+import { buildMartiOlay } from "./olay-marti.js";
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
+  // --- ajan C ---
+  dugun: buildDugunOlay,
+  film: buildFilmOlay,
+  yaris: buildYarisOlay,
+  marti: buildMartiOlay,
 };
