@@ -840,10 +840,8 @@ function olayCekimi(ad0, a, L) {
     ...(b.sarsinti && !sokakEv ? { sarsinti: b.sarsinti } : {}),
     // Hız: araç takibi 1,5; çekici yüklemesi 10; balina sıçraması gerçek zamanlı (~3,5 sn) → 1,2; fırtınada şimşek
     // çakışı 1,3 sn → 2; yakın çekim 2; diğerleri 4 (sis akar).
-    olayHiz: cek ? 10 : arac ? 1.5 : olay.tur === "marti" && ad !== "olay-tele" && ad !== "olay-hava" ? 2 : deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null };
+    olayHiz: cek ? 10 : arac ? 1.5 : olay.tur === "marti" && ad !== "olay-tele" && ad !== "olay-hava" ? 2 : ani.hiz ?? (deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null) };
   if (arac && !cek) shot.otoEfekt = arac === "gelin" ? [{ ad: "korna", sure: 4 }] : arac === "lider" ? [] : [{ ad: "siren-arac", sure: 6 }];
-    olayHiz: cek ? 10 : arac ? 1.5 : ani.hiz ?? (deniz ? 1.2 : olay.tur === "firtina" && ad !== "olay-kalabalik" ? 2 : ad === "olay-yakin" ? 2 : null) };
-  if (arac && !cek) shot.otoEfekt = [{ ad: "siren-arac", sure: 6 }];
   if (arac) shot.aracAni = { ad: arac, oto: true };
   if (olay.tur === "firtina") shot.yagmur = true;
   // Olay anı (kaydet.mjs anAni): fırtınada sıradaki şimşek, balinada sıradaki sıçrama çekimin içine oturur.

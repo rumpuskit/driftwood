@@ -23,77 +23,47 @@
 //            (yuru: yürüme evresi radyan, kenara yürürken; null: alan dışında). Saf işlev; people.js her karede çağırır.
 //   ekstra?(crowd, minute, time)  sakin olmayan figürler (ör. kartopu oynayan çocuklar): crowd.add(-1, poz) (people.js).
 //   durum?(o | null, minute) → nesne | null   olaya özgü durum (elektrik: main.js pencere/lamba ışıkları; olay.elektrik).
-// kur'a gelen yuzey: { terrain, roads, grounds, harbor, beach, fields, city, trees } (main.js; kar düşen yüzeyler).
-import { buildZeplinOlay } from "./olay-zeplin.js";
-// --- ajan E ---
-import { buildKarOlay } from "./olay-kar.js";
-
-export const MODULLER = {
-  zeplin: buildZeplinOlay,
-  kar: buildKarOlay, // ajan E
-// --- ajan D ---
-import { buildBalonOlay } from "./olay-balon.js";
-import { buildUcurtmaOlay } from "./olay-ucurtma.js";
-import { buildKusOlay } from "./olay-kus.js";
-import { buildMooseOlay } from "./olay-moose.js"; // yalnız Driftwood
-// --- ajan D sonu ---
-
-export const MODULLER = {
-  zeplin: buildZeplinOlay,
-  // --- ajan D ---
-  balon: buildBalonOlay,
-  ucurtma: buildUcurtmaOlay,
-  kus: buildKusOlay,
-  moose: buildMooseOlay,
-  // --- ajan D sonu ---
 //   gunBasi?(day)  her gün başında (olay kurulmadan önce) çağrılır: modülün dünyaya taktığı kancaları sıfırlar (vapur gecikmesi).
-import { buildZeplinOlay } from "./olay-zeplin.js";
-// --- ajan B ---
-import { buildVapurOlay } from "./olay-vapur.js";
-import { buildBalikOlay } from "./olay-balik.js";
-import { buildYarisOlay } from "./olay-yaris.js";
-// --- ajan B sonu ---
-
-export const MODULLER = {
-  zeplin: buildZeplinOlay,
-  // --- ajan B ---
-  vapur: buildVapurOlay,
-  balik: buildBalikOlay,
-  tekne_yarisi: buildYarisOlay,
-  // --- ajan B sonu ---
+// kur'a gelen yuzey: { terrain, roads, grounds, harbor, beach, fields, city, trees } (main.js; kar düşen yüzeyler).
 //   anlik?(o, minute) → { odak?, yon?, odakY?, gitD?, gitEgim? } | null   hareketli olayın o anki yeri ("Olaya git" ve
 //            video: düğün konvoyu, yarışın önü); api alanlarını o kare için ezer.
-//   ekstra?(crowd, minute, time)  sakin olmayan figürler: crowd.add(-1, poz) (people.js her karede çağırır).
 //   (ajan C modülleri sakin olmayan figürleri ekstra ile çizer; yardımcılar: olay-yardim.js.)
 //   seyirciBas?(o) → dakika   seyircilerin gelmeye başladığı an (varsayılan o.bas; düğünde halay).
 //   seyirci.ozel: true → seyirci kalemleri modul alanı taşır, duruşlarını modülün durus'u çizer (alkış, gülme…).
+// Driftwood: düğün konvoyu (çevre yolu ister) ve dev gemi, elektrik kesintisi Mercanada'ya özgü; moose, köpekbalığı ve
+// lobster boat race Driftwood'a özgü.
 import { buildZeplinOlay } from "./olay-zeplin.js";
-// --- ajan C: kasaba ve insan olayları (düğün, film, yarış, martı) ---
-import { buildDugunOlay } from "./olay-dugun.js";
+import { buildKarOlay } from "./olay-kar.js";
+import { buildBalonOlay } from "./olay-balon.js";
+import { buildUcurtmaOlay } from "./olay-ucurtma.js";
+import { buildKusOlay } from "./olay-kus.js";
+import { buildMooseOlay } from "./olay-moose.js";
+import { buildVapurOlay } from "./olay-vapur.js";
+import { buildBalikOlay } from "./olay-balik.js";
+import { buildTekneYarisiOlay } from "./olay-tekne-yarisi.js";
 import { buildFilmOlay } from "./olay-film.js";
 import { buildYarisOlay } from "./olay-yaris.js";
 import { buildMartiOlay } from "./olay-marti.js";
-
-export const MODULLER = {
-  zeplin: buildZeplinOlay,
-  // --- ajan C ---
-  dugun: buildDugunOlay,
-  film: buildFilmOlay,
-  yaris: buildYarisOlay,
-  marti: buildMartiOlay,
-// --- ajan A (deniz ve kıyı) ---
 import { buildFokOlay } from "./olay-fok.js";
 import { buildHortumOlay } from "./olay-hortum.js";
 import { buildDalgaOlay } from "./olay-dalga.js";
 import { buildKopekbaligiOlay } from "./olay-kopekbaligi.js";
-// --- ajan A sonu ---
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
-  // --- ajan A ---
+  kar: buildKarOlay,
+  balon: buildBalonOlay,
+  ucurtma: buildUcurtmaOlay,
+  kus: buildKusOlay,
+  moose: buildMooseOlay,
+  vapur: buildVapurOlay,
+  balik: buildBalikOlay,
+  tekne_yarisi: buildTekneYarisiOlay,
+  film: buildFilmOlay,
+  yaris: buildYarisOlay,
+  marti: buildMartiOlay,
   fok: buildFokOlay,
   hortum: buildHortumOlay,
   dalga: buildDalgaOlay,
   kopekbaligi: buildKopekbaligiOlay,
-  // --- ajan A sonu ---
 };
