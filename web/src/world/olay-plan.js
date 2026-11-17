@@ -57,6 +57,12 @@ const TURLER = {
   elektrik: { ad: "Elektrik kesintisi", en: "Power outage", pencere: [1050, 1090], sure: [30, 38], yuva: 1,
     gerek: (open, day) => elektrikPenceresi(day) != null, pencereGun: (P, day) => elektrikPenceresi(day, P) ?? P },
   // --- ajan E sonu ---
+  // --- ajan D --- gökyüzü ve doğa (olay-balon.js, olay-ucurtma.js, olay-kus.js; moose: olay-moose.js, yalnız Driftwood).
+  // kus: adaya göre (olay-ayar.js KUS, ADLAR): Mercanada leylek göçü, Driftwood kel kartal; evreleri KUS.evre ezer.
+  balon: { ad: "Sıcak hava balonları", en: "Hot air balloons", pencere: [480, 640], sure: [55, 70], gerek: () => true },
+  ucurtma: { ad: "Uçurtma şenliği", en: "Kite festival", pencere: [600, 700], sure: [45, 60], gerek: () => true },
+  kus: { ad: "Kuşlar", en: "Birds", pencere: [540, 680], sure: [35, 50], gerek: () => true },
+  // --- ajan D sonu ---
 };
 // Ada adları (olay-ayar.js ADLAR: { tur: [ad, en] }; ör. Mercanada "Akdeniz foku", Driftwood "Seals on the dock").
 /** Kar mevsimi: 1 Aralık–28 Şubat (29 Şubat yok). Gün verilmezse (eski çağrı) false. */
@@ -224,6 +230,11 @@ export function olayEvre(o, minute) {
     // --- ajan E ---
     kar: [[0.15, "baslangic"], [0.75, "yogun"], [1, "seyrelme"]],
     elektrik: [[0.08, "kesinti"], [0.84, "karanlik"], [1, "donus"]],
+    // --- ajan D ---
+    balon: [[0.22, "sisirme"], [0.32, "kalkis"], [0.72, "suzulme"], [0.84, "inis"], [1, "yerde"]],
+    ucurtma: [[0.12, "toplanma"], [0.5, "senlik"], [0.76, "takildi"], [1, "kurtuldu"]],
+    kus: AYAR.KUS?.evre ?? [[0.15, "gelis"], [0.75, "termik"], [1, "gidis"]],
+    // --- ajan D sonu ---
   }[o.tur] ?? [[1, "olay"]];
   const [, ad] = E.find(([s]) => u <= s) ?? E[E.length - 1];
   return { ad, u, t: minute - o.bas };

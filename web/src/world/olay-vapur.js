@@ -148,7 +148,10 @@ export function buildVapurOlay({ world, scene }) {
     K.mesafe = mesafe;
     const kal = [(pier.x0 + pier.x1) / 2, pier.z1 - 7];
     // Kamera: denizden (güneydoğu), vapur önde, arkada iskele ve kasaba; kalabalık çekimi iskeleden vapura.
-    return { odak: [S.x + 4, S.z + 2], odakY: 4, kalabalik: kal, kiyi: null, yon: Math.atan2(0.55, 1), yerAdi: DIL === "en" ? "Ferry Landing" : "Vapur İskelesi", zaman: null,
+    // odak dizisi her karede vapurun o anki yerine güncellenir (update): kalabalık çekimi ve "Olaya git" vapuru izler; seyirci yerleri
+    // gün başında (durduğu yer) kurulur.
+    K.odak = [S.x + 4, S.z + 2];
+    return { odak: K.odak, odakY: 4, kalabalik: kal, kiyi: null, yon: Math.atan2(0.55, 1), yerAdi: DIL === "en" ? "Ferry Landing" : "Vapur İskelesi", zaman: null,
       gitD: 115, gitEgim: 0.36, cekimOlcek: 1.9, cekimOlcekH: 1.5, kalabalikArkadan: true };
   }
 
@@ -156,6 +159,7 @@ export function buildVapurOlay({ world, scene }) {
     if (!G) return;
     if (!o || !K || K.o !== o) { G.group.visible = false; G.yolcu.visible = false; return; }
     const t = minute - o.bas;
+    if (t >= V.ariza) { if (minute >= K.A2) { K.odak[0] = f.x; K.odak[1] = f.z; } else { vapurPoz(t, _p); K.odak[0] = _p.x; K.odak[1] = _p.z; } }
     const vapurVar = t >= 0 && minute < K.A2 + 0.6;
     const tugVar = tugPoz(t, _q);
     G.group.visible = !!(vapurVar || tugVar);
