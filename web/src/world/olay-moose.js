@@ -196,7 +196,7 @@ export function buildMooseOlay({ world, scene, group, traffic }) {
     let cx = C[0] - H[0], cz = C[1] - H[1]; const cd = Math.hypot(cx, cz) || 1; cx /= cd; cz /= cd;
     K.kal = [H[0] + cx * 22, H[1] + cz * 22];
     return { odak: [H[0], H[1]], odakY: 1.6, kalabalik: K.kal, kiyi: null, yon: yonK, yerAdi: "Main Street", zaman: null,
-      gitD: 34, gitEgim: 0.45, gitCanli: true, cekimOlcek: 0.75, cekimOlcekH: 0.7, kalabalikArkadan: true };
+      gitD: 55, gitEgim: 0.5, gitCanli: true, cekimOlcek: 0.75, cekimOlcekH: 0.7, kalabalikArkadan: true };
   }
 
   /** Moose pose at second sec: { x, z, h, yd (gait distance), dur ("" walking | bak | ye), gor }. */
