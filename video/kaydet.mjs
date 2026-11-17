@@ -560,6 +560,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
   // Dokular ve ilk kareler otursun, sonra sanal saate geç.
   await page.waitForTimeout(2500);
   await page.evaluate(() => window.__manual());
+  // Saat ?saat'e geri alınır (yükleme sırasında akan süre silinir); ısınma bitince çekim tam istenen saniyede başlar.
+  await page.evaluate((n) => globalThis.__saatBasaAl?.(n / 30), shot.isinma ?? 20);
   await page.waitForTimeout(300);
   if (shot.hazirlik) await page.evaluate(shot.hazirlik);
   // Isınma: benzetim birkaç saniye ilerlesin (yürüyüşler, araçlar yerleşsin).
