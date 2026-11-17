@@ -191,7 +191,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
   function planlaYuva(people, day, S) {
     const o = S.plan;
     // Fırtına ve siste seyirci yok (17 Kasım QC: sakinler fırtınada meydana yürüyüp "izliyor"du).
-    const M = mod[o.tur];
+    const M = o ? mod[o.tur] : null; // modülün kur'u null döndüyse yuva boş (17 Kasım akşamı: o.tur'da çöküyordu)
     if (!o || !S.odak || o.tur === "firtina" || o.tur === "sis" || (M && !M.seyirci)) return null;
     const plans = people.plans;
     const R = people.residents;
