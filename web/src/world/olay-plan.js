@@ -16,6 +16,13 @@ export { ADA_TURLERI, ozelGun };
 // İkinci (öğleden sonra) olay: { turler, pencere: {tur: [en erken, en geç başlangıç]}, son (en geç bitiş, yerel dk),
 // yazSon (Avrupa yaz saatinde en geç bitiş) }. Ayar yoksa ikinci olay yok.
 const IKINCI = AYAR.IKINCI ?? null;
+// Tür listesi sürümleri (17 Kasım akşamı: yeni tür eklenince blok karıştırması değişip geçmiş günlerin, yayınlanmış
+// videoların olayı geriye dönük değişiyordu). olay-ayar.js TUR_SURUMLERI: [{ gun: "YYYY-MM-DD", sabah: [...], ikinci:
+// [...] }]; o günden itibaren o listeler geçerli, öncesi ADA_TURLERI / IKINCI.turler (ya da önceki sürüm).
+const SURUMLER = (AYAR.TUR_SURUMLERI ?? []).map((s) => ({ ...s, d: Date.parse(s.gun + "T00:00:00Z") / 86400000 })).sort((a, b) => a.d - b.d);
+function surum(day) { let r = null; for (const s of SURUMLER) if (s.d <= day) r = s; return r; }
+export const sabahTurleri = (day) => surum(day)?.sabah ?? ADA_TURLERI;
+export const ikinciTurleri = (day) => surum(day)?.ikinci ?? IKINCI?.turler ?? [];
 
 // Tür tablosu: pencere [en erken, en geç başlangıç] (yerel dakika; olay-ayar.js PENCERE ezer), süre (dk), gerek (isOpen).
 const TURLER = {
@@ -57,7 +64,7 @@ export const kesir = (...p) => karma(...p) / 4294967296;
 export function olayGunu(day, open, o = {}) {
   if (o.yuva === 1) return ikinciOlay(day, open, o);
   if ((o.ozel ?? ozelGun)(day) && !o.zorla) return null;
-  const turler = (o.turler ?? ADA_TURLERI).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
+  const turler = (o.turler ?? sabahTurleri(day)).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
   if (!turler.length) return null;
   let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
   if (!tur) {
@@ -80,6 +87,9 @@ export function olayGunu(day, open, o = {}) {
   // = 12:30 TR). Olay ayardaki YAZ_SON'dan (yerel dakika) önce bitecek kadar erkene alınır; kış günleri değişmez.
   let b0 = bas;
   if (AYAR.YAZ_SON && o.saat == null && avrupaYazi(day) && b0 + sure > AYAR.YAZ_SON) b0 = AYAR.YAZ_SON - sure;
+  // Genel sınır (17 Kasım akşamı: yeni türlerin varsayılan penceresi Driftwood'un öğle üretimini geçiyordu): sabah olayı
+  // olay-ayar.js SABAH_SON'dan (yerel dk) sonra bitmez.
+  if (AYAR.SABAH_SON && o.saat == null && b0 + sure > AYAR.SABAH_SON) b0 = AYAR.SABAH_SON - sure;
   return { tur, ad: T.ad, en: T.en, bas: b0, son: b0 + sure, tohum: karma("olay", day, tur), day, yuva: 0 };
 }
 
@@ -93,15 +103,16 @@ export function gunOlaylari(day, open, o = {}) {
 /** Öğleden sonra olayı: türü sabahkinden farklı (sis yok: IKINCI.turler), kendi blok karıştırması ve saat penceresi. */
 function ikinciOlay(day, open, o) {
   if (!IKINCI || ((o.ozel ?? ozelGun)(day) && !o.zorla)) return null;
-  const hepsi = IKINCI.turler.filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
+  const liste = (d) => ikinciTurleri(d).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
   let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
   if (!tur) {
     // Blok karıştırma (ayrı tuz) + iki kısıt: sabahkinden farklı, önceki günün öğleden sonrakinden farklı. Önceki gün
     // 32 günlük sabit blokların başından zincirlenir (her gün için aynı sonuç; blok başında yalnız sabah kısıtı).
-    const n = hepsi.length;
-    const sira = (b) => hepsi.map((t) => [kesir("olaySira2", b, t), t]).sort((a, c) => a[0] - c[0]).map((x) => x[1]);
     const sec = (d, dun) => {
       if ((o.ozel ?? ozelGun)(d)) return null;
+      const hepsi = liste(d), n = hepsi.length;
+      if (!n) return null;
+      const sira = (b) => hepsi.map((t) => [kesir("olaySira2", b, t), t]).sort((a, c) => a[0] - c[0]).map((x) => x[1]);
       const sabah = olayGunu(d, open, { ...o, yuva: 0, zorla: undefined, saat: undefined })?.tur;
       const s = sira(Math.floor(d / n)), aday = [s[((d % n) + n) % n], ...s];
       return aday.find((t) => t !== sabah && t !== dun) ?? aday.find((t) => t !== sabah) ?? null;
@@ -111,7 +122,9 @@ function ikinciOlay(day, open, o) {
     tur = sec(day, dun);
     if (!tur) return null;
   }
-  const T = OLAYLAR[tur], P = IKINCI.pencere[tur] ?? T.pencere;
+  // Penceresi verilmemiş tür öğleden sonra varsayılanına (IKINCI.varsayilan) düşer, sabah penceresine DEĞİL (17 Kasım akşamı:
+  // öğleden sonra yuvasındaki zeplin 10:55'te başlıyordu).
+  const T = OLAYLAR[tur], P = IKINCI.pencere[tur] ?? IKINCI.varsayilan ?? [IKINCI.son - 240, IKINCI.son - 120];
   const sure = Math.round(T.sure[0] + kesir("olaySure2", day, tur) * (T.sure[1] - T.sure[0]));
   let bas = o.saat ?? Math.round(P[0] + kesir("olaySaat2", day, tur) * (P[1] - P[0]));
   // En geç bitiş (akşam üretiminden önce): kışın IKINCI.son, Avrupa yaz saatinde IKINCI.yazSon (yerel dk).
