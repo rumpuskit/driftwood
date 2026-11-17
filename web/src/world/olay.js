@@ -89,7 +89,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null, y
   /** Etkin olay yuvası (dakikaya göre). */
   let yuvalar = [];
   const etkin = (m) => (yuvalar[1]?.plan && (!yuvalar[0]?.plan || m >= yuvalar[1].plan.bas - 45) ? yuvalar[1] : yuvalar[0]) ?? null;
-  const ALANLAR = ["plan", "odak", "odakY", "kalabalik", "bina", "kiyi", "yon", "yerAdi", "zaman", "seyirci", "itfaiyeci", "gitD", "gitEgim", "cekimOlcek", "cekimOlcekH", "kalabalikArkadan"];
+  const ALANLAR = ["plan", "odak", "odakY", "kalabalik", "bina", "kiyi", "yon", "yerAdi", "zaman", "seyirci", "itfaiyeci", "gitD", "gitEgim", "cekimOlcek", "cekimOlcekH", "kalabalikArkadan", "gitCanli"];
   function etkinYap(m) {
     const S = etkin(m); // her karede kopyalanır (planla yuvanın seyirci/itfaiyeci sayısını sonradan yazar)
     for (const k of ALANLAR) api[k] = S ? S[k] : k === "odakY" ? 2 : k === "yon" || k === "seyirci" || k === "itfaiyeci" ? 0 : null;
@@ -128,7 +128,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null, y
 
   /** Bir olayın kurgusu ve alanları (K ve Y burada kurulur; aynı gün aynı tür iki kez olmaz). */
   function yuvaKur(o) {
-    const S = { plan: o, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, yerAdi: null, zaman: null, seyirci: 0, itfaiyeci: 0, gitD: null, gitEgim: null, cekimOlcek: null, cekimOlcekH: null, kalabalikArkadan: false };
+    const S = { plan: o, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, yerAdi: null, zaman: null, seyirci: 0, itfaiyeci: 0, gitD: null, gitEgim: null, cekimOlcek: null, cekimOlcekH: null, kalabalikArkadan: false, gitCanli: false };
     if (mod[o.tur]) {
       const r = mod[o.tur].kur(o);
       if (!r) { S.plan = null; return S; }

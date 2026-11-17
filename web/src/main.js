@@ -297,6 +297,21 @@ function acikYon(x, y, z, a0, D, egim) {
   return en[1];
 }
 olay.api.git = () => {
+  // Hareketli olayda (modül gitCanli: balon, geyik, kuş) o anki hedefe. Havadaki hedefte kamera hedefin üstünde durur ve
+  // bakış çizgisi hedefin içinden yere iner: uçuştan sonra bakılan nokta zemine çekildiği için (aşağıda) yerdeki noktaya
+  // bakılır, hedef yine kadrajın ortasında kalır.
+  const c = olay.api.gitCanli ? olay.api.hedef?.() : null;
+  if (c) {
+    const gy = Math.max(0, world.height(c[0], c[2])), D = olay.api.gitD ?? 60;
+    // Eğim, bakış çizgisi yere hedefin en çok 1,5 katı ötede değecek kadar (yoksa yer noktası adanın dışına düşüp kırpılıyor).
+    const d = acikYon(c[0], c[1], c[2], olay.api.yon, D, Math.max(olay.api.gitEgim ?? 0.5, (c[1] - gy) / (1.5 * D)));
+    const cam = new THREE.Vector3(c[0], c[1], c[2]).addScaledVector(d, D);
+    if (c[1] - gy > 6 && cam.y > c[1] + 1) {
+      const G = cam.clone().lerp(new THREE.Vector3(c[0], c[1], c[2]), (cam.y - gy) / (cam.y - c[1]));
+      return flyTo(G.x, gy, G.z, cam.distanceTo(G), cam.clone().sub(G), 1.6);
+    }
+    return flyTo(c[0], c[1], c[2], D, d, 1.6);
+  }
   const [x, z] = olay.api.odak, a = olay.api.yon, hava = olay.api.plan?.tur === "firtina" || olay.api.plan?.tur === "sis";
   const y = Math.max(0, world.height(x, z)) + (olay.api.odakY ?? 1);
   if (hava) return flyTo(x, y, z, 300, new THREE.Vector3(Math.sin(a), 0.55, Math.cos(a)), 1.8);
