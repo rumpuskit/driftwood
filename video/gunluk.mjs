@@ -439,6 +439,8 @@ const OLAY_ANI = {
   balina: { olay: "olay:oyun" },
   // Olay modülleri (17 Kasım akşamı; web/src/world/olay-moduller.js): hareketli hedefi olanlarda kamera onu izler.
   zeplin: { olay: "olay:yerde", "olay-yakin": "olay:inis", "olay-kalabalik": "olay:yerde+4", "olay-tele": "olay:alcalma+3", "olay-hava": "olay:alcalma+2" },
+  // --- ajan E --- Kar: yoğun yağışın ortası (çocuklar kartopunda), seyrelirken kardan adam bitmiş; "olay:sonra" beyaz ada güneşte.
+  kar: { olay: "olay:yogun", "olay-yakin": "olay:seyrelme", "olay-kalabalik": "olay:seyrelme", "olay-tele": "olay:yogun", "olay-hava": "olay:yogun" },
 };
 const efektler = [];
 // Hareket dili (16 Kasım 2026, Mercanada kullanıcısı: "sürekli bir yerlere yaklaşan çekimler yerine daha karışık ve dikkat

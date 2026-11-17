@@ -2116,6 +2116,7 @@ export class People {
       }
     }
     this.dollhouse?.addExtras?.(crowd, minute, time, this.day); // iç mekân müşterileri ve öğrenciler
+    this.olay?.ekstra?.(crowd, minute, time); // olay figürleri (sakin değil; olay-moduller.js ekstra)
     // Öğrenciler (sakin değil): hafta içi 08:40-15:20 arası teneffüslerde (her saatin son 10 dakikası
     // ve öğle arası) okul bahçesinde koşar, top oynar, sohbet eder; ders saatinde içeridedirler.
     // Okul günü: hafta içi ve resmî tatil değil (tatilde parklar hafta sonu gibi açık).

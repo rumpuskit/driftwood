@@ -74,7 +74,7 @@ function yolculukKonum(y, minute, out) {
 
 const BOS_KUME = new Set();
 
-export function buildOlay({ world, scene, sky, params, traffic, zeplin = null }) {
+export function buildOlay({ world, scene, sky, params, traffic, zeplin = null, yuzey = null }) {
   const group = new THREE.Group();
   scene.add(group);
   const hava = buildHava({ world, scene, sky });
@@ -107,7 +107,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
   let K = null; // kaza kurgusu
   const kaza = buildKazaGorsel(group);
   // Olay modülleri (olay-moduller.js; 17 Kasım akşamı: yeni türler kendi dosyasında, arayüz olay-moduller.js başında).
-  const mod = Object.fromEntries(Object.entries(MODULLER).map(([tur, kur]) => [tur, kur({ world, scene, group, traffic, zeplin, sky })]));
+  const mod = Object.fromEntries(Object.entries(MODULLER).map(([tur, kur]) => [tur, kur({ world, scene, group, traffic, zeplin, sky, yuzey })]));
   const planOf = (tur) => yuvalar.find((S) => S?.plan?.tur === tur)?.plan ?? null;
   let sonDk = 0;
   api.hedef = (m = sonDk) => mod[etkin(m)?.plan?.tur]?.canli?.(m) ?? null;
@@ -382,6 +382,10 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null })
       ses.kalabalik = Y && minute > Y.bas + 5 && minute < Y.son ? 0.7 : K && minute > K.bas + 4 && minute < K.son ? 0.6 : 0;
       for (const m of Object.values(mod)) { const s2 = m.ses?.(minute); if (s2) for (const k in s2) ses[k] = Math.max(ses[k] ?? 0, s2[k]); }
     },
+    /** Olay modüllerinin sakin olmayan figürleri (ör. karda kartopu oynayan çocuklar; people.js kalabalık çiziminde). */
+    ekstra(crowd, minute, time) { for (const m of Object.values(mod)) m.ekstra?.(crowd, minute, time); },
+    /** Elektrik kesintisi (olay-elektrik.js; main.js pencere/lamba ışıkları): null ya da kesinti durumu. */
+    elektrik: (m) => mod.elektrik?.durum?.(planOf("elektrik"), m) ?? null,
     /** Ses ortamı (sound.js Ambience.update env.olay). */
     ses() { return { ...hava.durum, ...ses }; },
   };

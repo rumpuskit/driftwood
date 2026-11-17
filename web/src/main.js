@@ -197,7 +197,8 @@ const grounds = buildGrounds(world);
 const water = buildWater(world);
 const harbor = buildHarbor(world);
 const beach = buildBeach(world);
-scene.add(water, terrain, roads, grounds, harbor, beach, buildFields(world));
+const fields = buildFields(world);
+scene.add(water, terrain, roads, grounds, harbor, beach, fields);
 const T6 = performance.now();
 progress(0.54, "Putting up traffic lights…");
 await paint();
@@ -265,7 +266,8 @@ if (zeplin) scene.add(zeplin.group);
 // Kapatan kişinin tercihi bu cihazda hatırlanır.
 const ambience = new Ambience();
 // Günün olayı (olay.js, 16 Kasım): fırtına, sis, balina (araç yolu ve itfaiye açılınca kaza, yangın).
-const olay = buildOlay({ world, scene, sky, params, traffic, zeplin });
+// yuzey: kar düşen yüzeyler (olay-kar.js: zemin, yollar, çatılar, ağaçlar; yalnız kar günü gölgelendiriciye eklenir).
+const olay = buildOlay({ world, scene, sky, params, traffic, zeplin, yuzey: { terrain, roads, grounds, harbor, beach, fields, city: city.group, trees } });
 people.olay = olay; // setDay: olaya göre seyirci/görevli planı (olay.planla)
 // Olay yerine uçuş: olayın en iyi göründüğü yandan (api.yon).
 // "Olaya git" (17 Kasım QC): telefonda kaza bir evin çatısının arkasında kalıyordu. Olayın en iyi bakış yönünden başlayıp

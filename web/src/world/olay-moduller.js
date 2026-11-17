@@ -21,8 +21,14 @@
 //   ses?(minute) → { siren, korna, kalabalik, ... }   canli?(minute) → [x, y, z] | null (hareketli hedef: video).
 //   tahliye?(x, z, minute) → { x, z, heading, yuru } | null   boşaltılan alan: o anda (x, z)'de duracak sakinin yeni yeri
 //            (yuru: yürüme evresi radyan, kenara yürürken; null: alan dışında). Saf işlev; people.js her karede çağırır.
+//   ekstra?(crowd, minute, time)  sakin olmayan figürler (ör. kartopu oynayan çocuklar): crowd.add(-1, poz) (people.js).
+//   durum?(o | null, minute) → nesne | null   olaya özgü durum (elektrik: main.js pencere/lamba ışıkları; olay.elektrik).
+// kur'a gelen yuzey: { terrain, roads, grounds, harbor, beach, fields, city, trees } (main.js; kar düşen yüzeyler).
 import { buildZeplinOlay } from "./olay-zeplin.js";
+// --- ajan E ---
+import { buildKarOlay } from "./olay-kar.js";
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
+  kar: buildKarOlay, // ajan E
 };
