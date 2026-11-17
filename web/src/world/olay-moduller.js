@@ -46,4 +46,19 @@ export const MODULLER = {
   kus: buildKusOlay,
   moose: buildMooseOlay,
   // --- ajan D sonu ---
+//   gunBasi?(day)  her gün başında (olay kurulmadan önce) çağrılır: modülün dünyaya taktığı kancaları sıfırlar (vapur gecikmesi).
+import { buildZeplinOlay } from "./olay-zeplin.js";
+// --- ajan B ---
+import { buildVapurOlay } from "./olay-vapur.js";
+import { buildBalikOlay } from "./olay-balik.js";
+import { buildYarisOlay } from "./olay-yaris.js";
+// --- ajan B sonu ---
+
+export const MODULLER = {
+  zeplin: buildZeplinOlay,
+  // --- ajan B ---
+  vapur: buildVapurOlay,
+  balik: buildBalikOlay,
+  tekne_yarisi: buildYarisOlay,
+  // --- ajan B sonu ---
 };

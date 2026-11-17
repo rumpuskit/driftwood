@@ -52,7 +52,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
-import { ferryOut, nextArrival } from "../web/src/world/ferry.js";
+import { ferryOut, nextArrival, vapurGecikmesi, vapurOlayGecikme } from "../web/src/world/ferry.js";
 import { seslendir } from "./seslendir.mjs";
 import { efekt, EFEKT_SES, EFEKTLER } from "./efekt.mjs";
 import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
@@ -150,6 +150,9 @@ const olayGun = opt("--tarih") ? Date.parse(opt("--tarih") + "T00:00:00Z") / 864
 // Günde iki olay (17 Kasım akşamı): 18:30 videosu (yuva ogle) sabahki olayı, 23:30 videosu (yuva aksam) öğleden sonrakini anlatır.
 const olayYuva = yuva === "aksam" ? 1 : 0;
 const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined, yuva: olayYuva });
+// Vapur arızası (olay "vapur"): o gün iki yuvadan birinde varsa arızalı sefer 20 dk gecikir (ferry.js); iskele çekimleri
+// vapurun gerçekten yanaştığı ana göre (site aynı gecikmeyi kurar).
+vapurGecikmesi(vapurOlayGecikme([olay, olayGunu(olayGun, sim.isOpen, { yuva: 1 - olayYuva })].find((p) => p?.tur === "vapur") ?? null));
 const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}${olayYuva ? "&olayyuva=1" : ""}` : "";
 if (olay) console.log(`günün olayı: ${olay.en} (${olay.tur}) ${saatYaz(olay.bas)}–${saatYaz(olay.son)} ET${olayZorla ? " [zorlandı]" : ""}`);
 const stages = catalog.gelisim;
@@ -449,6 +452,12 @@ const OLAY_ANI = {
   // moose: "kasabada" middle = browsing at the end of the walk, watchers there; +3/+6 = walking in along the paths/Main Street.
   moose: { olay: "olay:kasabada", "olay-yakin": "olay:kasabada+6", "olay-kalabalik": "olay:kasabada", "olay-tele": "olay:gorundu+3", "olay-hava": "olay:kasabada+3" },
   // --- ajan D sonu ---
+  // --- ajan B (liman/tekne olayları) ---
+  vapur: { olay: "olay:romorkor+7", "olay-yakin": "olay:ariza+2.3", "olay-kalabalik": "olay:cekme+3", "olay-tele": "olay:cekme+2", "olay-hava": "olay:ariza+2" },
+  gemi: { olay: "olay:yanasma+10", "olay-yakin": "olay:limanda+6", "olay-kalabalik": "olay:limanda+3", "olay-tele": "olay:gorundu+8", "olay-hava": "olay:yanasma+4" },
+  balik: { olay: "olay:indirme+2", "olay-yakin": "olay:foto+3", "olay-kalabalik": "olay:foto+5", "olay-tele": "olay:donus+7", "olay-hava": "olay:donus+8" },
+  tekne_yarisi: { olay: "olay:yaris+1.5", "olay-yakin": "olay:yaris+3", "olay-kalabalik": "olay:yaris+4.6", "olay-tele": "olay:yaris+2.2", "olay-hava": "olay:toplanma+8" },
+  // --- ajan B sonu ---
 };
 const efektler = [];
 // Hareket dili (16 Kasım 2026, Mercanada kullanıcısı: "sürekli bir yerlere yaklaşan çekimler yerine daha karışık ve dikkat

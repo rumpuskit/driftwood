@@ -121,6 +121,7 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null, y
     K = null; Y = null;
     kaza.gizle(); yanginG.gizle();
     if (traffic) traffic.kapali = new Set();
+    for (const m of Object.values(mod)) m.gunBasi?.(day); // modülün gün başı sıfırlaması (ör. vapur gecikmesi)
     yuvalar = planlar.map((o) => (o ? yuvaKur(o) : null));
     api.planlar = yuvalar.map((S) => (S?.plan ? S : null));
     etkinYap(0);
@@ -291,6 +292,12 @@ export function buildOlay({ world, scene, sky, params, traffic, zeplin = null, y
       case "goster": { // eliyle olay yerini gösteriyor (aralıklı)
         const g = Math.max(0, Math.sin(t * 0.7 + ph));
         p.shR = 0.4 + 1.0 * g; p.elR = 0.2; p.headYaw = Math.max(-1, Math.min(1, bak)) * 0.8; idleGesture(p, t, ph, false); break;
+      }
+      case "tezahurat": { // tezahürat (yarış): iki kol havada sallanır, arada alkış
+        const w = Math.sin(t * 5.5 + ph * 3);
+        if (Math.sin(t * 0.5 + ph) > -0.3) { p.shL = p.shR = 2.55 + 0.25 * w; p.elL = p.elR = 0.25; p.abL = p.abR = 0.2 + 0.1 * w; p.headPitch = -0.12; }
+        else { p.shL = p.shR = 1.2; p.elL = p.elR = 1.4 + 0.35 * Math.max(0, w); p.abL = p.abR = -0.25; }
+        break;
       }
       case "sasir": // eller başta
         p.shL = p.shR = 2.3; p.elL = p.elR = 2.4; p.abL = p.abR = 0.25; p.headPitch = -0.08; break;

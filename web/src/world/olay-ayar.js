@@ -4,6 +4,9 @@
 export const ADA_TURLERI = ["firtina", "balina", "sis", "kaza", "yangin"];
 /** Başlangıç pencereleri [en erken, en geç] (ET dakikası). */
 export const PENCERE = { firtina: [450, 560], sis: [330, 380], balina: [480, 630], kaza: [480, 600], yangin: [480, 610], zeplin: [480, 600], balon: [450, 600], ucurtma: [540, 620], kus: [480, 620], moose: [480, 630] };
+export const PENCERE = { firtina: [450, 560], sis: [330, 380], balina: [480, 630], kaza: [480, 600], yangin: [480, 610], zeplin: [480, 600] };
+// --- ajan B --- liman/tekne olayları, sabah pencereleri (SABAH_SON 11:20'den önce biter).
+Object.assign(PENCERE, { vapur: [480, 650], balik: [480, 630], tekne_yarisi: [480, 640] });
 /** Sabah olayının en geç bitişi (ET dk): öğle üretimi 11:30 ET başlar; 11:20. */
 export const SABAH_SON = 680;
 /** Özel günler (olay yok): 4 Temmuz. */
@@ -23,6 +26,8 @@ export const IKINCI = {
   son: 950,
   yazSon: 950,
 };
+// --- ajan B --- öğleden sonra pencereleri (gün ışığında biter; yarışta tekneler başlangıçtan 37 dk sonra açığa gider).
+Object.assign(IKINCI.pencere, { vapur: [740, 900], balik: [740, 880], tekne_yarisi: [740, 890] });
 /** Olay modüllerinin dili ve adları (olay-zeplin.js). Driftwood'un zeplini 150. sakinde açılır; o zamana dek inen
  *  zeplin adanın üstünden geçen yabancı bir zeplindir. */
 export const DIL = "en";
