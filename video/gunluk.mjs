@@ -54,7 +54,7 @@ import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
 import { ferryOut, nextArrival } from "../web/src/world/ferry.js";
 import { seslendir } from "./seslendir.mjs";
-import { efekt, EFEKT_SES } from "./efekt.mjs";
+import { efekt, EFEKT_SES, EFEKTLER } from "./efekt.mjs";
 import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
 import { yukle } from "./tiktok.mjs";
 
@@ -420,6 +420,11 @@ const OLAY_CEKIM = {
   "olay-hava": { D: 120, H: 6, secenek: ["yanKay", "tele"] },
   "olay-arac": { D: 10, H: 3, secenek: ["takip", "yanTakip"] },
 };
+/** Aynı uyarı bölünen çekimin her parçasında tekrarlanmasın. */
+const uyarilan = new Set();
+const birKez = (m) => { if (!uyarilan.has(m)) { uyarilan.add(m); console.log(m); } };
+/** Olay türüne göre sahnedeki araçlar (olay.js: kazada polis/ambulans/çekici, yangında itfaiye). */
+const OLAY_ARACLARI = { kaza: ["polis", "ambulans", "cekici"], yangin: ["itfaiye"] };
 /** Saat verilmeyen olay çekiminin anı (olay türü → çekim → saat; araç: o aracın yolda olduğu evre). */
 const OLAY_ANI = {
   kaza: { olay: "olay:polis", "olay-yakin": "olay+1.5", "olay-kalabalik": "olay:polis", "olay-tele": "olay:polis", "olay-hava": "olay:polis", arac: { polis: "olay+5.2", ambulans: "olay+7.4", itfaiye: "olay+5.2", cekici: "olay:cekici+3" } },
@@ -580,6 +585,8 @@ function ozellik(k, i, shot) {
   for (const e0 of efs) {
     const e = typeof e0 === "string" ? { ad: e0 } : e0;
     if (!e?.ad) continue;
+    // Bilinmeyen efekt üretimi durdurmaz (17 Kasım QC: efekt.mjs hata fırlatıp bütün koşuyu bitiriyordu).
+    if (!EFEKTLER.includes(e.ad)) { birKez(`UYARI: bilinmeyen efekt "${e.ad}" (${EFEKTLER.join(", ")}): atlandı`); continue; }
     efektler.push({ dosya: efekt(e.ad, resolve("cikti/efekt"), e.sure), bas: +(k.t0 + (e.bas ?? 0)).toFixed(3), ses: e.ses ?? EFEKT_SES[e.ad] ?? null, ad: e.ad });
   }
   // Sis düdüğü (fenerin): siste olay çekiminin başında, en çok 9 sn'de bir.
@@ -767,6 +774,11 @@ function olayCekimi(ad0, a, L) {
     return shot;
   }
   const arac = tur === "olay-arac" ? ad.slice(10) : null, ani = OLAY_ANI[olay.tur] ?? {};
+  // Olayda olmayan araç (17 Kasım QC: kazada itfaiye, fırtınada polis istenince siren sesi boş çekime ekleniyordu).
+  if (arac && !(OLAY_ARACLARI[olay.tur] ?? []).includes(arac)) {
+    birKez(`UYARI: "${olay.tur}" olayında "${arac}" aracı yok (${(OLAY_ARACLARI[olay.tur] ?? []).join(", ") || "araçsız olay"}): geniş olay çekimi`);
+    return olayCekimi("olay", a, L);
+  }
   const cek = arac === "cekici", deniz = olay.tur === "yunus" || olay.tur === "balina";
   // Sis: denizden limana bakan hava çekimi daha yüksekten (alçakta iskele kadrajı kapatıyordu).
   const [D, H] = cek ? [20, 7] : olay.tur === "sis" && ad === "olay-hava" ? [90, 16] : [b.D, b.H];
