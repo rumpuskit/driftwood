@@ -67,6 +67,8 @@ function yolculukKonum(y, minute, out) {
   return u;
 }
 
+const BOS_KUME = new Set();
+
 export function buildOlay({ world, scene, sky, params, traffic }) {
   const group = new THREE.Group();
   scene.add(group);
@@ -132,12 +134,14 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   }
 
   /** Seyirci yerleri: odak çevresinde yay, yürünebilir, yolun dışında; odağa dönük. */
-  function seyirciYerleri(merkez, odak, n, r0, r1, seed) {
+  function seyirciYerleri(merkez, odak, n, r0, r1, seed, kiyida = false) {
     const out = [];
     const a0 = yon(merkez[0] - odak[0], merkez[1] - odak[1]);
+    // Deniz olayında yay kıyı noktasının kara tarafında (17 Kasım QC: odak açıkta, bütün yerler suya düşüyordu).
+    const C = kiyida ? merkez : odak;
     for (let t = 0; out.length < n && t < n * 30; t++) {
       const a = a0 + (kesir("syA", seed, t) - 0.5) * 2.6, r = r0 + kesir("syR", seed, t) * (r1 - r0);
-      const x = odak[0] + Math.sin(a) * r, z = odak[1] + Math.cos(a) * r;
+      const x = C[0] + Math.sin(a) * r, z = C[1] + Math.cos(a) * r;
       if (!world.isWalkable?.(x, z)) continue;
       if (traffic?.locate([x, z], 3.6, ["cadde", "sokak", "koy", "giris"])) continue; // taşıt yolunun üstünde durmaz
       if (out.some((q) => Math.hypot(q.x - x, q.z - z) < 0.85)) continue;
@@ -165,8 +169,15 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
     }
     if (o.tur === "yangin" && Y) {
       const T0 = Y.itfaiye.varis + 0.5, T1 = Y.itfaiye.ayrilis - 0.3;
-      const adaylar = R.map((r, i) => i).filter((i) => people.works[i]?.job === "itfaiyeci" && plans[i].some((s) => s.ne === "is" && s.bas <= T0 - 5 && s.son >= T1 + 2))
-        .sort((a, b) => roll(R[a].seed, "olayGorev", day) - roll(R[b].seed, "olayGorev", day)).slice(0, 3);
+      // Önce mesaidekiler, yetmezse evde (ya da uykuda) olan izinli itfaiyeciler çağrılır (17 Kasım QC: sabah vardiyasında
+      // itfaiyeci yoktu, hortumlar boş duruyordu). İçeride oldukları için kaybolmaları görünmez; araçla gelirler.
+      const sira = { is: 0, ev: 1, uyku: 2 };
+      const adaylar = R.map((r, i) => i).map((i) => {
+        if (people.works[i]?.job !== "itfaiyeci") return null;
+        const s = plans[i].find((x) => x.bas <= T0 - 5 && x.son >= T1 + 2 && x.ne in sira);
+        return s ? { i, k: sira[s.ne] } : null;
+      }).filter(Boolean)
+        .sort((a, b) => a.k - b.k || roll(R[a.i].seed, "olayGorev", day) - roll(R[b.i].seed, "olayGorev", day)).slice(0, 3).map((x) => x.i);
       adaylar.forEach((i, k) => gorev.push({ i, T0, T1, item: Y.hortum[k] }));
       api.itfaiyeci = adaylar.length;
     }
@@ -180,16 +191,24 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       const seg = plan.find((s) => s.bas <= T && s.son > T + 12);
       if (!seg) return;
       // Dışarıdakiler (meydan, hobi) ve evinde olan komşular (gürültüye cama, kapıya çıkar).
-      const a = seg.ne === "ev" ? people.homes[i]?.door : seg.ne === "meydan" || seg.ne === "hobi" ? yerOf(seg) : null;
+      // Yangında yakın dükkân ve iş yerlerinin çalışanları da dışarı çıkar (17 Kasım QC: çarşıda sabah yangınında seyirci 0'dı).
+      // Deniz olayında kıyıya yakın (≤300 m) iş yerlerinden de kıyıya inilir.
+      const isR = o.tur === "yangin" ? 90 : api.kiyi ? 300 : 0;
+      const isyeri = isR && seg.ne === "is" && (api.kiyi || !people.works[i]?.loc?.outdoor) ? people.works[i]?.loc?.door ?? people.works[i]?.loc?.anchor : null;
+      if (isyeri && Math.hypot(isyeri[0] - api.odak[0], isyeri[1] - api.odak[1]) > isR) return;
+      const a = isyeri ?? (seg.ne === "ev" ? people.homes[i]?.door : seg.ne === "meydan" || seg.ne === "hobi" ? yerOf(seg) : null);
       if (!a) return;
-      if (seg.ne === "ev" && Math.hypot(a[0] - api.odak[0], a[1] - api.odak[1]) > 160) return;
+      // Deniz olayında (yunus/balina) haber kıyıya yayılır: daha uzaktan gelinir (17 Kasım QC: kıyı meydandan uzak, seyirci 0).
+      const uzak = api.kiyi ? 2.2 : 1;
+      if (seg.ne === "ev" && Math.hypot(a[0] - api.odak[0], a[1] - api.odak[1]) > 160 * uzak) return;
       const d = Math.hypot(a[0] - api.odak[0], a[1] - api.odak[1]);
-      if (d > 340) return;
+      if (d > 340 * uzak) return;
       adaylar.push({ i, d, r: roll(R[i].seed, "olaySeyir", day) % 1000 });
     });
     adaylar.sort((a, b) => a.d / 340 + a.r / 1000 - (b.d / 340 + b.r / 1000));
     const merkez = api.kalabalik ?? api.odak;
-    const yerler = seyirciYerleri(merkez, api.odak, Math.min(30, adaylar.length), o.tur === "kaza" ? 8.5 : o.tur === "yangin" ? 16 : 14, o.tur === "kaza" ? 15 : o.tur === "yangin" ? 28 : 26, o.tohum);
+    const kiyida = !!api.kiyi;
+    const yerler = seyirciYerleri(merkez, api.odak, Math.min(30, adaylar.length), kiyida ? 1.5 : o.tur === "kaza" ? 8.5 : o.tur === "yangin" ? 16 : 14, kiyida ? 12 : o.tur === "kaza" ? 15 : o.tur === "yangin" ? 28 : 26, o.tohum, kiyida);
     api.seyirci = Math.min(adaylar.length, yerler.length);
     adaylar.slice(0, yerler.length).forEach(({ i, d }, k) => {
       const commute = Math.max(3, Math.round(d / 1.25 / 60) + 2);
@@ -297,7 +316,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       deniz.update(o, evre, minute, real, env);
       kaza.update(K, minute, real);
       yanginG.update(minute, real);
-      if (traffic && K) traffic.kapali = minute >= K.bas && minute < K.son - 3 ? new Set([K.node]) : new Set();
+      if (traffic && K) traffic.kapali = minute >= K.bas && minute < K.son - 3 ? (K.kapaliKume ??= new Set([K.node])) : BOS_KUME;
       // Çarpışma sesi: olay başladığında bir kez (sayaç artar).
       if (K) ses.carpisma = minute >= K.bas ? 1 : 0;
       // Kalabalık uğultusu (17 Kasım QC: yangının değeri her karede kazanınkiyle eziliyordu).
@@ -403,7 +422,8 @@ function kazaKur(world, traffic, o) {
     const v = [dA[0] + dB[0], dA[1] + dB[1]];
     const merkez = [P[0] + v[0] * 6, P[1] + v[1] * 6];
     // Uyarı üçgeni ve dubalar.
-    const ucgen = { x: a0[0] - dA[0] * 12, z: a0[1] - dA[1] * 12, h: yon(dA[0], dA[1]) };
+    // Üçgen ambulansın arkasında (ambulans a0 − 11·dA'da durur, boyu ~6 m; 17 Kasım QC: üçgen ambulansın içindeydi).
+    const ucgen = { x: a0[0] - dA[0] * 16, z: a0[1] - dA[1] * 16, h: yon(dA[0], dA[1]) };
     const dubalar = [];
     for (let k = 0; k < 5; k++) {
       const u = k / 4 - 0.5;
@@ -710,7 +730,9 @@ function buildYanginGorsel(group) {
   // Alev: toplanmış parlak spritelar (katmanlı, titreşen).
   const alevTex = doku("rgba(255,230,140,1)", "rgba(255,80,0,0)");
   const alevler = Array.from({ length: 14 }, () => new THREE.Sprite(new THREE.SpriteMaterial({ map: alevTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: "#ffb347" })));
-  const alevIsik = new THREE.PointLight("#ff8a2a", 0, 40, 1.6);
+  // Alev parıltısı: nokta ışığı yerine büyük toplamalı sprite (17 Kasım QC: PointLight sahneye girince bütün aydınlatılan
+  // malzemeler yeniden derleniyordu, yangın başında ~200 ms donma; söndükten sonra da her pikselde hesaplanıyordu).
+  const parilti = new THREE.Sprite(new THREE.SpriteMaterial({ map: doku("rgba(255,150,60,0.55)", "rgba(255,90,20,0)"), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   // Su: hortumdan ateşe yay boyunca akan damlalar (Points, mavi-beyaz).
   const SU = 160;
   const suGeo = new THREE.BufferGeometry();
@@ -719,7 +741,7 @@ function buildYanginGorsel(group) {
   su.frustumCulled = false;
   // İs izi: binanın üst kısmını saran yarı saydam koyu kabuk (söndükten sonra gün boyu).
   const is = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: "#151515", transparent: true, opacity: 0, roughness: 1, depthWrite: false }));
-  g.add(duman, ...alevler, alevIsik, su, is);
+  g.add(duman, ...alevler, parilti, su, is);
   let Y = null;
   return {
     gizle() { g.visible = false; Y = null; },
@@ -735,6 +757,10 @@ function buildYanginGorsel(group) {
       const S = yanginSiddet(Y, minute), sec = minute * 60;
       // İs: alev büyüdükçe koyulaşır, sonra kalır.
       is.material.opacity = 0.42 * clamp01((minute - Y.bas) / ((Y.son - Y.bas) * 0.4));
+      // Söndükten sonra yalnız is kalır: duman/alev/su döngüsü çalışmaz, çizilmez.
+      const bitti = S.duman <= 0.001 && S.alev <= 0.001 && !S.su;
+      duman.visible = !bitti; parilti.visible = S.alev > 0.02;
+      if (bitti) { for (const sp of alevler) sp.visible = false; su.visible = false; return; }
       // Duman parçacıkları: her biri 14 sn'lik ömür; kaynak ateş penceresi ve çatı.
       const pos = dumanGeo.attributes.position.array, boy = dumanGeo.attributes.boy.array, sy = dumanGeo.attributes.saydam.array;
       const [ax, ay, az] = Y.ates;
@@ -759,8 +785,12 @@ function buildYanginGorsel(group) {
         sp.position.set(ax + Y.yan[0] * yanX + Y.on[0] * 0.3, ay + ust + s * 0.4, az + Y.yan[1] * yanX + Y.on[1] * 0.3);
         sp.scale.set(s, s * 1.5, 1);
       });
-      alevIsik.position.set(ax + Y.on[0] * 2, ay, az + Y.on[1] * 2);
-      alevIsik.intensity = S.alev * 18 * (0.8 + 0.2 * Math.sin(real * 13));
+      if (parilti.visible) {
+        const pr = (7 + 5 * S.alev) * (0.9 + 0.1 * Math.sin(real * 13));
+        parilti.position.set(ax + Y.on[0] * 1.5, ay + 0.6, az + Y.on[1] * 1.5);
+        parilti.scale.set(pr, pr, 1);
+        parilti.material.opacity = Math.min(1, S.alev * 1.2);
+      }
       // Su: hortum ucundan ateşe parabol (itfaiyecilerin önünden).
       su.visible = S.su > 0;
       if (su.visible) {

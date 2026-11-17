@@ -8,6 +8,7 @@
 //
 // Tür tablosu: saat penceresi [en erken başlangıç, en geç başlangıç] (yerel dakika), süre (dk), gerek (isOpen ile).
 // Adaya özgü ayarlar (türler, saat pencereleri, özel günler) olay-ayar.js'te; bu dosya iki adada aynıdır.
+import * as AYAR from "./olay-ayar.js";
 import { ADA_TURLERI, PENCERE, ozelGun } from "./olay-ayar.js";
 export { ADA_TURLERI, ozelGun };
 
@@ -58,7 +59,18 @@ export function olayGunu(day, open, o = {}) {
   const T = OLAYLAR[tur];
   const bas = o.saat ?? Math.round(T.pencere[0] + kesir("olaySaat", day, tur) * (T.pencere[1] - T.pencere[0]));
   const sure = Math.round(T.sure[0] + kesir("olaySure", day, tur) * (T.sure[1] - T.sure[0]));
-  return { tur, ad: T.ad, en: T.en, bas, son: bas + sure, tohum: karma("olay", day, tur), day };
+  // Yaz saati (17 Kasım QC): Avrupa yaz saatinde öğle üretimi ada saatiyle bir saat erken başlar (Mercanada: 11:30 Berlin
+  // = 12:30 TR). Olay ayardaki YAZ_SON'dan (yerel dakika) önce bitecek kadar erkene alınır; kış günleri değişmez.
+  let b0 = bas;
+  if (AYAR.YAZ_SON && o.saat == null && avrupaYazi(day) && b0 + sure > AYAR.YAZ_SON) b0 = AYAR.YAZ_SON - sure;
+  return { tur, ad: T.ad, en: T.en, bas: b0, son: b0 + sure, tohum: karma("olay", day, tur), day };
+}
+
+/** Avrupa yaz saati mi (Mart'ın son pazarından Ekim'in son pazarına; gün sayısı UTC gün başı). */
+export function avrupaYazi(day) {
+  const y = new Date(day * 86400000).getUTCFullYear();
+  const sonPazar = (ay) => { const d = Date.UTC(y, ay + 1, 0) / 86400000; return d - new Date(d * 86400000).getUTCDay(); };
+  return day >= sonPazar(2) && day < sonPazar(9);
 }
 
 /** Olayın evresi (0–1 ilerleme ve ad); olay dışındaysa null. Görsel modüller ve video aynı evre adlarını kullanır. */

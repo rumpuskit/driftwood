@@ -282,6 +282,7 @@ function acikYon(x, y, z, a0, D, egim) {
       const cx = x + d.x * D, cy = y + d.y * D, cz = z + d.z * D, bx = x + ox, bz = z + oz;
       const px = bx + (cx - bx) * t, py = y + (cy - y) * t, pz = bz + (cz - bz) * t;
       for (const b of world.buildings) {
+        if (b === olay.api.bina) continue; // yanan binanın kendisi engel değil
         const r = Math.max(b.w, b.d) * 0.72;
         if (Math.abs(px - b.x) > r || Math.abs(pz - b.z) > r) continue;
         const c = Math.cos(-(b.rot ?? 0)), s = Math.sin(-(b.rot ?? 0)), lx = (px - b.x) * c - (pz - b.z) * s, lz = (px - b.x) * s + (pz - b.z) * c;

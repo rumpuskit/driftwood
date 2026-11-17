@@ -1802,6 +1802,13 @@ export class People {
   }
 
   /** Araçta oturan (sürücü ya da yolcu): aracın konumuna göre koltukta. */
+  /** Araç olay yerinde gizli mi (main.js olay.gizle ile aynı ölçü: aracın merkezi). */
+  _olayGizli(veh, minute) {
+    if (!veh || !this.olay) return false;
+    const pos = veh.route.position(veh.s, (this._gizliTmp ??= {}));
+    return this.olay.gizle(pos.x, pos.z, minute);
+  }
+
   _seatIn(veh, lx, lz, seatH, p) {
     const pos = this.traffic.pose ? this.traffic.pose(veh) : veh.route.position(veh.s);
     const h = pos.heading;
@@ -1969,7 +1976,8 @@ export class People {
         this.travelCache[i] = trip;
         const leg = trip.legs.find((l) => minute < l.t1) ?? trip.legs[trip.legs.length - 1];
         p.mode = trip.mode;
-        if (!this._travelState(i, k, trip, leg, minute, time, p, c)) { this.visible[i] = 0; continue; }
+        // Olay yerinde gizlenen araçtaki sakin de görünmez (17 Kasım QC: araç çizilmiyor, sürücüsü havada gidiyordu).
+        if (!this._travelState(i, k, trip, leg, minute, time, p, c) || (p.inVehicle && this._olayGizli(this.traffic?.active.get(p.vehicleKey), minute))) { this.visible[i] = 0; continue; }
         atWork = trip.fromWork || seg.nereye === "is"; // işe giderken de üniformalı
       } else {
         if (seg.ne === "is" && !this.works[i].loc.outdoor) {
@@ -2091,12 +2099,12 @@ export class People {
       Object.assign(drv, { style: 1, skin: P.SKIN[1], hairColor: P.HAIR[0], top, bottom: P.BOTTOMS[1], sleeves: true, beard: false, glasses: false });
       crowd.add(-1, drv);
     };
-    for (const e of this.extras) addDriver(e.veh, e.lx, e.lz, 0.42, DRIVER_TOP);
+    for (const e of this.extras) if (!this._olayGizli(e.veh, minute)) addDriver(e.veh, e.lx, e.lz, 0.42, DRIVER_TOP);
     if (this.traffic) {
       const seats = { bus: [0.75, 5.0, 0.9], ambulans: [0.45, 2.55, 0.75], itfaiye: [0.55, 4.4, 0.95], cop: [0.55, 3.3, 0.95] };
       for (const v of this.traffic.active.values()) {
         const st = seats[v.kind];
-        if (st && !(v.phase === "wait")) addDriver(v, st[0], st[1], st[2], v.kind === "bus" ? DRIVER_TOP : v.kind === "itfaiye" ? FIRE_TOP : v.kind === "ambulans" ? MEDIC_TOP : COP_TOP);
+        if (st && !(v.phase === "wait") && !this._olayGizli(v, minute)) addDriver(v, st[0], st[1], st[2], v.kind === "bus" ? DRIVER_TOP : v.kind === "itfaiye" ? FIRE_TOP : v.kind === "ambulans" ? MEDIC_TOP : COP_TOP);
       }
     }
     this.dollhouse?.addExtras?.(crowd, minute, time, this.day); // iç mekân müşterileri ve öğrenciler
