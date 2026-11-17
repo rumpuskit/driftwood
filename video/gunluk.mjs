@@ -416,12 +416,13 @@ const TEMEL = {
 };
 /** Olay çekimleri: temel kadraj ve hareket seçenekleri. */
 const OLAY_CEKIM = {
-  olay: { D: 45, H: 22, secenek: ["vinc", "yorunge", "yanKay"] },
-  "olay-yakin": { D: 32, H: 3, goz: 2.4, secenek: ["el", "alcak", "whip"], sarsinti: 0.5 },
-  "olay-kalabalik": { D: 14, H: 3, secenek: ["yanKay", "el"], sarsinti: 0.3 },
+  // Uzaklıklar (17 Kasım akşamı, kullanıcı: "çekimler çok yakın"): ~%35 geniş (olay 45→60, yakın 32→44, kalabalık 14→20).
+  olay: { D: 60, H: 28, secenek: ["vinc", "yorunge", "yanKay"] },
+  "olay-yakin": { D: 44, H: 3, goz: 2.4, secenek: ["el", "alcak", "whip"], sarsinti: 0.5 },
+  "olay-kalabalik": { D: 20, H: 3.5, secenek: ["yanKay", "el"], sarsinti: 0.3 },
   "olay-tele": { D: 45, H: 20, secenek: ["tele", "yanKay"], sarsinti: 0.2 }, // tek seçenek art arda/sınır üstü tele veriyordu (17 Kasım QC)
   "olay-hava": { D: 120, H: 6, secenek: ["yanKay", "tele"] },
-  "olay-arac": { D: 10, H: 3, secenek: ["takip", "yanTakip"] },
+  "olay-arac": { D: 14, H: 4, secenek: ["takip", "yanTakip"] },
 };
 /** Aynı uyarı bölünen çekimin her parçasında tekrarlanmasın. */
 const uyarilan = new Set();
@@ -436,6 +437,8 @@ const OLAY_ANI = {
   sis: { olay: "olay:yogun", "olay-yakin": "olay:yogun", "olay-kalabalik": "olay:yogun", "olay-tele": "olay:yogun", "olay-hava": "olay:yogun" },
   yunus: { olay: "olay:oyun" },
   balina: { olay: "olay:oyun" },
+  // Olay modülleri (17 Kasım akşamı; web/src/world/olay-moduller.js): hareketli hedefi olanlarda kamera onu izler.
+  zeplin: { olay: "olay:yerde", "olay-yakin": "olay:inis", "olay-kalabalik": "olay:yerde+4", "olay-tele": "olay:alcalma+3", "olay-hava": "olay:alcalma+2" },
 };
 const efektler = [];
 // Hareket dili (16 Kasım 2026, Mercanada kullanıcısı: "sürekli bir yerlere yaklaşan çekimler yerine daha karışık ve dikkat
@@ -788,7 +791,7 @@ function olayCekimi(ad0, a, L) {
   }
   const cek = arac === "cekici", deniz = olay.tur === "yunus" || olay.tur === "balina";
   // Sis: denizden limana bakan hava çekimi daha yüksekten (alçakta iskele kadrajı kapatıyordu).
-  const [D, H] = cek ? [20, 7] : olay.tur === "sis" && ad === "olay-hava" ? [90, 16] : [b.D, b.H];
+  const [D, H] = cek ? [26, 8] : olay.tur === "sis" && ad === "olay-hava" ? [90, 16] : [b.D, b.H];
   const hava = olay.tur === "sis" || olay.tur === "firtina", sokakEv = hava && ad === "olay-kalabalik"; // seyirci yok: Town Green karşı yandan
   const shot = { adres: a, hareket: { tur: null, hedef: ad, D, H, ...(b.goz ? { goz: b.goz } : {}) }, secenek: cek ? ["yorunge", "vinc", "alcak"] : sokakEv ? ["yanKay", "vinc"] : b.secenek, olayBek: olay.tur,
     olayAni: arac ? ani.arac?.[arac] ?? ani.olay ?? "olay+5" : ani[ad] ?? ani.olay ?? "olay+5",

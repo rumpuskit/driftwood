@@ -1992,6 +1992,14 @@ export class People {
           continue;
         }
         if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
+        // Olayın boşalttığı alan (olay.js tahliye; ör. zeplin inişinde saha): içinde duran kenara yürür, olaydan sonra döner.
+        if (seg.ne !== "olay" && this.olay?.tahliye) {
+          const q = this.olay.tahliye(p.x, p.z, minute);
+          if (q) {
+            p.x = q.x; p.z = q.z; p.y = this.world.groundY(q.x, q.z); p.heading = q.heading;
+            if (q.yuru) walkPose(p, q.yuru); else if (p.seated) { p.seated = false; }
+          }
+        }
         atWork = seg.ne === "is" || (seg.ne === "olay" && !!seg.olay?.gorevli);
         p.phase = time * 2;
       }

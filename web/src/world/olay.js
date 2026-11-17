@@ -21,6 +21,7 @@ import { buildHava } from "./hava.js";
 import { buildDeniz } from "./deniz.js";
 import { idleGesture } from "./people.js";
 import { pointAt } from "./traffic.js";
+import { MODULLER } from "./olay-moduller.js";
 
 const ease = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 const clamp01 = (u) => Math.max(0, Math.min(1, u));
@@ -73,7 +74,7 @@ function yolculukKonum(y, minute, out) {
 
 const BOS_KUME = new Set();
 
-export function buildOlay({ world, scene, sky, params, traffic }) {
+export function buildOlay({ world, scene, sky, params, traffic, zeplin = null }) {
   const group = new THREE.Group();
   scene.add(group);
   const hava = buildHava({ world, scene, sky });
@@ -88,7 +89,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   /** Etkin olay yuvası (dakikaya göre). */
   let yuvalar = [];
   const etkin = (m) => (yuvalar[1]?.plan && (!yuvalar[0]?.plan || m >= yuvalar[1].plan.bas - 45) ? yuvalar[1] : yuvalar[0]) ?? null;
-  const ALANLAR = ["plan", "odak", "odakY", "kalabalik", "bina", "kiyi", "yon", "yerAdi", "zaman", "seyirci", "itfaiyeci"];
+  const ALANLAR = ["plan", "odak", "odakY", "kalabalik", "bina", "kiyi", "yon", "yerAdi", "zaman", "seyirci", "itfaiyeci", "gitD", "gitEgim", "cekimOlcek", "cekimOlcekH", "kalabalikArkadan"];
   function etkinYap(m) {
     const S = etkin(m); // her karede kopyalanır (planla yuvanın seyirci/itfaiyeci sayısını sonradan yazar)
     for (const k of ALANLAR) api[k] = S ? S[k] : k === "odakY" ? 2 : k === "yon" || k === "seyirci" || k === "itfaiyeci" ? 0 : null;
@@ -105,6 +106,11 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   let gun = null;
   let K = null; // kaza kurgusu
   const kaza = buildKazaGorsel(group);
+  // Olay modülleri (olay-moduller.js; 17 Kasım akşamı: yeni türler kendi dosyasında, arayüz olay-moduller.js başında).
+  const mod = Object.fromEntries(Object.entries(MODULLER).map(([tur, kur]) => [tur, kur({ world, scene, group, traffic, zeplin, sky })]));
+  const planOf = (tur) => yuvalar.find((S) => S?.plan?.tur === tur)?.plan ?? null;
+  let sonDk = 0;
+  api.hedef = (m = sonDk) => mod[etkin(m)?.plan?.tur]?.canli?.(m) ?? null;
   const yanginG = buildYanginGorsel(group);
   let Y = null; // yangın kurgusu
 
@@ -122,8 +128,12 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
 
   /** Bir olayın kurgusu ve alanları (K ve Y burada kurulur; aynı gün aynı tür iki kez olmaz). */
   function yuvaKur(o) {
-    const S = { plan: o, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, yerAdi: null, zaman: null, seyirci: 0, itfaiyeci: 0 };
-    if (o.tur === "yunus" || o.tur === "balina") {
+    const S = { plan: o, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, yerAdi: null, zaman: null, seyirci: 0, itfaiyeci: 0, gitD: null, gitEgim: null, cekimOlcek: null, cekimOlcekH: null, kalabalikArkadan: false };
+    if (mod[o.tur]) {
+      const r = mod[o.tur].kur(o);
+      if (!r) { S.plan = null; return S; }
+      Object.assign(S, r);
+    } else if (o.tur === "yunus" || o.tur === "balina") {
       const y = deniz.yerSec(o);
       if (y) { S.odak = y.deniz; S.kiyi = y.kiyi; S.kalabalik = y.kiyi; S.odakY = 0.5; S.yon = yon(y.kiyi[0] - y.deniz[0], y.kiyi[1] - y.deniz[1]); }
     } else if (o.tur === "kaza" && traffic) {
@@ -181,7 +191,8 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   function planlaYuva(people, day, S) {
     const o = S.plan;
     // Fırtına ve siste seyirci yok (17 Kasım QC: sakinler fırtınada meydana yürüyüp "izliyor"du).
-    if (!o || !S.odak || o.tur === "firtina" || o.tur === "sis") return null;
+    const M = mod[o.tur];
+    if (!o || !S.odak || o.tur === "firtina" || o.tur === "sis" || (M && !M.seyirci)) return null;
     const plans = people.plans;
     const R = people.residents;
     const yerOf = (seg) => (seg.ne === "meydan" || seg.ne === "hobi" ? world.placeOf?.(seg.ne === "hobi" ? seg.yer.replace("hobi:", "") : "meydan")?.anchors?.[0] : null);
@@ -190,7 +201,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
     if (o.tur === "kaza" && K) {
       const T0 = K.polis.varis + 0.6, T1 = K.polis.ayrilis - 0.4;
       const adaylar = R.map((r, i) => i).filter((i) => people.works[i]?.job === "polis" && plans[i].some((s) => s.ne === "is" && s.bas <= T0 - 5 && s.son >= T1 + 2))
-        .sort((a, b) => roll(R[a].seed, "olayGorev" + o.yuva, day) - roll(R[b].seed, "olayGorev", day)).slice(0, 2);
+        .sort((a, b) => roll(R[a].seed, "olayGorev" + o.yuva, day) - roll(R[b].seed, "olayGorev" + o.yuva, day)).slice(0, 2);
       adaylar.forEach((i, k) => gorev.push({ i, T0, T1, item: { ...K.polisYer[k], gorevli: "polis" } }));
     }
     if (o.tur === "yangin" && Y) {
@@ -203,11 +214,12 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
         const s = plans[i].find((x) => x.bas <= T0 - 5 && x.son >= T1 + 2 && x.ne in sira);
         return s ? { i, k: sira[s.ne] } : null;
       }).filter(Boolean)
-        .sort((a, b) => a.k - b.k || roll(R[a.i].seed, "olayGorev" + o.yuva, day) - roll(R[b.i].seed, "olayGorev", day)).slice(0, 3).map((x) => x.i);
+        .sort((a, b) => a.k - b.k || roll(R[a.i].seed, "olayGorev" + o.yuva, day) - roll(R[b.i].seed, "olayGorev" + o.yuva, day)).slice(0, 3).map((x) => x.i);
       adaylar.forEach((i, k) => gorev.push({ i, T0, T1, item: Y.hortum[k] }));
       S.itfaiyeci = adaylar.length;
     }
-    for (const g of gorev) plans[g.i] = araEkle(plans[g.i], g.T0, g.T1, { ne: "olay", yer: "olay", olay: g.item }, 0);
+    if (M?.gorev) gorev.push(...(M.gorev(people, day, S, plans) ?? []));
+    for (const g of gorev) plans[g.i] = araEkle(plans[g.i], g.T0, g.T1, { ne: "olay", yer: "olay", olay: g.item }, g.commute ?? 0);
     // Seyirciler: olay sırasında dışarıda (meydan, hobi) olup yeri olaya yakın olanlar yürüyüp gelir.
     const T = o.bas + 3;
     const secili = new Set(gorev.map((g) => g.i));
@@ -219,13 +231,13 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       // Dışarıdakiler (meydan, hobi) ve evinde olan komşular (gürültüye cama, kapıya çıkar).
       // Yangında yakın dükkân ve iş yerlerinin çalışanları da dışarı çıkar (17 Kasım QC: çarşıda sabah yangınında seyirci 0'dı).
       // Deniz olayında kıyıya yakın (≤300 m) iş yerlerinden de kıyıya inilir.
-      const isR = o.tur === "yangin" ? 90 : S.kiyi ? 300 : 0;
+      const isR = M ? M.seyirci.isR ?? 0 : o.tur === "yangin" ? 90 : S.kiyi ? 300 : 0;
       const isyeri = isR && seg.ne === "is" && (S.kiyi || !people.works[i]?.loc?.outdoor) ? people.works[i]?.loc?.door ?? people.works[i]?.loc?.anchor : null;
       if (isyeri && Math.hypot(isyeri[0] - S.odak[0], isyeri[1] - S.odak[1]) > isR) return;
       const a = isyeri ?? (seg.ne === "ev" ? people.homes[i]?.door : seg.ne === "meydan" || seg.ne === "hobi" ? yerOf(seg) : null);
       if (!a) return;
       // Deniz olayında (yunus/balina) haber kıyıya yayılır: daha uzaktan gelinir (17 Kasım QC: kıyı meydandan uzak, seyirci 0).
-      const uzak = S.kiyi ? 2.2 : 1;
+      const uzak = M ? M.seyirci.uzak ?? 1 : S.kiyi ? 2.2 : 1;
       if (seg.ne === "ev" && Math.hypot(a[0] - S.odak[0], a[1] - S.odak[1]) > 160 * uzak) return;
       const d = Math.hypot(a[0] - S.odak[0], a[1] - S.odak[1]);
       if (d > 340 * uzak) return;
@@ -233,15 +245,17 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
     });
     adaylar.sort((a, b) => a.d / 340 + a.r / 1000 - (b.d / 340 + b.r / 1000));
     const merkez = S.kalabalik ?? S.odak;
-    const kiyida = !!S.kiyi;
-    const yerler = seyirciYerleri(merkez, S.odak, Math.min(30, adaylar.length), kiyida ? 1.5 : o.tur === "kaza" ? 8.5 : o.tur === "yangin" ? 16 : 14, kiyida ? 12 : o.tur === "kaza" ? 15 : o.tur === "yangin" ? 28 : 26, o.tohum, kiyida);
+    const kiyida = M ? !!M.seyirci.kiyida : !!S.kiyi;
+    const [r0, r1] = M ? [M.seyirci.r0, M.seyirci.r1] : [kiyida ? 1.5 : o.tur === "kaza" ? 8.5 : o.tur === "yangin" ? 16 : 14, kiyida ? 12 : o.tur === "kaza" ? 15 : o.tur === "yangin" ? 28 : 26];
+    const yerler = seyirciYerleri(merkez, S.odak, Math.min(M?.seyirci.en ?? 30, adaylar.length), r0, r1, o.tohum, kiyida);
     S.seyirci = Math.min(adaylar.length, yerler.length);
     adaylar.slice(0, yerler.length).forEach(({ i, d }, k) => {
       const commute = Math.max(3, Math.round(d / 1.25 / 60) + 2);
       const T0 = o.bas + 3 + (roll(R[i].seed, "olayVaris", day) % 9) + commute * 0.2;
       const kal = 10 + (roll(R[i].seed, "olayKal", day) % 16);
       const T1 = Math.min(o.son + 6, T0 + kal);
-      const tavir = ["cek", "konus", "goster", "konus", "cek", "bak", "sasir"][roll(R[i].seed, "olayTavir", day) % 7];
+      const tavirlar = M?.seyirci.tavirlar ?? ["cek", "konus", "goster", "konus", "cek", "bak", "sasir"];
+      const tavir = tavirlar[roll(R[i].seed, "olayTavir", day) % tavirlar.length];
       plans[i] = araEkle(plans[i], T0, T1, { ne: "olay", yer: "olay", olay: { ...yerler[k], tavir } }, commute);
     });
     return plans;
@@ -250,6 +264,8 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   /** Olay yerindeki duruş (people._placeState içinden). */
   function durus(i, it, minute, t, p, ph, stand) {
     if (!it) return false;
+    // Modülün kendi duruşu (ör. düğünde halay, el sallama): it.modul = tür.
+    if (it.modul && mod[it.modul]?.durus) return mod[it.modul].durus(i, it, minute, t, p, ph, stand, { idleGesture });
     stand(it.x, it.z, it.heading);
     let bak = it.look ? yon(it.look[0] - it.x, it.look[1] - it.z) - it.heading : 0;
     bak = Math.atan2(Math.sin(bak), Math.cos(bak));
@@ -293,6 +309,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
     if (S?.plan && minute < S.plan.bas && S !== yuvalar[0] && yuvalar[0]?.plan) S = yuvalar[0];
     const o = S?.plan;
     if (!o || minute < o.bas) return null;
+    if (mod[o.tur]) return mod[o.tur].yazi(o, S, minute, { saatYaz, saatte: saatYaz }) ?? null;
     const gun = o.yuva ? "this afternoon" : "this morning", gunOrta = o.yuva ? "afternoon" : "morning";
     const bitti = minute >= o.son, yer = S.yerAdi ? `at ${S.yerAdi}` : "at an intersection";
     if (o.tur === "kaza" && K) {
@@ -319,8 +336,14 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
     planla, durus,
     /** Gün değişince planı kurar (people.setDay'den önce çağrılır). */
     setDay(day) { if (day !== gun) gunuKur(day); },
+    /** Olayın boşalttığı alanda duran sakinin yeri (people.js): { x, z, heading, yuru } ya da null. */
+    tahliye(x, z, minute) {
+      for (const m of Object.values(mod)) { const q = m.tahliye?.(x, z, minute); if (q) return q; }
+      return null;
+    },
     /** Olay sırasında gerçek trafikten gizlenecek araçlar (olay yerine girip enkazın içinden geçmesin). */
     gizle(x, z, minute) {
+      for (const m of Object.values(mod)) if (m.gizle?.(x, z, minute)) return true;
       if (Y && minute > Y.itfaiye.varis - 0.5 && minute < Y.son && Math.hypot(x - Y.itfaiye.park[0], z - Y.itfaiye.park[1]) < 9) return true;
       if (!K || minute < K.bas - 0.2 || minute > K.son) return false;
       return Math.hypot(x - K.P[0], z - K.P[1]) < 24;
@@ -337,6 +360,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
           if (!pz.park && !pz.donuyor) ses.siren = 1;
         }
       }
+      for (const m of Object.values(mod)) m.vehicles?.(vehicles, real, minute, api.araclar, ses);
       if (!K || minute < K.bas - 30 || minute > K.son + 15) return;
       kazaAraclari(K, vehicles, real, minute, world, api.araclar, ses);
     },
@@ -347,11 +371,16 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       deniz.update(o, evre, minute, real, env);
       kaza.update(K, minute, real);
       yanginG.update(minute, real);
+      sonDk = minute;
+      for (const [tur, m] of Object.entries(mod)) { const p = planOf(tur); m.update(p, p ? olayEvre(p, minute) : null, minute, real, env); }
       if (traffic && K) traffic.kapali = minute >= K.bas && minute < K.son - 3 ? (K.kapaliKume ??= new Set([K.node])) : BOS_KUME;
+      // Modülün kapattığı düğümler (ör. düğün konvoyu meydan çevresi): kazayla birleşir.
+      if (traffic) for (const m of Object.values(mod)) { const k2 = m.kapali?.(minute); if (k2?.size) traffic.kapali = traffic.kapali?.size ? new Set([...traffic.kapali, ...k2]) : k2; }
       // Çarpışma sesi: olay başladığında bir kez (sayaç artar).
       if (K) ses.carpisma = minute >= K.bas ? 1 : 0;
       // Kalabalık uğultusu (17 Kasım QC: yangının değeri her karede kazanınkiyle eziliyordu).
       ses.kalabalik = Y && minute > Y.bas + 5 && minute < Y.son ? 0.7 : K && minute > K.bas + 4 && minute < K.son ? 0.6 : 0;
+      for (const m of Object.values(mod)) { const s2 = m.ses?.(minute); if (s2) for (const k in s2) ses[k] = Math.max(ses[k] ?? 0, s2[k]); }
     },
     /** Ses ortamı (sound.js Ambience.update env.olay). */
     ses() { return { ...hava.durum, ...ses }; },

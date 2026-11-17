@@ -186,6 +186,13 @@ function HAREKET({ h, sure, olayBek }) {
     } else if (hd === "olay-hava" && (!odak || O.plan.tur === "firtina")) {
       // Fırtına: iskele başından denize ve gökyüzüne geniş bakış.
       Tn = [PX, 16, W.ferryPier.z1 + 140]; oneri = Math.PI; yOfs = 0;
+    } else if (odak && hd === "olay-kalabalik" && O.kalabalik && O.kalabalikArkadan && O.seyirci !== 0) {
+      // Seyirciler arkadan, olay karşıda (olay modülü kalabalikArkadan: zeplin gibi büyük olaylarda yüzler değil, olaya
+      // bakan kalabalık + olayın kendisi). Kamera kalabalığın gerisinde, olaya doğru bakar.
+      const k = O.kalabalik;
+      Tn = nokta(odak, O.odakY ?? 2);
+      oneri = Math.atan2(k[0] - odak[0], k[1] - odak[1]);
+      dMin = Math.hypot(k[0] - odak[0], k[1] - odak[1]) + 14; tam = true;
     } else if (odak && hd === "olay-kalabalik" && O.kalabalik && O.seyirci !== 0) {
       // Seyirciler (tepki çekimi): kamera olay tarafında, kalabalığın yüzlerine bakar (işaret eden, bakan sakinler).
       const k = O.kalabalik;
@@ -212,6 +219,11 @@ function HAREKET({ h, sure, olayBek }) {
       const xyz = (v) => (v ? { x: v[0], y: v[1], z: v[2], heading: 0 } : null);
       if (c0) Tn = [c0[0], c0[1] + 0.5, c0[2]];
       else if (typeof O.suru === "function" && O.suru()) { hareketli = () => xyz(O.suru()); yOfs = 0.5; }
+    } else if (hd !== "olay-kalabalik" && typeof O?.hedef === "function" && O.hedef()) {
+      // Hareketli olay hedefi (olay modülü canli(): zeplin, geyik, konvoy, gemi…; 17 Kasım akşamı): kamera onu izler.
+      hareketli = () => { const v = O.hedef(); return v ? { x: v[0], y: v[1], z: v[2], heading: 0 } : null; }; yOfs = 0;
+      // Büyük hedefte (62 m zeplin) temel kadraj ölçeklenir (olay modülü cekimOlcek): yakın kadraj gövdeyle doluyordu.
+      if (O.cekimOlcek) h = { ...h, D: (h.D ?? 30) * O.cekimOlcek, H: (h.H ?? 10) * (O.cekimOlcekH ?? O.cekimOlcek) };
     }
     if (arac) {
       hareketli = () => O?.arac?.(arac) ?? null;
@@ -244,14 +256,17 @@ function HAREKET({ h, sure, olayBek }) {
   };
   const T = () => Tn;
   let yk = 1; // tele: yükseklik çarpanı (açı aramasında)
+  // Büyük hedefte (olay modülü cekimOlcek: zeplin) hareketlerin uzaklık sınırları da ölçeklenir (17 Kasım akşamı: el
+  // kamerası 26 m, vinç 22 m tavanında kalıyor, 62 m'lik gövde kadrajı dolduruyordu). Tele hariç (zaten uzak).
+  const ol = (hareketli && O?.cekimOlcek) || 1, klo = (v, a, b) => kl(v, a * ol, b * ol);
   const M = {
     vinc: () => {
-      const d0 = kl(D * 0.45, 7, 22), h1 = kl(Math.max(D, 20) * 0.75, 15, 38), d1 = Math.max(d0 * 1.5, h1 * 1.1);
+      const d0 = klo(D * 0.45, 7, 22), h1 = klo(Math.max(D, 20) * 0.75, 15, 38), d1 = Math.max(d0 * 1.5, h1 * 1.1);
       return { e: ease3, cam: (a, u) => at(a + s * 0.18 * u, lerp(d0, d1, u), lerp(1.8, h1, u)), bak: (a, u) => [Tn[0], Tn[1] + (1 - u) * 1.5, Tn[2]] };
     },
     yanKay: () => {
       // Elle kadrajda (aciSabit) o kadrajdan küçük yana kayma (uzaklığın %8'i).
-      const d = tam || h.aciSabit ? D : kl(D * 0.75, 8, 70), hh = tam ? 1.9 : h.aciSabit ? H : kl(d * egim, 2.2, 30), L = h.aciSabit ? d * 0.08 : kl(d * 0.42, 3, 26);
+      const d = tam || h.aciSabit ? D : klo(D * 0.75, 8, 70), hh = tam ? 1.9 : h.aciSabit ? H : klo(d * egim, 2.2, 30), L = h.aciSabit ? d * 0.08 : klo(d * 0.42, 3, 26);
       const yan = (a, k) => { const y = s * k * (2 * a - 1); return y; };
       return { e: (r) => 0.8 * r + 0.2 * ease(r), cam: (a, u) => at(a, d, hh, yan(u, L)),
         bak: (a, u) => { const y = yan(u, L * 0.45); return [Tn[0] + Math.cos(a) * y, Tn[1], Tn[2] - Math.sin(a) * y]; } };
@@ -259,7 +274,7 @@ function HAREKET({ h, sure, olayBek }) {
     alcak: () => {
       // Üç çeyrek açıdan (a + 0,35), yerden 0,9 m; bakış konunun orta yüksekliğine (gökyüzü ve çatı çizgisi kadrajda).
       // Olay/araç gibi alçak konuda bakış konunun hemen üstüne (yoksa konu altyazı bandına iner).
-      const d0 = kl(D * 0.75, 8, 30), yb = typeof hd === "string" && hd.startsWith("olay") ? 1.6 : kl(d0 * 0.3, 3, 8);
+      const d0 = klo(D * 0.75, 8, 30), yb = typeof hd === "string" && hd.startsWith("olay") ? 1.6 : klo(d0 * 0.3, 3, 8);
       return { e: ease, cam: (a, u) => at(a + s * (0.35 + 0.12 * u), lerp(d0, d0 * 0.78, u), 0.9, 0, true), bak: () => [Tn[0], Math.max(Tn[1], gyT() + yb), Tn[2]] };
     },
     tele: () => {
@@ -270,12 +285,12 @@ function HAREKET({ h, sure, olayBek }) {
     el: () => {
       // Elle kadrajda (aciSabit) kamera o kadrajda kalır, yalnız hafif ilerler; değilse sokak düzeyinde yürür.
       if (h.aciSabit) return { e: (r) => r, cam: (a, u) => at(a + s * 0.04 * u, D * (1 - 0.07 * u), H * (1 - 0.05 * u), s * 0.3 * Math.sin(u * Math.PI)), bak: T };
-      const d0 = tam ? D : kl(D * 0.45, 5, 26), gz = h.goz ?? 1.65; // goz: göz yüksekliği (olay-yakin 2,4: telefon havada)
+      const d0 = tam ? D : klo(D * 0.45, 5, 26), gz = h.goz ?? 1.65; // goz: göz yüksekliği (olay-yakin 2,4: telefon havada)
       return { e: (r) => r, cam: (a, u) => at(a + s * 0.08 * u, lerp(d0, d0 * (tam ? 0.95 : 0.86), u), gz, s * 0.6 * Math.sin(u * Math.PI), true),
         bak: () => [Tn[0], Math.max(Tn[1], gyT() + 1.4), Tn[2]] };
     },
     whip: () => {
-      const d = h.aciSabit ? D : kl(D * 0.6, 6, 40), hh = h.aciSabit ? H : kl(d * egim, 1.7, 25), Y0 = s * 1.35, a3 = h.aciSabit ? 0 : s * 0.25;
+      const d = h.aciSabit ? D : klo(D * 0.6, 6, 40), hh = h.aciSabit ? H : klo(d * egim, 1.7, 25), Y0 = s * 1.35, a3 = h.aciSabit ? 0 : s * 0.25;
       // w: 0,28 sn'de hedefe dönüp %6 aşar, sonra sönümlü oturur.
       const w = (t) => (t < 0.28 ? 1.06 * (1 - (1 - t / 0.28) ** 3) : 1 + 0.06 * Math.exp(-(t - 0.28) * 9) * Math.cos((t - 0.28) * 16));
       return { e: ease, cam: (a, u) => at(a + a3, d * (1 - 0.06 * u), hh),
@@ -285,9 +300,9 @@ function HAREKET({ h, sure, olayBek }) {
         } };
     },
     vertigo: () => {
-      const d0 = kl(D * 0.5, 8, 30), d1 = d0 * 2.1, f0 = h.fov ?? 46, k = d0 * Math.tan((f0 / 2) * R);
+      const d0 = klo(D * 0.5, 8, 30), d1 = d0 * 2.1, f0 = h.fov ?? 46, k = d0 * Math.tan((f0 / 2) * R);
       const dd = (u) => (s > 0 ? lerp(d0, d1, u) : lerp(d1, d0, u));
-      return { e: ease3, cam: (a, u) => { const d = dd(u); return at(a, d, kl(d * egim, 1.6, 40)); }, bak: T, fov: (u) => (2 * Math.atan(k / dd(u))) / R };
+      return { e: ease3, cam: (a, u) => { const d = dd(u); return at(a, d, klo(d * egim, 1.6, 40)); }, bak: T, fov: (u) => (2 * Math.atan(k / dd(u))) / R };
     },
     yorunge: () => ({ e: ease, cam: (a, u) => at(a + s * 0.75 * u, D * (1 - 0.12 * u), H * (1 - 0.12 * u)), bak: T }),
     itme: () => ({ e: ease, cam: (a, u) => at(a + s * 0.1 * u, D * (1 - 0.2 * u), H * (1 - 0.2 * u)), bak: T }),

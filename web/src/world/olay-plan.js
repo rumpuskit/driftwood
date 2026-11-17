@@ -25,8 +25,18 @@ const TURLER = {
   kaza: { ad: "Trafik kazası", en: "Car crash", pencere: [510, 720], sure: [40, 48], gerek: (open) => open("cevre_yolu") && open("karakol:0") },
   yunus: { ad: "Yunuslar", en: "Dolphins", pencere: [540, 730], sure: [32, 40], gerek: () => true },
   balina: { ad: "Balina", en: "Whale", pencere: [540, 730], sure: [32, 40], gerek: () => true },
+  // Yeni türler (17 Kasım akşamı, kullanıcı: "olay çeşitliliği ve dikkat çekicilik çok önemli"); görünüm modülleri
+  // olay-moduller.js. Adada çıkması için olay-ayar.js ADA_TURLERI / IKINCI.turler listesine girmeleri gerekir.
+  zeplin: { ad: "Zeplin acil inişi", en: "Blimp emergency landing", pencere: [600, 740], sure: [45, 60], gerek: () => true },
+  dugun: { ad: "Düğün konvoyu", en: "Wedding convoy", pencere: [600, 740], sure: [35, 45], gerek: (open) => open("cevre_yolu") },
+  fok: { ad: "Fok", en: "Seals", pencere: [560, 730], sure: [40, 55], gerek: () => true },
+  hortum: { ad: "Su hortumu", en: "Waterspout", pencere: [560, 720], sure: [25, 35], gerek: () => true },
+  gemi: { ad: "Dev gemi", en: "Giant ship", pencere: [560, 700], sure: [55, 70], gerek: () => true },
+  moose: { ad: "Geyik", en: "Moose in town", pencere: [480, 690], sure: [35, 45], gerek: () => true },
+  kopekbaligi: { ad: "Köpekbalığı", en: "Shark sighting", pencere: [560, 700], sure: [40, 55], gerek: () => true },
 };
-export const OLAYLAR = Object.fromEntries(Object.entries(TURLER).map(([k, v]) => [k, { ...v, pencere: PENCERE[k] ?? v.pencere }]));
+// Ada adları (olay-ayar.js ADLAR: { tur: [ad, en] }; ör. Mercanada "Akdeniz foku", Driftwood "Seals on the dock").
+export const OLAYLAR = Object.fromEntries(Object.entries(TURLER).map(([k, v]) => [k, { ...v, pencere: PENCERE[k] ?? v.pencere, ad: AYAR.ADLAR?.[k]?.[0] ?? v.ad, en: AYAR.ADLAR?.[k]?.[1] ?? v.en }]));
 
 // Küçük, kararlı karma (xmur3 + mulberry32): aynı (gün, tuz) her yerde aynı sayıyı verir.
 function karma(...parca) {
@@ -122,7 +132,7 @@ export function olayEvre(o, minute) {
   if (!o) return null;
   const sure = o.son - o.bas, u = (minute - o.bas) / sure;
   // Fırtınanın ardından gökkuşağı (20 dk), yangının ardından gün boyu is izi: "sonra" evresi.
-  const sonra = { firtina: 20, yangin: 24 * 60, kaza: 0, sis: 0, yunus: 0, balina: 0 }[o.tur] ?? 0;
+  const sonra = { firtina: 20, yangin: 24 * 60 }[o.tur] ?? 0;
   if (minute < o.bas || minute > o.son + sonra) return null;
   if (minute > o.son) return { ad: "sonra", u: (minute - o.son) / Math.max(1, sonra), t: minute - o.bas };
   const E = {
@@ -132,7 +142,14 @@ export function olayEvre(o, minute) {
     kaza: [[0.14, "kaza"], [0.42, "polis"], [1, "cekici"]],
     yunus: [[0.15, "gorundu"], [0.85, "oyun"], [1, "uzaklasma"]],
     balina: [[0.15, "gorundu"], [0.85, "oyun"], [1, "uzaklasma"]],
-  }[o.tur];
+    zeplin: [[0.18, "alcalma"], [0.3, "inis"], [0.78, "yerde"], [1, "kalkis"]],
+    dugun: [[0.15, "toplanma"], [0.7, "konvoy"], [1, "halay"]],
+    fok: [[0.15, "gorundu"], [0.85, "kayada"], [1, "uzaklasma"]],
+    hortum: [[0.2, "olusma"], [0.8, "hortum"], [1, "dagilma"]],
+    gemi: [[0.15, "gorundu"], [0.5, "yanasma"], [1, "limanda"]],
+    moose: [[0.15, "gorundu"], [0.85, "kasabada"], [1, "uzaklasma"]],
+    kopekbaligi: [[0.12, "gorundu"], [0.3, "bosaltma"], [0.88, "kapali"], [1, "acildi"]],
+  }[o.tur] ?? [[1, "olay"]];
   const [, ad] = E.find(([s]) => u <= s) ?? E[E.length - 1];
   return { ad, u, t: minute - o.bas };
 }

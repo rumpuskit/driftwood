@@ -493,6 +493,11 @@ export class Zeplin {
 
   /** Yerel saniyede konum (dışarıdaysa null). */
   positionAt(sec, out = new THREE.Vector3()) {
+    // Olay yolu (olay-zeplin.js, acil iniş): penceresinde konum ya da null (gizli); pencere dışında undefined → olağan tur.
+    if (this.olayYol) {
+      const r = this.olayYol(sec, out);
+      if (r !== undefined) { if (r) { this.pose.phase = "olay"; this.pose.speed = 0; } return r; }
+    }
     const { start, end } = SCHEDULE;
     if (sec < start || sec > end + this.outbound.dur) return null;
     if (sec < this.loopStart) { this.pose.phase = "gelis"; this.pose.speed = this.inbound.speed(sec - start); return this.inbound.at(sec - start, out); }
@@ -504,6 +509,11 @@ export class Zeplin {
   /** Her kare: unix (sanal saat), real (gerçek saniye, pervane ve ışıklar), night 0..1. */
   update(unix, real, night) {
     const sec = minuteOf(unix) * 60;
+    this.updateSec(sec, real, night);
+  }
+
+  /** Yerel saniyeyle kare güncellemesi (olay-zeplin.js ziyaretçi zeplini doğrudan çağırır). */
+  updateSec(sec, real, night) {
     const q = this.positionAt(sec + 2, (this._q ??= new THREE.Vector3()));
     const r0 = this.positionAt(sec - 2, (this._r ??= new THREE.Vector3()));
     const p = this.positionAt(sec, (this._p ??= new THREE.Vector3())); // en son: pose.phase/speed bu anın
@@ -513,7 +523,10 @@ export class Zeplin {
     const r = r0 ?? p;
     const ahead = q ?? p;
     const dx = ahead.x - r.x, dz = ahead.z - r.z, dy = ahead.y - r.y;
-    const heading = Math.atan2(-dz, dx);
+    // Durur ya da dikine inip kalkarken (acil iniş) yön korunur, burun yatmaz.
+    const yatay = Math.hypot(dx, dz);
+    const heading = yatay > 0.05 ? Math.atan2(-dz, dx) : this._heading ?? Math.atan2(-dz, dx);
+    this._heading = heading;
     // Dönüşte hafif yatış (eğrilik), tırmanışta burun hafif yukarı; rüzgârda yavaş salınım.
     let turn = 0;
     if (q && r !== p) {
@@ -522,9 +535,10 @@ export class Zeplin {
     }
     const sway = Math.sin(real * 0.37) * 0.012 + Math.sin(real * 0.23 + 1.3) * 0.008;
     this.group.position.set(p.x, p.y + Math.sin(real * 0.31) * 0.6, p.z);
-    this.group.rotation.set(THREE.MathUtils.clamp(-turn * 2.2, -0.07, 0.07) + sway, heading, Math.atan2(dy, Math.hypot(dx, dz)) * 0.8 + Math.sin(real * 0.29 + 0.6) * 0.01, "YZX");
-    Object.assign(this.pose, { x: p.x, y: p.y, z: p.z, heading: Math.atan2(dx, dz) });
-    for (const b of this.fans) b.rotation.x = real * 38;
+    this.group.rotation.set(THREE.MathUtils.clamp(-turn * 2.2, -0.07, 0.07) + sway, heading, THREE.MathUtils.clamp(Math.atan2(dy, Math.max(yatay, 1)) * 0.8, -0.2, 0.2) + Math.sin(real * 0.29 + 0.6) * 0.01, "YZX");
+    Object.assign(this.pose, { x: p.x, y: p.y, z: p.z, heading: yatay > 0.05 ? Math.atan2(dx, dz) : this.pose.heading });
+    // Acil inişte bir pervane durur (olay-zeplin.js durgunFan: sıra numarası; null hepsi döner).
+    this.fans.forEach((b, k) => { if (k !== this.durgunFan) b.rotation.x = real * 38; });
     // Gece: reklam alanı içten ışıklı, kabin pencereleri yanar, seyir ışıkları parlar.
     const n = THREE.MathUtils.smoothstep(night, 0.15, 0.6);
     this.hullMat.emissiveIntensity = n * 0.95;

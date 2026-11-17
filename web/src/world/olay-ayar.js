@@ -20,3 +20,12 @@ export const IKINCI = {
   son: 950,
   yazSon: 950,
 };
+/** Olay modüllerinin dili ve adları (olay-zeplin.js). Driftwood'un zeplini 150. sakinde açılır; o zamana dek inen
+ *  zeplin adanın üstünden geçen yabancı bir zeplindir. */
+export const DIL = "en";
+export const ZEPLIN = {
+  kendi: { ad: "the Driftwood Blimp" },
+  ziyaretci: { ad: "an ad blimp" },
+  saha: { ad: "the ball field" },
+  yedekSaha: { ad: "the Town Green" },
+};

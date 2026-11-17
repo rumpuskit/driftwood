@@ -265,7 +265,7 @@ if (zeplin) scene.add(zeplin.group);
 // Kapatan kişinin tercihi bu cihazda hatırlanır.
 const ambience = new Ambience();
 // Günün olayı (olay.js, 16 Kasım): fırtına, sis, balina (araç yolu ve itfaiye açılınca kaza, yangın).
-const olay = buildOlay({ world, scene, sky, params, traffic });
+const olay = buildOlay({ world, scene, sky, params, traffic, zeplin });
 people.olay = olay; // setDay: olaya göre seyirci/görevli planı (olay.planla)
 // Olay yerine uçuş: olayın en iyi göründüğü yandan (api.yon).
 // "Olaya git" (17 Kasım QC): telefonda kaza bir evin çatısının arkasında kalıyordu. Olayın en iyi bakış yönünden başlayıp
@@ -298,8 +298,9 @@ olay.api.git = () => {
   const [x, z] = olay.api.odak, a = olay.api.yon, hava = olay.api.plan?.tur === "firtina" || olay.api.plan?.tur === "sis";
   const y = Math.max(0, world.height(x, z)) + (olay.api.odakY ?? 1);
   if (hava) return flyTo(x, y, z, 300, new THREE.Vector3(Math.sin(a), 0.55, Math.cos(a)), 1.8);
-  const D = olay.api.kiyi ? 90 : 52;
-  flyTo(x, y, z, D, acikYon(x, y, z, a, D, olay.api.kiyi ? 0.85 : 1.05), 1.6);
+  // Olay modülü uzaklık/eğim verebilir (zeplin: büyük gövde, yandan uzaktan; olay-moduller.js gitD/gitEgim).
+  const D = olay.api.gitD ?? (olay.api.kiyi ? 90 : 52);
+  flyTo(x, y, z, D, acikYon(x, y, z, a, D, olay.api.gitEgim ?? (olay.api.kiyi ? 0.85 : 1.05)), 1.6);
 };
 const soundBtn = document.getElementById("sound");
 const pref = { get: () => { try { return localStorage.getItem("ses") !== "kapali"; } catch { return true; } },
