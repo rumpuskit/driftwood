@@ -1,7 +1,9 @@
 // Günün olayı (16 Kasım 2026, kullanıcı: "yaşayan bir şehir … doğal olaylar, kazalar, önemli anlar, dikkat çekici olaylar
 // gibi kurgular olsun"). Saf modül (three yok): site (olay.js) ve video betiği (video/gunluk.mjs) aynı planı hesaplar.
 //
-// Her gün (özel günler hariç) adada BİR olay olur; tür, saat ve tohum yalnız güne ve adada neyin açık olduğuna bağlıdır
+// Her gün (özel günler hariç) adada İKİ olay olur (17 Kasım akşamı, kullanıcı: "ikinci videolar da olay videosu olacak
+// … tek düze olmaması için"): yuva 0 sabah (öğle videosu anlatır), yuva 1 öğleden sonra (akşam videosu anlatır; türü
+// sabahkinden farklı, saatleri olay-ayar.js IKINCI). Her olay; tür, saat ve tohum yalnız güne ve adada neyin açık olduğuna bağlıdır
 // (deterministik): video kaydı günün herhangi bir dakikasını yeniden çizebilir, sitedeki ziyaretçi de aynı olayı görür.
 // Olaylar zararsız kurgudur: kimse yaralanmaz, gerçek bir sakin suçlanmaz ya da kazaya karıştırılmaz (sakinler yalnız
 // seyirci, itfaiyeci/polis/doktor olarak görev başında ya da tanık olarak görünür).
@@ -11,6 +13,9 @@
 import * as AYAR from "./olay-ayar.js";
 import { ADA_TURLERI, PENCERE, ozelGun } from "./olay-ayar.js";
 export { ADA_TURLERI, ozelGun };
+// İkinci (öğleden sonra) olay: { turler, pencere: {tur: [en erken, en geç başlangıç]}, son (en geç bitiş, yerel dk),
+// yazSon (Avrupa yaz saatinde en geç bitiş) }. Ayar yoksa ikinci olay yok.
+const IKINCI = AYAR.IKINCI ?? null;
 
 // Tür tablosu: pencere [en erken, en geç başlangıç] (yerel dakika; olay-ayar.js PENCERE ezer), süre (dk), gerek (isOpen).
 const TURLER = {
@@ -35,10 +40,12 @@ export const kesir = (...p) => karma(...p) / 4294967296;
 /**
  * Günün olayı.
  *   day: gün sayısı (sim.dayOf), open: (anahtar) => açık mı (sim.isOpen), o: { turler: ["yunus", …] (bu adanın türleri),
- *   ozel: (day) => özel gün mü (anma vb.; o gün olay yok), zorla: "yangin" (deneme: türü zorla), saat: dakika (deneme) }
- * Dönüş: { tur, ad, en, bas, son, tohum, day } ya da null.
+ *   ozel: (day) => özel gün mü (anma vb.; o gün olay yok), zorla: "yangin" (deneme: türü zorla), saat: dakika (deneme),
+ *   yuva: 0 sabah (varsayılan) | 1 öğleden sonra }
+ * Dönüş: { tur, ad, en, bas, son, tohum, day, yuva } ya da null.
  */
 export function olayGunu(day, open, o = {}) {
+  if (o.yuva === 1) return ikinciOlay(day, open, o);
   if ((o.ozel ?? ozelGun)(day) && !o.zorla) return null;
   const turler = (o.turler ?? ADA_TURLERI).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
   if (!turler.length) return null;
@@ -63,7 +70,44 @@ export function olayGunu(day, open, o = {}) {
   // = 12:30 TR). Olay ayardaki YAZ_SON'dan (yerel dakika) önce bitecek kadar erkene alınır; kış günleri değişmez.
   let b0 = bas;
   if (AYAR.YAZ_SON && o.saat == null && avrupaYazi(day) && b0 + sure > AYAR.YAZ_SON) b0 = AYAR.YAZ_SON - sure;
-  return { tur, ad: T.ad, en: T.en, bas: b0, son: b0 + sure, tohum: karma("olay", day, tur), day };
+  return { tur, ad: T.ad, en: T.en, bas: b0, son: b0 + sure, tohum: karma("olay", day, tur), day, yuva: 0 };
+}
+
+/** Günün iki olayı [sabah, öğleden sonra] (yoksa null'lar). o: olayGunu seçenekleri; o.yuva verilirse zorla/saat yalnız o
+ *  yuvaya uygulanır (deneme: ?olayyuva=1). */
+export function gunOlaylari(day, open, o = {}) {
+  const y = o.yuva ?? 0, ham = { ...o, zorla: undefined, saat: undefined };
+  return [0, 1].map((i) => olayGunu(day, open, i === y ? { ...o, yuva: i } : { ...ham, yuva: i }));
+}
+
+/** Öğleden sonra olayı: türü sabahkinden farklı (sis yok: IKINCI.turler), kendi blok karıştırması ve saat penceresi. */
+function ikinciOlay(day, open, o) {
+  if (!IKINCI || ((o.ozel ?? ozelGun)(day) && !o.zorla)) return null;
+  const hepsi = IKINCI.turler.filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open));
+  let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
+  if (!tur) {
+    // Blok karıştırma (ayrı tuz) + iki kısıt: sabahkinden farklı, önceki günün öğleden sonrakinden farklı. Önceki gün
+    // 32 günlük sabit blokların başından zincirlenir (her gün için aynı sonuç; blok başında yalnız sabah kısıtı).
+    const n = hepsi.length;
+    const sira = (b) => hepsi.map((t) => [kesir("olaySira2", b, t), t]).sort((a, c) => a[0] - c[0]).map((x) => x[1]);
+    const sec = (d, dun) => {
+      if ((o.ozel ?? ozelGun)(d)) return null;
+      const sabah = olayGunu(d, open, { ...o, yuva: 0, zorla: undefined, saat: undefined })?.tur;
+      const s = sira(Math.floor(d / n)), aday = [s[((d % n) + n) % n], ...s];
+      return aday.find((t) => t !== sabah && t !== dun) ?? aday.find((t) => t !== sabah) ?? null;
+    };
+    let dun = null;
+    for (let d = day - (((day % 32) + 32) % 32); d < day; d++) dun = sec(d, dun) ?? dun;
+    tur = sec(day, dun);
+    if (!tur) return null;
+  }
+  const T = OLAYLAR[tur], P = IKINCI.pencere[tur] ?? T.pencere;
+  const sure = Math.round(T.sure[0] + kesir("olaySure2", day, tur) * (T.sure[1] - T.sure[0]));
+  let bas = o.saat ?? Math.round(P[0] + kesir("olaySaat2", day, tur) * (P[1] - P[0]));
+  // En geç bitiş (akşam üretiminden önce): kışın IKINCI.son, Avrupa yaz saatinde IKINCI.yazSon (yerel dk).
+  const sonSinir = avrupaYazi(day) && IKINCI.yazSon ? IKINCI.yazSon : IKINCI.son;
+  if (o.saat == null && sonSinir && bas + sure > sonSinir) bas = sonSinir - sure;
+  return { tur, ad: T.ad, en: T.en, bas, son: bas + sure, tohum: karma("olay2", day, tur), day, yuva: 1 };
 }
 
 /** Avrupa yaz saati mi (Mart'ın son pazarından Ekim'in son pazarına; gün sayısı UTC gün başı). */

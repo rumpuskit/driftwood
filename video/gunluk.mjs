@@ -147,8 +147,10 @@ sim.setTown(level);
 // deneme: olayı zorlar ve çekim adreslerine aynı parametreleri ekler (sayfa da zorlanır).
 const olayZorla = opt("--olay"), olaySaatZorla = opt("--olaysaat");
 const olayGun = opt("--tarih") ? Date.parse(opt("--tarih") + "T00:00:00Z") / 86400000 : today;
-const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined });
-const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}` : "";
+// Günde iki olay (17 Kasım akşamı): 18:30 videosu (yuva ogle) sabahki olayı, 23:30 videosu (yuva aksam) öğleden sonrakini anlatır.
+const olayYuva = yuva === "aksam" ? 1 : 0;
+const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined, yuva: olayYuva });
+const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}${olayYuva ? "&olayyuva=1" : ""}` : "";
 if (olay) console.log(`günün olayı: ${olay.en} (${olay.tur}) ${saatYaz(olay.bas)}–${saatYaz(olay.son)} ET${olayZorla ? " [zorlandı]" : ""}`);
 const stages = catalog.gelisim;
 const next = stages.find((s) => s.nufus > level);
