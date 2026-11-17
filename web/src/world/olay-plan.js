@@ -61,11 +61,11 @@ function karMevsimi(day) {
 }
 /** Elektrik kesintisinin o günkü başlangıç penceresi [en erken, en geç] (yerel dk) ya da null (o gün sığmaz): kesinti
  *  lambalar yandıktan sonra başlar (gün batımı + 7 dk: güneş −1,5°'nin altında) ve öğleden sonra sınırından (IKINCI.son,
- *  yaz saatinde yazSon) önce biter. P (ayardaki pencere) verilirse kesişim alınır (boşsa hesaplanan). */
+ *  yaz saatinde yazSon) önce biter; karanlık olsun diye sınıra en yakın 10 dk'lık dilimde başlar. P (ayardaki pencere) verilirse kesişim alınır (boşsa hesaplanan). */
 function elektrikPenceresi(day, P) {
   if (day == null || !AYAR.gunBatimi || !IKINCI) return null;
   const sinir = avrupaYazi(day) && IKINCI.yazSon ? IKINCI.yazSon : IKINCI.son;
-  const a = AYAR.gunBatimi(day) + 7, b = sinir - TURLER.elektrik.sure[1];
+  const b = sinir - TURLER.elektrik.sure[1], a = Math.max(AYAR.gunBatimi(day) + 7, b - 10); // olabildiğince geç: karanlık
   if (a > b) return null;
   if (P && Math.max(a, P[0]) <= Math.min(b, P[1])) return [Math.max(a, P[0]), Math.min(b, P[1])];
   return [a, b];

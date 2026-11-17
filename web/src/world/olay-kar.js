@@ -31,14 +31,18 @@ export function karDurum(o, minute) {
   }
   const dalga = 0.85 + 0.15 * Math.sin((minute - o.bas) * 0.31 + (o.tohum % 7));
   const yag = u < 0.15 ? ss(u / 0.15, 0, 1) * 0.9 : u < 0.75 ? dalga : dalga * (1 - ss((u - 0.75) / 0.25, 0, 1));
-  return { yag, birikim: ss(u, 0.03, 0.62), bulut: ss(u / 0.15, 0, 1) };
+  return { yag, birikim: ss(u, 0.02, 0.45), bulut: ss(u / 0.15, 0, 1) };
 }
 
 // Kar gölgelendiricisi (yalnız kar günü, ilk kurulumda eklenir; ortak değişken uKar).
 const KAR = { uKar: { value: 0 }, uKarRenk: { value: C("#f2f5f9") } };
-function karYama(m, kat) {
+function karYama(m, kat, agac = false) {
   if (!m || m.userData.karYama || m.isShaderMaterial || m.isMeshBasicMaterial || m.isPointsMaterial || m.isLineBasicMaterial || m.isSpriteMaterial) return 0;
   if (!(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial)) return 0;
+  // Su ve cam gibi parlak yüzeyler (göl, havuz, çeşme suyu; pürüzlülük < 0,15) ve yarı saydamlar (ağaç tepeleri dışında)
+  // karlanmaz (17 Kasım denemesi: parktaki göl bir saatte karla örtülüyordu).
+  if (m.roughness != null && m.roughness < 0.15) return 0;
+  if (m.transparent && m.opacity < 0.9 && !agac) return 0;
   m.userData.karYama = true;
   const anahtar = m.customProgramCacheKey(), eski = m.onBeforeCompile, uKat = { value: kat };
   m.onBeforeCompile = (sh, r) => {
@@ -129,7 +133,7 @@ export function buildKarOlay({ world, scene, group: anaGrup, traffic, sky, yuzey
     for (const [ad, kok] of Object.entries(yuzey ?? {})) {
       kok?.traverse?.((ob) => {
         if (!(ob.isMesh || ob.isInstancedMesh) || ob.isSprite) return;
-        for (const m of Array.isArray(ob.material) ? ob.material : [ob.material]) n += karYama(m, ad === "roads" && !roadMats.has(m) ? 1 : kat[ad] ?? 1);
+        for (const m of Array.isArray(ob.material) ? ob.material : [ob.material]) n += karYama(m, ad === "roads" && !roadMats.has(m) ? 1 : kat[ad] ?? 1, ad === "trees");
       });
     }
     group.userData.yamali = n;
@@ -161,7 +165,7 @@ export function buildKarOlay({ world, scene, group: anaGrup, traffic, sky, yuzey
     const adam = P0(0.4, 5.2);
     const yapanlar = [[-1.05, 4.6], [1.15, 5.5]].map(([u, v]) => { const [x, z] = P0(u, v); return { x, z, heading: yon(adam[0] - x, adam[1] - z) }; });
     const yer0 = YER[DIL === "en" ? "en" : "tr"][yer.tur];
-    K = { o, yer, P0, cocukBas, cocukSon, cocuk, atanlar, adam, yapanlar, yerDe: yer0[0], yerAd: yer0[1], izleyen: 0, adamBitti: cocukBas + 24 };
+    K = { o, yer, P0, cocukBas, cocukSon, cocuk, atanlar, adam, yapanlar, yerDe: yer0[0], yerAd: yer0[1], izleyenler: [], adamBitti: cocukBas + 24 };
     kardanAdam.g.position.set(adam[0], world.groundY(adam[0], adam[1]), adam[1]);
     kardanAdam.g.rotation.y = yon(-s, c) + Math.PI; // yüzü oyun alanına
     // Kamera: oyun alanını yandan, kardan adam ve iki takım aynı kadrajda (kalabalık izleyenlerin arkasından).
@@ -200,7 +204,7 @@ export function buildKarOlay({ world, scene, group: anaGrup, traffic, sky, yuzey
       const { x, z } = yerler[k], q = [K.yer.x, K.yer.z];
       out.push({ i, T0, T1, commute, item: { modul: "kar", x, z, heading: yon(q[0] - x, q[1] - z), tavir: ["cek", "bak", "konus", "cek", "goster"][k % 5] } });
     });
-    K.izleyen = out.length;
+    K.izleyenler = out.map((g) => g.T0);
     return out;
   }
 
@@ -340,7 +344,7 @@ export function buildKarOlay({ world, scene, group: anaGrup, traffic, sky, yuzey
   function yazi(o, S, minute, { saatYaz, saatte }) {
     if (!K) return null;
     const sure = o.son - o.bas, yagiyor = minute < o.son, oyun = K.cocuk && minute >= K.cocukBas, oynuyor = oyun && minute <= K.cocukSon;
-    const adam = K.cocuk && minute >= K.adamBitti, izle = oyun && minute >= K.cocukBas + 6 ? K.izleyen : 0;
+    const adam = K.cocuk && minute >= K.adamBitti, izle = K.izleyenler.filter((t) => t <= minute).length;
     // Vapur: yağış sırasında (ya da şimdiye dek) iskeleye yanaşan sefer var mı (ferry.js tarifesi; 06:00–23:00).
     const varis = nextArrival(o.bas + 2), vapur = varis <= Math.min(minute, o.son) && varis >= 360;
     if (DIL === "en") {
