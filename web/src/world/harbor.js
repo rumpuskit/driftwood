@@ -498,6 +498,7 @@ export function buildHarbor(world) {
       group.add(m);
       floating.push({ obj: m, base: 0.2, amp: 0.06, roll: 0.006, ph: 0.3 });
       ferryObj = { obj: m, x: f.x, z: f.z };
+      world.vapur3d = m; // olay-vapur.js: güverte yolcuları vapurun çocuğu olarak eklenir
       // İskele köprüsü (vapurdan iskeleye).
       // Açık gri döşeme, iki yanda ince dikmeli çift borulu korkuluk (dolu levha değil).
       const gw = [box(2.2, 0.1, 4.2, 0, 0, 0, "#b9c0c7"), box(2.24, 0.05, 0.08, 0, 0.04, -2.06, "#8d949b"), box(2.24, 0.05, 0.08, 0, 0.04, 2.06, "#8d949b")];
@@ -529,8 +530,16 @@ export function buildHarbor(world) {
   group.userData.setMinute = (m) => {
     port?.userData.setMinute(m);
     if (!ferryObj) return;
-    const u = ferryOut(m);
     const o = ferryObj.obj;
+    // Vapur arızası olayında (olay-vapur.js) vapurun yeri olaydan gelir: { x, z, rot, kopru }.
+    const ov = world.vapurOlay?.(m);
+    if (ov) {
+      o.visible = true;
+      if (ferryPlank) ferryPlank.visible = ov.kopru;
+      o.position.x = ov.x; o.position.z = ov.z; o.rotation.y = ov.rot;
+      return;
+    }
+    const u = ferryOut(m);
     o.visible = u < 0.98;
     if (ferryPlank) ferryPlank.visible = u < 0.02; // vapur yokken iskele köprüsü kaldırılmış
     o.position.x = ferryObj.x + 26 * u * u;

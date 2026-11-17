@@ -21,8 +21,19 @@
 //   ses?(minute) → { siren, korna, kalabalik, ... }   canli?(minute) → [x, y, z] | null (hareketli hedef: video).
 //   tahliye?(x, z, minute) → { x, z, heading, yuru } | null   boşaltılan alan: o anda (x, z)'de duracak sakinin yeni yeri
 //            (yuru: yürüme evresi radyan, kenara yürürken; null: alan dışında). Saf işlev; people.js her karede çağırır.
+//   gunBasi?(day)  her gün başında (olay kurulmadan önce) çağrılır: modülün dünyaya taktığı kancaları sıfırlar (vapur gecikmesi).
 import { buildZeplinOlay } from "./olay-zeplin.js";
+// --- ajan B ---
+import { buildVapurOlay } from "./olay-vapur.js";
+import { buildBalikOlay } from "./olay-balik.js";
+import { buildYarisOlay } from "./olay-yaris.js";
+// --- ajan B sonu ---
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
+  // --- ajan B ---
+  vapur: buildVapurOlay,
+  balik: buildBalikOlay,
+  tekne_yarisi: buildYarisOlay,
+  // --- ajan B sonu ---
 };
