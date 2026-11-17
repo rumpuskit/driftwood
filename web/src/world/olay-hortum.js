@@ -173,7 +173,7 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
         const f = (r1 + ts * (0.03 + 0.03 * r2)) % 1; // yükselme evresi
         const a = r3 * TAU + ts * (0.9 - 0.4 * f) * K.sg + f * 2.5 * K.sg, rr = (5 + 13 * r2) * (1 + 0.9 * f);
         const y = 1 + 30 * f * f + 4 * r1, s = (2.2 + 3.5 * r2) * (0.7 + 0.9 * f);
-        kp.ekle("puf", _p[0] + Math.cos(a) * rr, y, _p[1] + Math.sin(a) * rr, s, s * 0.8, s, 0.42 * h * (1 - f) * ss(0, 0.08, f));
+        kp.ekle("puf", _p[0] + Math.cos(a) * rr, y, _p[1] + Math.sin(a) * rr, s, s * 0.8, s, 0.75 * h * (1 - f) * ss(0, 0.08, f));
       }
       for (let i = 0; i < 140; i++) {
         const r1 = hr(K.t, 93, i), r2 = hr(K.t, 94, i), f = (r1 + ts * 0.25) % 1;

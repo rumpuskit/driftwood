@@ -218,7 +218,7 @@ function pufGeo() {
 }
 function pufMalzeme() {
   // Örnek matrisinin konumu ve ölçeği alınır, disk kameraya döndürülür (billboard); saydamlık köşe × örnek rengi.
-  const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, vertexColors: true, fog: true });
+  const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, vertexColors: true, fog: true, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", `
       vec4 pc = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);

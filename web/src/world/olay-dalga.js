@@ -205,7 +205,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
         const kpk = ss(34, 4, vC) * g;
         if (kpk > 0.05) for (let j = 0; j < 2; j++) {
           const r = hr(K.t, i * 7 + j, nSon), s = 1.2 + 1.8 * kpk;
-          kp.ekle("puf", bx + e1[0] * (j - 0.5) * 2.4, h - 0.1, bz + e1[1] * (j - 0.5) * 2.4 - e2[1] * 0.1, s, s * 0.5, s, 0.7 * kpk * (0.7 + 0.3 * r));
+          kp.ekle("puf", bx + e1[0] * (j - 0.5) * 2.4, h - 0.1, bz + e1[1] * (j - 0.5) * 2.4 - e2[1] * 0.1, s, s * 0.5, s, 0.95 * kpk * (0.7 + 0.3 * r));
         }
       }
       // Kırılma: son kırılan dalganın su tozu ve köpüğü (6 sn).
@@ -219,7 +219,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
           const yk = ust * (0.3 + 0.7 * r2), y = yk * (1 - Math.exp(-aj * 2.6)) - 0.35 * Math.max(0, aj - 1.2) * (aj - 1.2);
           const geri = (0.3 + (ruz * 0.5 + (bS ? 1.4 : 0)) * aj * (0.4 + 0.6 * r2)) * (0.7 + 0.5 * r1);
           const s = (0.75 + 0.4 * aj) * (bS ? 1.3 : 1) * (0.7 + 0.5 * r2);
-          const al = 0.36 * (1 - ss(0.8, 4.8, aj)) * ss(0, 0.2, aj);
+          const al = 0.75 * (1 - ss(0.8, 4.8, aj)) * ss(0, 0.2, aj);
           kp.ekle("puf", x0 + e1[0] * (r1 - 0.5) * 4 - e2[0] * geri, Math.max(0.4, y), z0 + e1[1] * (r1 - 0.5) * 4 - e2[1] * geri, s, s * 1.5, s, al);
         }
         for (let j = 0; j < 10; j++) {
@@ -242,7 +242,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
       const bx = W[0] + e1[0] * is.u + e2[0] * vC, bz = W[1] + e1[1] * is.u + e2[1] * vC, n = Math.floor(ts / P);
       for (let j = 0; j < 6; j++) {
         const r1 = hr(K.t, 500 + j, n), r2 = hr(K.t, 520 + j, n), yan = j % 2 ? 1 : -1, s2 = (1.2 + 1.2 * r2) * g;
-        kp.ekle("puf", bx + e1[0] * yan * (is.en + 0.6 * r1) - e2[0] * j * 0.6, 1.2 + 2.6 * r2 * g, bz + e1[1] * yan * (is.en + 0.6 * r1) - e2[1] * j * 0.6, s2, s2 * 1.4, s2, 0.5 * g * (1 - j / 8));
+        kp.ekle("puf", bx + e1[0] * yan * (is.en + 0.6 * r1) - e2[0] * j * 0.6, 1.2 + 2.6 * r2 * g, bz + e1[1] * yan * (is.en + 0.6 * r1) - e2[1] * j * 0.6, s2, s2 * 1.4, s2, 0.8 * g * (1 - j / 8));
       }
     }
     dm.count = nd; dm.instanceMatrix.needsUpdate = true;
