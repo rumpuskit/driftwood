@@ -41,6 +41,12 @@ const TURLER = {
   gemi: { ad: "Dev gemi", en: "Giant ship", pencere: [560, 700], sure: [55, 70], gerek: () => true },
   moose: { ad: "Geyik", en: "Moose in town", pencere: [480, 690], sure: [35, 45], gerek: () => true },
   kopekbaligi: { ad: "Köpekbalığı", en: "Shark sighting", pencere: [560, 700], sure: [40, 55], gerek: () => true },
+  // --- ajan D --- gökyüzü ve doğa (olay-balon.js, olay-ucurtma.js, olay-kus.js; moose: olay-moose.js, yalnız Driftwood).
+  // kus: adaya göre (olay-ayar.js KUS, ADLAR): Mercanada leylek göçü, Driftwood kel kartal; evreleri KUS.evre ezer.
+  balon: { ad: "Sıcak hava balonları", en: "Hot air balloons", pencere: [480, 640], sure: [55, 70], gerek: () => true },
+  ucurtma: { ad: "Uçurtma şenliği", en: "Kite festival", pencere: [600, 700], sure: [45, 60], gerek: () => true },
+  kus: { ad: "Kuşlar", en: "Birds", pencere: [540, 680], sure: [35, 50], gerek: () => true },
+  // --- ajan D sonu ---
 };
 // Ada adları (olay-ayar.js ADLAR: { tur: [ad, en] }; ör. Mercanada "Akdeniz foku", Driftwood "Seals on the dock").
 export const OLAYLAR = Object.fromEntries(Object.entries(TURLER).map(([k, v]) => [k, { ...v, pencere: PENCERE[k] ?? v.pencere, ad: AYAR.ADLAR?.[k]?.[0] ?? v.ad, en: AYAR.ADLAR?.[k]?.[1] ?? v.en }]));
@@ -162,6 +168,11 @@ export function olayEvre(o, minute) {
     gemi: [[0.15, "gorundu"], [0.5, "yanasma"], [1, "limanda"]],
     moose: [[0.15, "gorundu"], [0.85, "kasabada"], [1, "uzaklasma"]],
     kopekbaligi: [[0.12, "gorundu"], [0.3, "bosaltma"], [0.88, "kapali"], [1, "acildi"]],
+    // --- ajan D ---
+    balon: [[0.22, "sisirme"], [0.32, "kalkis"], [0.72, "suzulme"], [0.84, "inis"], [1, "yerde"]],
+    ucurtma: [[0.12, "toplanma"], [0.5, "senlik"], [0.76, "takildi"], [1, "kurtuldu"]],
+    kus: AYAR.KUS?.evre ?? [[0.15, "gelis"], [0.75, "termik"], [1, "gidis"]],
+    // --- ajan D sonu ---
   }[o.tur] ?? [[1, "olay"]];
   const [, ad] = E.find(([s]) => u <= s) ?? E[E.length - 1];
   return { ad, u, t: minute - o.bas };

@@ -22,7 +22,19 @@
 //   tahliye?(x, z, minute) → { x, z, heading, yuru } | null   boşaltılan alan: o anda (x, z)'de duracak sakinin yeni yeri
 //            (yuru: yürüme evresi radyan, kenara yürürken; null: alan dışında). Saf işlev; people.js her karede çağırır.
 import { buildZeplinOlay } from "./olay-zeplin.js";
+// --- ajan D ---
+import { buildBalonOlay } from "./olay-balon.js";
+import { buildUcurtmaOlay } from "./olay-ucurtma.js";
+import { buildKusOlay } from "./olay-kus.js";
+import { buildMooseOlay } from "./olay-moose.js"; // yalnız Driftwood
+// --- ajan D sonu ---
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
+  // --- ajan D ---
+  balon: buildBalonOlay,
+  ucurtma: buildUcurtmaOlay,
+  kus: buildKusOlay,
+  moose: buildMooseOlay,
+  // --- ajan D sonu ---
 };
