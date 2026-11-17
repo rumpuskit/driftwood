@@ -268,7 +268,38 @@ const ambience = new Ambience();
 const olay = buildOlay({ world, scene, sky, params, traffic });
 people.olay = olay; // setDay: olaya göre seyirci/görevli planı (olay.planla)
 // Olay yerine uçuş: olayın en iyi göründüğü yandan (api.yon).
-olay.api.git = () => { const [x, z] = olay.api.odak; const a = olay.api.yon; flyTo(x, Math.max(0, world.height(x, z)) + (olay.api.odakY ?? 1), z, olay.api.kiyi ? 90 : 48, new THREE.Vector3(Math.sin(a), 0.85, Math.cos(a)), 1.6); };
+// "Olaya git" (17 Kasım QC): telefonda kaza bir evin çatısının arkasında kalıyordu. Olayın en iyi bakış yönünden başlayıp
+// sağa/sola açılarak binaya çarpmayan ilk yön seçilir (bina kutuları, ışın atmadan). Fırtına ve siste geniş görünüm.
+function acikYon(x, y, z, a0, D, egim) {
+  let en = null;
+  for (const da of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, Math.PI]) {
+    const a = a0 + da, d = new THREE.Vector3(Math.sin(a), egim, Math.cos(a)).normalize();
+    // Hedeften ve kadrajın alt yarısına düşen yer noktalarından (hedefin 10/20 m kamera tarafı) kameraya giden çizgiler.
+    let engel = 0;
+    const h = Math.hypot(d.x, d.z) || 1;
+    for (const [ox, oz, t0] of [[0, 0, 0.12], [(d.x / h) * 10, (d.z / h) * 10, 0.05], [(d.x / h) * 20, (d.z / h) * 20, 0.05]])
+    for (let t = t0; t <= 1; t += 0.04) {
+      const cx = x + d.x * D, cy = y + d.y * D, cz = z + d.z * D, bx = x + ox, bz = z + oz;
+      const px = bx + (cx - bx) * t, py = y + (cy - y) * t, pz = bz + (cz - bz) * t;
+      for (const b of world.buildings) {
+        const r = Math.max(b.w, b.d) * 0.72;
+        if (Math.abs(px - b.x) > r || Math.abs(pz - b.z) > r) continue;
+        const c = Math.cos(-(b.rot ?? 0)), s = Math.sin(-(b.rot ?? 0)), lx = (px - b.x) * c - (pz - b.z) * s, lz = (px - b.x) * s + (pz - b.z) * c;
+        if (Math.abs(lx) < b.w / 2 + 0.5 && Math.abs(lz) < b.d / 2 + 0.5 && py < (b.floors ?? 1) * 3.2 + 4) { engel++; break; }
+      }
+    }
+    if (!engel) return d;
+    if (!en || engel < en[0]) en = [engel, d];
+  }
+  return en[1];
+}
+olay.api.git = () => {
+  const [x, z] = olay.api.odak, a = olay.api.yon, hava = olay.api.plan?.tur === "firtina" || olay.api.plan?.tur === "sis";
+  const y = Math.max(0, world.height(x, z)) + (olay.api.odakY ?? 1);
+  if (hava) return flyTo(x, y, z, 300, new THREE.Vector3(Math.sin(a), 0.55, Math.cos(a)), 1.8);
+  const D = olay.api.kiyi ? 90 : 52;
+  flyTo(x, y, z, D, acikYon(x, y, z, a, D, olay.api.kiyi ? 0.85 : 1.05), 1.6);
+};
 const soundBtn = document.getElementById("sound");
 const pref = { get: () => { try { return localStorage.getItem("ses") !== "kapali"; } catch { return true; } },
   set: (on) => { try { localStorage.setItem("ses", on ? "acik" : "kapali"); } catch {} } };
@@ -636,13 +667,15 @@ function updateWindows(minute, light, sunDeg) {
     windows.setColorAt(i, tmpColor);
   }
   windows.instanceColor.needsUpdate = true;
-  // Lambalar güneş ufkun altına inince yanar.
-  const on = sunDeg < -1.5;
+  // Lambalar güneş ufkun altına inince yanar; günün olayında gök kararınca (fırtına) ya da yoğun siste sokak lambaları da
+  // (17 Kasım QC: olay metni lambaların yandığını söylüyor). Fenerin sis/fırtına ışığını hava.js ekler (setFlood sarmalı).
+  const hv = olay.api.hava, gece = sunDeg < -1.5;
+  const on = gece || Math.max(hv?.karanlik ?? 0, (hv?.sis ?? 0) * 0.9) > 0.45;
   for (const m of roads.userData.lampHeads) m.color.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, on ? 1 : 0);
-  lampLight.setNight(on ? Math.min(1, (-1.5 - sunDeg) / 6 + 0.35) : 0);
+  lampLight.setNight(gece ? Math.min(1, (-1.5 - sunDeg) / 6 + 0.35) : on ? 0.35 : 0);
   // Saha ışıkları yalnızca akşam (17:30-23:00), fener bütün gece.
   const stadium = on && minute >= 1050 && minute < 1380 ? 1 : 0;
-  city.setFlood(stadium, on ? 1 : 0);
+  city.setFlood(stadium, gece ? 1 : 0);
   lampLight.setStadium(stadium);
   harbor.userData.setNight(on ? 1 : 0);
 }

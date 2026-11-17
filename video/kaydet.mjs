@@ -509,7 +509,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
     else if (shot.aracAni.oto) {
       // Çekici: kazalı aracı kasaya aldığı an (yukleme); diğerleri olay yerine varmadan ~20 sn önce.
       const yk = shot.aracAni.ad === "cekici" ? await page.evaluate(() => globalThis.__ada.olay?.zaman?.yukleme ?? null) : null;
-      const [t0, t1] = yk ?? z.yol, m = yk ? t0 + 0.1 : t1 - t0 > 0.45 ? t1 - 0.35 : t0 + 0.05;
+      // ofs: bölünen çekimin sonraki parçası, grubun başından geçen süre kadar ileride (gunluk.mjs parcaSaati).
+      const [t0, t1] = yk ?? z.yol, m = (yk ? t0 + 0.1 : t1 - t0 > 0.45 ? t1 - 0.35 : t0 + 0.05) + (shot.aracAni.ofs ?? 0);
       if (m0 == null || Math.abs(m - m0) > 0.02) {
         shot.adres = shot.adres.replace(/saat=[^&]*/, "saat=" + yaz(m));
         console.log(`  çekim ${ci + 1}: ${shot.aracAni.ad} ${yaz(t0)}–${yaz(t1)} ${yk ? "yüklüyor" : "yolda"} → çekim saati ${yaz(m)}`);

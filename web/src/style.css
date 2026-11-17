@@ -1346,7 +1346,7 @@ body.tur #hud, body.tur #card, body.tur #arama, body.tur #navbtns, body.tur #doc
   body:not(.hud-acik) #hud .chip { flex: 1 1 0; flex-direction: row; justify-content: center; align-items: baseline; gap: 4px; padding: 3px 6px; overflow: hidden; }
   body:not(.hud-acik) #hud .chip b { font-size: 13px; }
   body:not(.hud-acik) #hud .chip b svg.i { width: 13px; height: 13px; margin-right: 4px; }
-  body:not(.hud-acik) #hud :is(#online, #next, #gunun, #waiting, #secim, .links):not(.tk-on) { display: none; }
+  body:not(.hud-acik) #hud :is(#online, #next, #gunun, #waiting, #secim, #olaybtn, .links):not(.tk-on) { display: none; }
   body:not(.hud-acik) #hud .tk-on { animation: tk-in 0.35s ease both; --tx: 0; }
   body:not(.hud-acik) #hud .priv { display: none; }
   body:not(.hud-acik) #hud .online { min-height: 30px; padding: 0 4px; }

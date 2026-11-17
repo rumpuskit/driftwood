@@ -73,8 +73,10 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   const hava = buildHava({ world, scene, sky });
   const deniz = buildDeniz({ world, scene });
   group.add(hava.group, deniz.group);
-  const zorla = params?.get("olay") || null;
-  const zorlaSaat = params?.get("olaysaat")?.match(/^(\d{1,2}):(\d{2})$/);
+  // ?olay / ?olaysaat yalnız geliştirme ve video kaydında (17 Kasım QC: yayındaki sitede herkes sahte olay gösterebiliyordu).
+  const gelistir = import.meta.env?.DEV || ["denetle", "gelistir", "test"].some((k) => params?.has(k));
+  const zorla = (gelistir && params?.get("olay")) || null;
+  const zorlaSaat = gelistir ? params?.get("olaysaat")?.match(/^(\d{1,2}):(\d{2})$/) : null;
   const api = { plan: null, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, araclar: new Map(), hava: hava.durum, yerAdi: null, seyirci: 0 };
   api.evre = (m) => olayEvre(api.plan, m);
   api.arac = (ad) => api.araclar.get(ad) ?? null;
@@ -94,7 +96,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   function gunuKur(day) {
     gun = day;
     api.plan = olayGunu(day, isOpen, { zorla, saat: zorlaSaat ? Number(zorlaSaat[1]) * 60 + Number(zorlaSaat[2]) : undefined });
-    api.odak = api.kalabalik = api.bina = api.kiyi = null; api.zaman = null;
+    api.odak = api.kalabalik = api.bina = api.kiyi = api.yerAdi = null; api.zaman = null; api.seyirci = 0; api.itfaiyeci = 0;
     api.araclar.clear();
     K = null; Y = null;
     kaza.gizle(); yanginG.gizle();
@@ -148,7 +150,8 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   function planla(people, day) {
     if (day !== gun) gunuKur(day);
     const o = api.plan;
-    if (!o || !api.odak) return null;
+    // Fırtına ve siste seyirci yok (17 Kasım QC: sakinler fırtınada meydana yürüyüp "izliyor"du).
+    if (!o || !api.odak || o.tur === "firtina" || o.tur === "sis") return null;
     const plans = people.plans;
     const R = people.residents;
     const yerOf = (seg) => (seg.ne === "meydan" || seg.ne === "hobi" ? world.placeOf?.(seg.ne === "hobi" ? seg.yer.replace("hobi:", "") : "meydan")?.anchors?.[0] : null);
@@ -254,8 +257,8 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       if (bitti) return { kisa: `Fire at ${yerY} this morning`, uzun: `At ${saatYaz(o.bas)} a fire broke out on the top floor of ${yerY}; nobody was hurt. Firefighters arrived in ${Math.round(Y.itfaiye.varis - Y.bas)} minutes and put it out.` };
       return { kisa: `Fire! ${yerY}`, uzun: `Smoke is rising from ${yerY}. Firefighters are on the way.` };
     }
-    const T = { firtina: ["Storm! Heavy rain and lightning", "A storm hit this morning", "A thunderstorm swept over the island; streets emptied and the ferry waited it out."],
-      sis: ["The island is fogged in", "Thick fog this morning", "Dense sea fog rolled over the island; the ferry came in sounding its horn and the lighthouse burned until late morning."],
+    const T = { firtina: ["Storm! Heavy rain and lightning", "A storm hit this morning", "A thunderstorm swept over the island; the sky went dark and the street lamps came on in the middle of the morning."],
+      sis: ["The island is fogged in", "Thick fog this morning", "Dense sea fog rolled over the island; the foghorn sounded every forty seconds and the lighthouse and street lamps burned until it lifted."],
       balina: ["Whale off the coast!", "A whale visited this morning", `A humpback whale breached again and again just off the shore${api.seyirci ? `; ${api.seyirci} ${api.seyirci === 1 ? "neighbor" : "neighbors"} came down to the water to watch` : ""}.`],
       yunus: ["Dolphins off the coast!", "Dolphins visited this morning", `A pod of dolphins leapt off the shore for half an hour${api.seyirci ? `; ${api.seyirci} people came to watch` : ""}.`] }[o.tur];
     if (!T) return null;
@@ -294,11 +297,11 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       deniz.update(o, evre, minute, real, env);
       kaza.update(K, minute, real);
       yanginG.update(minute, real);
-      if (Y) ses.kalabalik = minute > Y.bas + 5 && minute < Y.son ? 0.7 : 0;
       if (traffic && K) traffic.kapali = minute >= K.bas && minute < K.son - 3 ? new Set([K.node]) : new Set();
       // Çarpışma sesi: olay başladığında bir kez (sayaç artar).
       if (K) ses.carpisma = minute >= K.bas ? 1 : 0;
-      ses.kalabalik = K && minute > K.bas + 4 && minute < K.son ? 0.6 : 0;
+      // Kalabalık uğultusu (17 Kasım QC: yangının değeri her karede kazanınkiyle eziliyordu).
+      ses.kalabalik = Y && minute > Y.bas + 5 && minute < Y.son ? 0.7 : K && minute > K.bas + 4 && minute < K.son ? 0.6 : 0;
     },
     /** Ses ortamı (sound.js Ambience.update env.olay). */
     ses() { return { ...hava.durum, ...ses }; },

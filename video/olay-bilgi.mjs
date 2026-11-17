@@ -18,29 +18,34 @@ const PORT = Number(opt("--port", 4186));
 const zorla = opt("--olay", null), zorlaSaat = opt("--olaysaat", null);
 sim.setCatalog(JSON.parse(readFileSync(resolve(HERE, "../data/catalog.json"), "utf8")));
 const saat = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`;
+// Saniyeli saat toplam saniyeden (17 Kasım QC: dakika ve saniye ayrı yuvarlanınca "08:38:60" çıkıyordu).
+const saatSn = (m) => { const sn = Math.round(m * 60); return sn % 60 ? `${saat(Math.floor(sn / 60))}:${String(sn % 60).padStart(2, "0")}` : saat(sn / 60); };
+// Üst sınır: hiçbir adım üretimi bekletmesin (uret.sh ayrıca 240 sn'de öldürür).
+setTimeout(() => { console.error("olay-bilgi: zaman aşımı (200 sn)"); process.exit(3); }, 200000).unref();
 
 // Adanın düzeyi açık veriden (gunluk.mjs ile aynı kaynak).
 const { VERI_URL } = await import("../web/src/config.js");
+// Veri alınamazsa tahmin YOK (17 Kasım QC: düzey 1 sayılınca açık olay türleri değişip başka olay hesaplanabiliyordu).
 let zirve = 0;
 try {
-  const r = await fetch(VERI_URL, { headers: { "User-Agent": "Mozilla/5.0 (olay-bilgi)", "Cache-Control": "no-cache" } });
+  const r = await fetch(VERI_URL, { headers: { "User-Agent": "Mozilla/5.0 (olay-bilgi)", "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(20000) });
   const d = await r.json();
   zirve = Math.max(d.zirve ?? 0, ...(d.sakinler ?? []).map((s) => (Array.isArray(s) ? s[2] ?? 0 : s.slot ?? 0) + 1));
-} catch {}
+} catch (e) { console.error(`olay-bilgi: ada verisi alınamadı (${e.message})`); process.exit(2); }
 sim.setTown(zirve || 1);
 const now = Date.now() / 1000, day = sim.dayOf(now), dakika = sim.minuteOf(now);
 const m = zorlaSaat?.match(/^(\d{1,2}):(\d{2})$/);
 const plan = olayGunu(day, sim.isOpen, { zorla, saat: m ? Number(m[1]) * 60 + Number(m[2]) : undefined });
 if (!plan) { console.log(JSON.stringify({ olay: null, gun: day })); process.exit(0); }
 
-execFileSync("npx", ["vite", "build"], { cwd: resolve(HERE, "../web"), stdio: "ignore" });
+execFileSync("npx", ["vite", "build"], { cwd: resolve(HERE, "../web"), stdio: "ignore", timeout: 150000 });
 const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: resolve(HERE, "../web"), stdio: "ignore", detached: true });
 const kapat = () => { try { process.kill(-server.pid); } catch {} };
 process.on("exit", kapat);
-let sonuc = null;
+let sonuc = null, b = null;
 try {
-  for (let k = 0; k < 40; k++) { try { await fetch(`http://localhost:${PORT}/`); break; } catch { await new Promise((r) => setTimeout(r, 500)); } }
-  const b = await chromium.launch({ channel: "chrome", headless: true });
+  for (let k = 0; k < 40; k++) { try { await fetch(`http://localhost:${PORT}/`, { signal: AbortSignal.timeout(2000) }); break; } catch { await new Promise((r) => setTimeout(r, 500)); } }
+  b = await chromium.launch({ channel: "chrome", headless: true });
   const p = await b.newPage({ viewport: { width: 400, height: 300 } });
   const q = new URLSearchParams({ saat: saat(Math.min(1439, plan.son + 2)) });
   if (zorla) q.set("olay", zorla);
@@ -52,18 +57,19 @@ try {
     const O = globalThis.__ada.olay;
     return { yerAdi: O.yerAdi, seyirci: O.seyirci, odak: O.odak, kiyi: O.kiyi, yazi: O.yazi?.(son + 2) ?? null, plan: O.plan, zaman: O.zaman ?? null };
   }, plan.son);
-  await b.close();
-} finally { kapat(); }
-// Evre saatleri (video çekimlerinde "saat": "olay:<evre>" için).
+} finally { await b?.close().catch(() => {}); kapat(); }
+// Sitenin planı esastır (sayfa kendi verisiyle kurar); Node'un hesabı yalnız "bugün olay var mı" ön denetimi.
+const P = sonuc?.plan?.tur ? sonuc.plan : plan;
+// Evre saatleri (video çekimlerinde "saat": "olay:<evre>" için; "sonra" da: yangın sonrası is, fırtına sonrası gökkuşağı).
 const evreler = {};
-for (let t = plan.bas; t <= plan.son; t += 0.25) {
-  const e = olayEvre(plan, t);
-  if (e && !evreler[e.ad]) evreler[e.ad] = saat(t);
+for (let t = P.bas; t <= P.son + 30; t += 0.05) {
+  const e = olayEvre(P, t);
+  if (e && !evreler[e.ad]) evreler[e.ad] = saatSn(t);
 }
 console.log(JSON.stringify({
-  olay: plan.tur, ad: plan.ad, en: plan.en, bas: saat(plan.bas), son: saat(plan.son), bitti: dakika >= plan.son,
+  olay: P.tur, ad: P.ad, en: P.en, bas: saat(P.bas), son: saat(P.son), bitti: dakika >= P.son,
   evreler, yerAdi: sonuc?.yerAdi ?? null, seyirci: sonuc?.seyirci ?? null, metin: sonuc?.yazi?.uzun ?? null,
-  araclar: sonuc?.zaman ? JSON.parse(JSON.stringify(sonuc.zaman, (k, v) => (typeof v === "number" ? saat(v) + (v % 1 ? `:${String(Math.round((v % 1) * 60)).padStart(2, "0")}` : "") : v))) : null,
+  araclar: sonuc?.zaman ? JSON.parse(JSON.stringify(sonuc.zaman, (k, v) => (typeof v === "number" ? saatSn(v) : v))) : null,
   sayfaPlani: sonuc?.plan?.tur === plan.tur, gun: day,
 }));
 process.exit(0);

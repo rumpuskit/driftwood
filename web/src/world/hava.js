@@ -553,8 +553,11 @@ export function buildHava({ world, scene, sky }) {
       // Gelişte uzaklık sisi, kıyı yığını karaya yaklaşınca koyulaşır (önce yığın denizde görünür).
       const sd = kiyiL >= 0 ? ss(kiyiL, 0.3, 1) : sis;
       const yuk = 1 + Math.max(0, camera.position.y - 10) / 160;
-      scene.fog.near = lerpLog(fog0.near, 18 * yuk, sd);
-      scene.fog.far = lerpLog(fog0.far, 175 * yuk, sd);
+      // Açılış görünümünde (kamera ~440 m yüksekte, adaya ~900 m) ada seçilebilsin (17 Kasım QC: yoğun siste ekran
+      // bembeyazdı). 60 m altındaki (video) kameralarda değişmez.
+      const yuksek = Math.max(0, camera.position.y - 60);
+      scene.fog.near = lerpLog(fog0.near, Math.max(18 * yuk, yuksek * 0.75), sd);
+      scene.fog.far = lerpLog(fog0.far, Math.max(175 * yuk, yuksek * 3.6), sd);
     }
     // Fener: sisli/karanlık havada gündüz de yanar (gündüz mercek, gece huzme).
     if (fener) fener.uygula(Math.max(sis, ss(k, 0.4, 0.9)) * (0.3 + 0.7 * (1 - light)));

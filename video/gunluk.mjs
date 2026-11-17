@@ -366,7 +366,7 @@ gruplar.forEach((g, gi) => {
   // Bölme eşiğinde %12 pay: grup 2,6 sn'ye çok yakınken ses yenilenince kendiliğinden ikiye bölünüp AYNI/BENZER
   // veriyordu (7 Kasım kod notu). Açılış çekimi hiç bölünmez.
   const parca = g.cekim === "kapanis" || g.acilis ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA) - 0.12));
-  for (let k = 0; k < parca; k++) kesitler.push({ ...g, parca: k, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
+  for (let k = 0; k < parca; k++) kesitler.push({ ...g, parca: k, g0: t0, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
 });
 const kullanim = {};
 // Kilitli yerin taslağı ({"taslak": "balikci_koyu:0"}): yerin binalarının ortası ve boyu sitenin kendi yerleşiminden
@@ -416,7 +416,7 @@ const OLAY_CEKIM = {
   olay: { D: 45, H: 22, secenek: ["vinc", "yorunge", "yanKay"] },
   "olay-yakin": { D: 32, H: 3, goz: 2.4, secenek: ["el", "alcak", "whip"], sarsinti: 0.5 },
   "olay-kalabalik": { D: 14, H: 3, secenek: ["yanKay", "el"], sarsinti: 0.3 },
-  "olay-tele": { D: 45, H: 20, secenek: ["tele"], sarsinti: 0.2 },
+  "olay-tele": { D: 45, H: 20, secenek: ["tele", "yanKay"], sarsinti: 0.2 }, // tek seçenek art arda/sınır üstü tele veriyordu (17 Kasım QC)
   "olay-hava": { D: 120, H: 6, secenek: ["yanKay", "tele"] },
   "olay-arac": { D: 10, H: 3, secenek: ["takip", "yanTakip"] },
 };
@@ -443,6 +443,7 @@ const SINIR = { vertigo: 0, drone: 0, tele: 2, whip: 2, vinc: 3, el: 3 };
 const GECIS = { kesme: 0.1, solma: 0.25, kaydir: 0.2, flas: 0.3, yakinlas: 0.22 };
 const hs = { onceki: null, sayac: {}, grup: 0, flas: 0, duduk: -99, gok: -99, olayN: 0 };
 const ham = kesitler.map((k, i) => {
+  hs.parca = k.parca; // olayCekimi: grubun kaydırması parçalarda aynı kalır
   const sure = +(k.t1 - k.t0 + X).toFixed(3); // geçici; geçişler seçilince düzeltilir
   const anahtar = ckAnahtar(k.cekim);
   const v = (kullanim[anahtar] = (kullanim[anahtar] ?? -1) + 1);
@@ -455,9 +456,21 @@ const ham = kesitler.map((k, i) => {
   // Bölünen ayarlı çekimde parça başına kadraj (7 Kasım kod notu: 2. parçanın sabit sapması temiz kadrajı bozuyordu):
   // {"yer"|"yorunge": .., "parcalar": [{aci, uzak, yuk} | {yorunge}, ...]} → k. parça (k ≥ 1) parcalar[k − 1] ile.
   const pk = k.parca > 0 && k.cekim && typeof k.cekim === "object" ? k.cekim.parcalar?.[k.parca - 1] : null;
-  if (pk) return yonet(Object.assign(CEKIM({ ...k.cekim, ...pk, parcalar: undefined, hareket: undefined }, v, sure, k.arayuz), { parcaKadraj: true }), k, 0, i);
-  return yonet(CEKIM(k.cekim, v, sure, k.arayuz), k, v, i);
+  if (pk) return yonet(parcaSaati(Object.assign(CEKIM({ ...k.cekim, ...pk, parcalar: undefined, hareket: undefined }, v, sure, k.arayuz), { parcaKadraj: true }), k), k, 0, i);
+  return yonet(parcaSaati(CEKIM(k.cekim, v, sure, k.arayuz), k), k, v, i);
 });
+/** Bölünen olay çekiminde k. parça olayın akışını sürdürür (17 Kasım QC: parçalar aynı anı baştan oynatıyor ya da
+ *  saatte ileri geri sıçrıyordu). Parçanın saati, grubun başından geçen süre × sayfa hızı kadar ileri alınır. */
+function parcaSaati(shot, k) {
+  if (!(k.parca > 0) || !(shot.olayEvreAd || shot.aracAni)) return shot;
+  const hiz = Number(/hiz=([\d.]+)/.exec(shot.adres)?.[1] ?? 1) || 1, ofs = ((k.t0 - k.g0) * hiz) / 60; // dakika
+  if (shot.aracAni?.oto) { shot.aracAni.ofs = ofs; return shot; } // kaydet.mjs aracın saatini sayfadan bulur, ofs ekler
+  const q = /saat=(\d+):(\d+)(?::(\d+))?/.exec(shot.adres);
+  if (!q) return shot;
+  const sn = Math.min(86399, Math.round((+q[1] * 60 + +q[2] + (+q[3] || 0) / 60 + ofs) * 60));
+  shot.adres = shot.adres.replace(/saat=[^&]*/, `saat=${String(Math.floor(sn / 3600) % 24).padStart(2, "0")}:${String(Math.floor(sn / 60) % 60).padStart(2, "0")}:${String(sn % 60).padStart(2, "0")}`);
+  return shot;
+}
 /** Çekimin hareketini seçer ve uygular (bkz. yukarı). */
 function yonet(shot, k, v, i) {
   const ck = k.cekim && typeof k.cekim === "object" ? k.cekim : null;
@@ -508,7 +521,9 @@ function sec(secenek, v) {
   const farkli = sira.filter(([t]) => AILE(t) !== hs.onceki);
   const uygun = farkli.filter(([t]) => (hs.sayac[t] ?? 0) < (SINIR[t] ?? 9));
   const izinli = (l) => l.filter(([t]) => (SINIR[t] ?? 9) > 0);
-  const L = (uygun.length ? uygun : izinli(farkli).length ? izinli(farkli) : izinli(sira).length ? izinli(sira) : sira).sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+  // Yedek sırası: sınırın altındaki (aile tekrar etse de) → izinli farklı aile → izinli → hepsi (17 Kasım QC: sınır üstü seçiliyordu).
+  const altinda = sira.filter(([t]) => (hs.sayac[t] ?? 0) < (SINIR[t] ?? 9));
+  const L = (uygun.length ? uygun : altinda.length ? altinda : izinli(farkli).length ? izinli(farkli) : izinli(sira).length ? izinli(sira) : sira).sort((a, b) => a[1] - b[1] || a[2] - b[2]);
   return L[0][0];
 }
 /** Çekime GİRİŞ geçişi. Hikâye "gecis" verirse o (ilk parçada); whip'e kaydırma, çarpma/gök efektine ve şimşek anına flaş
@@ -772,7 +787,9 @@ function olayCekimi(ad0, a, L) {
   // Limana/iskeleye bakan çekimler (sis hava; fırtına/sis yakın: iskelenin üstü): feribot iskelede olsun.
   if ((olay.tur === "sis" && ad === "olay-hava") || ((olay.tur === "sis" || olay.tur === "firtina") && ad === "olay-yakin")) shot.vapurAni = true;
   // Saati verilmeyen olay çekimleri aynı ana yığılmasın (fırtınada hep aynı şimşek, siste aynı kare): n. çekim kaydırılır.
-  shot.olayOfs = [0, 1.6, -1.2, 3, -2.4, 4.2, -3.6, 5.4][hs.olayN++ % 8];
+  // Bölünen grubun parçaları aynı kaydırmayı alır (sürekliliği parcaSaati verir).
+  if (!hs.parca || hs.olayGrupOfs == null) hs.olayGrupOfs = [0, 1.6, -1.2, 3, -2.4, 4.2, -3.6, 5.4][hs.olayN++ % 8];
+  shot.olayOfs = hs.olayGrupOfs;
   return shot;
 }
 
