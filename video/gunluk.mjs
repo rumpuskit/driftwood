@@ -57,6 +57,7 @@ import { seslendir } from "./seslendir.mjs";
 import { efekt, EFEKT_SES, EFEKTLER } from "./efekt.mjs";
 import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
 import { yukle } from "./tiktok.mjs";
+import * as ETIKET from "./etiket.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 process.chdir(HERE);
@@ -330,14 +331,14 @@ for (const x of cumleler) console.log("   " + x.ses + (x.vurus ? "   [vuruş]" :
 
 // --- açıklama (etkileşim: kanca + soru + istek kalıbı + etiketler) ---
 const kanca = ozelKanca ?? { acilis: "Something new opened on the island today 🏗️", yeniler: `${fmt(yeniler.length)} new ${yeniler.length === 1 ? "neighbor" : "neighbors"} on Driftwood Island today 🧳`, istek: "A comment request came true ✍️", sakin: "A day in the life of a resident 👀", bos: "Nobody lives on this island yet 🏝️" }[tur];
+// No address, 5 hashtags, none shared with the previous two videos (etiket.mjs; 17 Nov, user request).
 const aciklama = [
   kanca,
   `${(soru.yazi ?? soru.ses).replace(/\n/g, " ")} 👇`,
   `Follow and you move in. Pick your job: comment "job: fisherman" (or any job).`,
   etiketler.length ? etiketler.map((h) => "@" + h).join(" ") : null,
-  "Find yourself: driftwood.rumpuskit.com",
   "",
-  "#driftwoodisland #cozygames #simulation #smalltown #islandlife",
+  ETIKET.sec(tarih, yuva).join(" "),
 ].filter((x) => x != null).join("\n");
 writeFileSync(`${out}/ACIKLAMA.txt`, aciklama + "\n");
 writeFileSync(`${out}/malzeme.json`, JSON.stringify({ tarih, yuva, tur, konuId, nufus: N, takipci, level, sıradaki: next?.ad, need, yeniler: yeniler.map((r) => r.handle), etiketler }, null, 2));
@@ -446,7 +447,7 @@ const AILE = (t) => (t === "yanTakip" ? "takip" : t === "itme" ? "yorunge" : t);
 // Drone ve vertigo yalnız hikâye zorlarsa ("hareket"): kendiliğinden seçildiklerinde çatı sıyıran/rastgele açılış veriyordu.
 const SINIR = { vertigo: 0, drone: 0, tele: 2, whip: 2, vinc: 3, el: 3 };
 const GECIS = { kesme: 0.1, solma: 0.25, kaydir: 0.2, flas: 0.3, yakinlas: 0.22 };
-const hs = { onceki: null, sayac: {}, grup: 0, flas: 0, duduk: -99, gok: -99, olayN: 0 };
+const hs = { onceki: null, sayac: {}, zorla: {}, grup: 0, flas: 0, duduk: -99, gok: -99, olayN: 0 };
 const ham = kesitler.map((k, i) => {
   hs.parca = k.parca; // olayCekimi: grubun kaydırması parçalarda aynı kalır
   const sure = +(k.t1 - k.t0 + X).toFixed(3); // geçici; geçişler seçilince düzeltilir
@@ -486,6 +487,8 @@ function yonet(shot, k, v, i) {
   if (shot.sabit) { canlandir(shot, shot.ayarli ? k.parca : v); return bitir(shot.sabit, shot.sabit === "alcak" ? "alcak" : "sabit"); }
   let zorla = k.parca === 0 ? ck?.hareket : null;
   if (zorla && !HAREKETLER.includes(zorla)) { console.log(`UYARI: bilinmeyen hareket "${zorla}" (${HAREKETLER.join(", ")}): yok sayıldı`); zorla = null; }
+  // Aynı hareketi hikâyede çok kez zorlamak videoyu tekdüzeleştirir (17 Kasım: 5 çekime "yorunge" verilmişti).
+  if (zorla && (hs.zorla[zorla] = (hs.zorla[zorla] ?? 0) + 1) === 3) console.log(`UYARI: "hareket": "${zorla}" hikâyede 3. kez verildi: hareketi yalnız kusuru gidermek için ver, gerisini otomatiğe bırak (aynı hareket en çok 2 kez)`);
   const dogal = shot.hareket ? null : shot.kamera ? "itme" : "yorunge";
   // Açılış çekimi (hikâyede ham yörünge ile bayrak benzeri): doğal hareketiyle, alçak açı ailesinden sayılır.
   if (k.acilis && !zorla && !shot.hareket) { canlandir(shot, 0); return bitir("alcak", dogal); }
@@ -636,7 +639,9 @@ function canlandir(shot, v) {
     const y = shot.yorunge, yay = Math.max(Math.abs(y.a1 - y.a0), 0.5) * (Math.sign(y.a1 - y.a0) || 1);
     const o = y.r < 50 ? Math.max(0.85, olc) : olc; // yakın yörünge daha da yaklaşmaz (çardağa, direğe, bacaya girdi, 3 Kasım)
     y.a0 += aci; y.a1 = y.a0 + yay; y.r = +(y.r * o).toFixed(2); y.h = +(y.h * o).toFixed(2);
-    if (y.hedef !== "zeplin") y.r1 = +(y.r * m).toFixed(2);
+    // Yörünge hedefe yaklaşmaz (17 Kasım, kullanıcı: Mercanada 18:30'da 5 çekim "eski mantıkla" hedefe yaklaşıyordu;
+    // 16 Kasım isteği "sürekli yaklaşan çekimler yerine karışık"): sabit uzaklıkta döner, tek kullanımda hafif açılır.
+    if (y.hedef !== "zeplin" && m > 1) y.r1 = +(y.r * m).toFixed(2);
   }
   return shot;
 }
