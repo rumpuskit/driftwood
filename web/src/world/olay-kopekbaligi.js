@@ -120,7 +120,7 @@ export function buildKopekbaligiOlay({ world, group: olayGrubu }) {
       bas: o.bas + E.g / 60, kapat: o.bas + E.g / 60 + 1.5, ac: o.bas + E.k / 60 + 2 };
     // "Olaya git": denizden kıyıya bakış (yüzgeç önde, bayraklar, seyirci ve kasaba arkada). Video kıyıdan bakar (kiyi).
     const yon = Math.atan2(K.merkez[0] - kiyi[0], K.merkez[1] - kiyi[1]) + sg * 0.3;
-    return { odak: K.merkez, odakY: 0.5, kalabalik: kal, kiyi, yon, yerAdi: K.ad.ad, zaman: null, gitD: 70, gitEgim: 0.2, cekimOlcek: 1.1, kalabalikArkadan: true };
+    return { odak: K.merkez, odakY: 0.5, kalabalik: kal, kiyi, yon, yerAdi: K.ad.ad, zaman: null, gitD: 70, gitEgim: 0.2, cekimOlcek: 0.6, kalabalikArkadan: true }; // yüzgeç küçük (1 m): kadraj yakın
   }
 
   // --- yüzgecin yolu ---
@@ -218,17 +218,17 @@ export function buildKopekbaligiOlay({ world, group: olayGrubu }) {
     if (DIL !== "en") {
       const izle = n ? ` ${n} kişi güvenli mesafeden izliyor.` : "";
       if (ts < K.E.g) return { kisa: "Kıyıda köpekbalığı yüzgeci!", uzun: `Saat ${saatte(o.bas)} ${A.in ?? "kıyının"} açığında büyük bir köpekbalığının sırt yüzgeci göründü; kıyıya koşut dolaşıyor.` };
-      if (ts < K.E.k + 120) return { kisa: "Köpekbalığı · kıyı kapatıldı", uzun: `Saat ${saatte(o.bas)} ${A.in ?? "kıyının"} açığında görünen köpekbalığı kıyıya koşut dolaşıyor; su kenarı boşaltıldı, kırmızı ve mor uyarı bayrakları çekildi.${izle}` };
+      if (ts < K.E.k + 120) return { kisa: "Köpekbalığı · kıyı kapatıldı", uzun: `Saat ${saatte(o.bas)} ${A.in ?? "kıyının"} açığında görünen köpekbalığı kıyıya koşut dolaşıyor; kırmızı ve mor uyarı bayrakları çekildi, su kenarı kapatıldı.${izle}` };
       return { kisa: `Bugün köpekbalığı göründü · ${tGor}`, uzun: `Saat ${saatte(o.bas)} ${A.in ?? "kıyının"} açığında bir köpekbalığı göründü; su kenarı ${sure} dakika kapalı kaldı. Yüzgeç açığa dönünce bayraklar indi, kıyı yeniden açıldı.${n ? ` ${n} kişi kıyıdan izledi.` : ""}` };
     }
     const izle = n ? ` ${n} ${n === 1 ? "neighbor is" : "neighbors are"} watching from a safe distance.` : "";
     if (ts < K.E.g) return { kisa: "Shark fin off the waterfront!", uzun: `At ${tGor} a large shark fin was spotted off ${A.ad}, cruising along the shore.` };
-    if (ts < K.E.k + 120) return { kisa: "Shark sighting · shore closed", uzun: `A shark has been circling off ${A.ad} since ${tGor}. The water's edge was cleared and red and purple warning flags are up.${izle}` };
+    if (ts < K.E.k + 120) return { kisa: "Shark sighting · shore closed", uzun: `A shark has been circling off ${A.ad} since ${tGor}. Red and purple warning flags are up and the water's edge is closed.${izle}` };
     return { kisa: `Shark sighting ${o.yuva ? "this afternoon" : "this morning"} · ${tGor}`, uzun: `At ${tGor} a shark fin was spotted off ${A.ad}. The water's edge was closed for ${sure} minutes with red and purple flags up; once the fin turned back out to sea the flags came down and the shore reopened.${n ? ` ${n} ${n === 1 ? "neighbor" : "neighbors"} watched from the shore.` : ""}` };
   }
 
   return {
     kur, update, canli, yazi, tahliye,
-    seyirci: { r0: 1.5, r1: 10, isR: 300, uzak: 2.2, kiyida: true, en: 30, tavirlar: ["goster", "cek", "sasir", "goster", "cek", "konus", "bak"] },
+    seyirci: { r0: 1.5, r1: 7, isR: 300, uzak: 2.2, kiyida: true, en: 30, tavirlar: ["goster", "cek", "sasir", "goster", "cek", "konus", "bak"] },
   };
 }

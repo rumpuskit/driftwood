@@ -12,7 +12,7 @@ import { TAU, ss, mix, hr, kiyiYeri, kiyiAdi, iskeleUzak, vapurUzak, govde, levh
 // Fok türleri: L boy (m), renkler, benek.
 const TURLER = {
   kesis: { L: 2.4, sirt: "#38332f", yan: "#544b44", karin: "#8a8174", leke: "#d6cfbf", benek: 0 },
-  liman: { L: 1.6, sirt: "#5f6468", yan: "#8b8e8f", karin: "#c3bfb4", leke: "#c3bfb4", benek: 0.3 },
+  liman: { L: 1.6, sirt: "#7d8287", yan: "#a6a9aa", karin: "#d3cfc4", leke: "#d3cfc4", benek: 0.35 }, // açık gri, koyu benekli (koyu kayada seçilsin)
 };
 const BOYUN = 0.2, KALCA = 0.8, YO = 0.15; // YO: yatarken gövde ortasının taştan yüksekliği (boya oranı) // baş ve arka yüzgeç eklemleri (boya oranı)
 
@@ -145,7 +145,7 @@ export function buildFokOlay({ world, scene, group: olayGrubu }) {
       const c = Math.cos(yaw0), s = Math.sin(yaw0);
       const x = R.x + e1[0] * la + e2[0] * ge, z = R.z + e1[1] * la + e2[1] * ge;
       ry = Math.max(ry, (ust - world.height(x, z) + 0.4) / 1.5); // taban deniz dibine değsin (rıhtım önü derin)
-      const g = kayaGeo(rx, ry, rz, t + parca.length * 13, n > 1 ? "#7f7b74" : "#b5ab99");
+      const g = kayaGeo(rx, ry, rz, t + parca.length * 13, n > 1 ? "#57524b" : "#b5ab99");
       const y0 = ust - ry * 0.6; // düz tepe (~0,6·ry) suyun ust m üstünde
       g.rotateY(yaw0).translate(x, y0, z);
       parca.push(g);
@@ -185,11 +185,11 @@ export function buildFokOlay({ world, scene, group: olayGrubu }) {
     const odak = n === 1 ? [yerler[0].x, yerler[0].z] : [R.x, R.z];
     // Kamera kıyıdan, biraz çapraz (kıyı ve kayalar birlikte).
     const yon = Math.atan2(kiyi[0] - odak[0], kiyi[1] - odak[1]) + ((t >> 3) & 1 ? 0.2 : -0.2);
-    return { odak, odakY: 0.7, kalabalik: kiyi, kiyi, yon, yerAdi: K.ad.ad, zaman: null, gitD: n === 1 ? 42 : 55, gitEgim: 0.3, cekimOlcek: n === 1 ? 0.8 : 1 };
+    return { odak, odakY: 0.7, kalabalik: kiyi, kiyi, yon, yerAdi: K.ad.ad, zaman: null, gitD: n === 1 ? 42 : 55, gitEgim: 0.3, cekimOlcek: n === 1 ? 0.8 : 0.75 };
   }
 
   // --- fok durumu ---
-  const D = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, basK: 0, basY: 0, arkaK: 0, suda: true, gorunur: false };
+  const D = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, basK: 0, basY: 0, arkaK: 0, suda: true, gorunur: false }, YZ = { ac: 0, dik: 0 };
   /** Fok j'nin t (sn) anındaki pozu D'ye. */
   function durum(j, ts) {
     const f = K.F[j], Y = f.Y, Lb = T.L * G.foklar[j].olc;
@@ -198,7 +198,8 @@ export function buildFokOlay({ world, scene, group: olayGrubu }) {
       // Yüzeye çıkma döngüsü: 24 sn'de bir ~8 sn yüzeyde (başı dışarıda), arada dalık.
       const per = 24, k = Math.floor((tt + faz) / per), tau = tt + faz - k * per, r = hr(K.t, 30 + j, k);
       const ac = ss(0, 1.2, tau) * (1 - ss(7.5, 9, tau));
-      return { ac, dik: r < 0.3 ? ac * ss(1.5, 3, tau) * (1 - ss(6, 7.5, tau)) : 0, k, tau }; // dik: başını dikip bakma
+      YZ.ac = ac; YZ.dik = r < 0.3 ? ac * ss(1.5, 3, tau) * (1 - ss(6, 7.5, tau)) : 0; // dik: başını dikip bakma
+      return YZ;
     };
     if (ts < f.cik) {
       // Geliş: açıktan kayanın deniz yanına; son 60 sn yüzeyde.

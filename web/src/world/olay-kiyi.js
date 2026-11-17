@@ -204,6 +204,32 @@ function yatayGeo(rr, aa, n = 24) {
   }
   return yumusak(pos, col, idx);
 }
+/** Yumuşak puf (kameraya dönük disk): merkez opak, kenar saydam. */
+function pufGeo() {
+  const rr = [0, 0.35, 0.65, 0.85, 1], aa = [1, 0.85, 0.5, 0.18, 0], n = 16, pos = [], col = [], idx = [];
+  for (let i = 0; i < rr.length; i++) for (let k = 0; k < n; k++) {
+    const a = (k / n) * TAU, w = 1 + (i > 1 ? 0.12 * Math.sin(a * 3 + i) : 0); // hafif düzensiz kenar
+    pos.push(Math.cos(a) * rr[i] * w, Math.sin(a) * rr[i] * w, 0); col.push(aa[i], aa[i], aa[i]);
+  }
+  for (let i = 0; i < rr.length - 1; i++) for (let k = 0; k < n; k++) {
+    const a = i * n + k, b = i * n + ((k + 1) % n); idx.push(a, b, a + n, b, b + n, a + n);
+  }
+  return yumusak(pos, col, idx);
+}
+function pufMalzeme() {
+  // Örnek matrisinin konumu ve ölçeği alınır, disk kameraya döndürülür (billboard); saydamlık köşe × örnek rengi.
+  const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, vertexColors: true, fog: true });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", `
+      vec4 pc = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      float psx = length(instanceMatrix[0].xyz), psy = length(instanceMatrix[1].xyz);
+      vec3 pr = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), pu = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+      vec4 mvPosition = viewMatrix * vec4(pc.xyz + pr * transformed.x * psx + pu * transformed.y * psy, 1.0);
+      gl_Position = projectionMatrix * mvPosition;`);
+    sh.fragmentShader = sh.fragmentShader.replace("#include <color_fragment>", "diffuseColor.a *= vColor.r;");
+  };
+  return m;
+}
 function bulutGeo() {
   const g = new THREE.IcosahedronGeometry(1, 1); g.deleteAttribute("uv"); g.deleteAttribute("normal");
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
@@ -214,18 +240,19 @@ function bulutGeo() {
 
 /**
  * Köpük havuzu: damla (katı küçük küre), leke (yatay yumuşak leke), halka (yatay halka), bulut (yumuşak sis/serpinti
- * kümesi). sayilar: { damla, leke, halka, bulut }. Her karede bas(isik) → ekle… → bitir(). Ekleme: (x, y, z, sx, sy, sz,
+ * kümesi), puf (kameraya dönük yumuşak disk: su tozu; ölçek x/y kullanılır). sayilar: { damla, leke, halka, bulut }. Her karede bas(isik) → ekle… → bitir(). Ekleme: (x, y, z, sx, sy, sz,
  * alfa, ry). İsik (0–1) köpüğü alacakaranlıkta söndürür.
  */
 export function kopukHavuzu(group, sayilar) {
   const kMat = kopukMalzeme();
   const dMat = new THREE.MeshBasicMaterial({ color: 0xf2f9fc });
-  const geo = { damla: () => new THREE.IcosahedronGeometry(1, 0), leke: () => yatayGeo([0, 0.45, 0.8, 1], [1, 0.8, 0.35, 0], 18), halka: () => yatayGeo([0.72, 0.84, 0.92, 1], [0, 1, 0.8, 0], 28), bulut: () => bulutGeo() };
+  const geo = { damla: () => new THREE.IcosahedronGeometry(1, 0), leke: () => yatayGeo([0, 0.45, 0.8, 1], [1, 0.8, 0.35, 0], 18), halka: () => yatayGeo([0.72, 0.84, 0.92, 1], [0, 1, 0.8, 0], 28), bulut: () => bulutGeo(), puf: () => pufGeo() };
+  const pMat = sayilar.puf ? pufMalzeme() : null;
   const H = {}, P = {};
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _Y = new THREE.Vector3(0, 1, 0);
   for (const [ad, n] of Object.entries(sayilar)) {
     if (!n) continue;
-    const m = new THREE.InstancedMesh(geo[ad](), ad === "damla" ? dMat : kMat, n);
+    const m = new THREE.InstancedMesh(geo[ad](), ad === "damla" ? dMat : ad === "puf" ? pMat : kMat, n);
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.count = 0; m.renderOrder = 3;
     for (let i = 0; i < n; i++) m.setColorAt(i, C.setRGB(1, 1, 1));
     m.instanceColor.setUsage(THREE.DynamicDrawUsage);
@@ -245,7 +272,7 @@ export function kopukHavuzu(group, sayilar) {
     bas(isik = 1) {
       for (const k in P) P[k] = 0;
       const l = 0.45 + 0.55 * Math.min(1, Math.max(0, isik));
-      kMat.color.setScalar(l); dMat.color.setRGB(0.95 * l, 0.98 * l, l);
+      kMat.color.setScalar(l); dMat.color.setRGB(0.95 * l, 0.98 * l, l); if (pMat) pMat.color.setScalar(0.92 * l);
     },
     bitir() {
       for (const k in H) {

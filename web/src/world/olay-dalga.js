@@ -75,7 +75,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
     const ayak = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 1.0, 0.5).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: "#eeeeea", roughness: 0.6 }), 16);
     bariyer.count = ayak.count = 0; bariyer.castShadow = ayak.castShadow = true;
     group.add(deniz, duvar, bariyer, ayak);
-    const kopuk = kopukHavuzu(group, { damla: 320, bulut: 260, leke: 120, halka: 0 });
+    const kopuk = kopukHavuzu(group, { damla: 320, puf: 300, leke: 120 });
     G = { group, deniz, duvar, bariyer, ayak, kopuk, n };
     return G;
   }
@@ -151,10 +151,23 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
     // Kapanış ve açılış: dövme evresinin başında (+1 dk), durulma evresinde (olay-plan.js dalga: yukselme 0,15, dovme 0,85).
     const kap = o.bas + (Ts * 0.15) / 60 + 1, ac = o.bas + (Ts * 0.9) / 60;
     const kal = world.nearestWalkable(W[0] - e2[0] * 26, W[1] - e2[1] * 26, 8);
-    K = { o, yer, W, e1, e2, Ts, t, parca, kapali, bariyerler: bariyerler.slice(0, 4), kap, ac, kal, ad: kiyiAdi(world, yer, DIL), yaw, bos: new Set() };
+    // Şeritteki iskeleler: dalga sırtı geçerken iki yanında su fışkırır ("dalgalar iskeleyi döver").
+    const iskeleler = [];
+    for (const pr of world.piers ?? []) {
+      const cx = (pr.x0 + pr.x1) / 2, cz = (pr.z0 + pr.z1) / 2, u = (cx - W[0]) * e1[0] + (cz - W[1]) * e1[1];
+      if (Math.abs(u) > YARI - 5) continue;
+      const vs = [[pr.x0, pr.z0], [pr.x1, pr.z1], [pr.x0, pr.z1], [pr.x1, pr.z0]].map(([x, z]) => (x - W[0]) * e2[0] + (z - W[1]) * e2[1]);
+      const v1 = Math.max(...vs);
+      if (v1 < 4) continue;
+      iskeleler.push({ u, v0: Math.max(0, Math.min(...vs)), v1, en: Math.max(pr.x1 - pr.x0, pr.z1 - pr.z0) < 20 ? Math.min(pr.x1 - pr.x0, pr.z1 - pr.z0) / 2 + 0.8 : 3 });
+    }
+    K = { o, yer, W, e1, e2, Ts, t, parca, kapali, iskeleler, bariyerler: bariyerler.slice(0, 4), kap, ac, kal, ad: kiyiAdi(world, yer, DIL), yaw, bos: new Set() };
     const odak = [W[0] + e2[0] * 4, W[1] + e2[1] * 4];
-    return { odak, odakY: 3, kalabalik: kal, kiyi: yer.K, yon: Math.atan2(-e2[0] + e1[0] * 0.8, -e2[1] + e1[1] * 0.8), yerAdi: K.ad.ad, zaman: null,
-      gitD: 70, gitEgim: 0.42, cekimOlcek: 1.25, kalabalikArkadan: true };
+    // Kamera kıyı boyunca bakar (kiyi verilmez: video kamerası denizden ya da karanın içinden değil, sahil şeridinin
+    // ilerisinden dalgaların kıyıyı dövdüğü çizgiye bakar; deniz bir yanda, sahil yolu öbür yanda).
+    const sg = hr(t, 9) < 0.5 ? -1 : 1, yx = e1[0] * sg * 0.94 - e2[0] * 0.34, yz = e1[1] * sg * 0.94 - e2[1] * 0.34;
+    return { odak, odakY: 3, kalabalik: kal, kiyi: null, yon: Math.atan2(yx, yz), yerAdi: K.ad.ad, zaman: null,
+      gitD: 80, gitEgim: 0.3, cekimOlcek: 1.25, kalabalikArkadan: true };
   }
 
   /** Dalganın gücü (0–1): yükselme evresinde artar, dövmede tam (dalgalanarak), durulmada söner. */
@@ -192,7 +205,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
         const kpk = ss(34, 4, vC) * g;
         if (kpk > 0.05) for (let j = 0; j < 2; j++) {
           const r = hr(K.t, i * 7 + j, nSon), s = 1.2 + 1.8 * kpk;
-          kp.ekle("bulut", bx + e1[0] * (j - 0.5) * 2.4, h - 0.1, bz + e1[1] * (j - 0.5) * 2.4 - e2[1] * 0.1, s, s * 0.5, s, 0.7 * kpk * (0.7 + 0.3 * r));
+          kp.ekle("puf", bx + e1[0] * (j - 0.5) * 2.4, h - 0.1, bz + e1[1] * (j - 0.5) * 2.4 - e2[1] * 0.1, s, s * 0.5, s, 0.7 * kpk * (0.7 + 0.3 * r));
         }
       }
       // Kırılma: son kırılan dalganın su tozu ve köpüğü (6 sn).
@@ -207,7 +220,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
           const geri = (0.3 + (ruz * 0.5 + (bS ? 1.4 : 0)) * aj * (0.4 + 0.6 * r2)) * (0.7 + 0.5 * r1);
           const s = (0.75 + 0.4 * aj) * (bS ? 1.3 : 1) * (0.7 + 0.5 * r2);
           const al = 0.36 * (1 - ss(0.8, 4.8, aj)) * ss(0, 0.2, aj);
-          kp.ekle("bulut", x0 + e1[0] * (r1 - 0.5) * 4 - e2[0] * geri, Math.max(0.4, y), z0 + e1[1] * (r1 - 0.5) * 4 - e2[1] * geri, s, s * 1.5, s, al);
+          kp.ekle("puf", x0 + e1[0] * (r1 - 0.5) * 4 - e2[0] * geri, Math.max(0.4, y), z0 + e1[1] * (r1 - 0.5) * 4 - e2[1] * geri, s, s * 1.5, s, al);
         }
         for (let j = 0; j < 10; j++) {
           const r1 = hr(tohum, j, 3), r2 = hr(tohum, j, 4), r3 = hr(tohum, j, 5), aj = a - 0.04 * j;
@@ -221,6 +234,15 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
         const tas = (bS ? 22 : 10) * (HS / 2.1), al = 0.7 * ss(0, 0.6, a) * (1 - ss(2.5, 6.5, a));
         const vv = -2 - tas * ss(0, 1.8, a);
         kp.ekle("leke", x0 + e2[0] * vv, world.groundY(x0 + e2[0] * vv, z0 + e2[1] * vv) + 0.06, z0 + e2[1] * vv, ADIM * 0.9, 1, 3 + tas * 0.25, al, K.yaw - Math.PI / 2);
+      }
+    }
+    for (const is of K.iskeleler) {
+      const k = (ts - is.u * EGIK) / P, tB = (Math.floor(k) + 1) * P + is.u * EGIK, vC = C * (tB - ts);
+      if (vC < is.v0 || vC > is.v1 || g < 0.3) continue;
+      const bx = W[0] + e1[0] * is.u + e2[0] * vC, bz = W[1] + e1[1] * is.u + e2[1] * vC, n = Math.floor(ts / P);
+      for (let j = 0; j < 6; j++) {
+        const r1 = hr(K.t, 500 + j, n), r2 = hr(K.t, 520 + j, n), yan = j % 2 ? 1 : -1, s2 = (1.2 + 1.2 * r2) * g;
+        kp.ekle("puf", bx + e1[0] * yan * (is.en + 0.6 * r1) - e2[0] * j * 0.6, 1.2 + 2.6 * r2 * g, bz + e1[1] * yan * (is.en + 0.6 * r1) - e2[1] * j * 0.6, s2, s2 * 1.4, s2, 0.5 * g * (1 - j / 8));
       }
     }
     dm.count = nd; dm.instanceMatrix.needsUpdate = true;
@@ -279,14 +301,14 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
     if (DIL === "en") {
       const izle = n ? ` ${n} ${n === 1 ? "neighbor is" : "neighbors are"} watching from a safe distance.` : "";
       if (u < 0.15) return { kisa: "The sea is building", uzun: `Since ${saatYaz(o.bas)} the wind has been whipping up the sea off ${A.ad}; whitecaps are rolling in and the waves are getting bigger.` };
-      if (minute < K.ac) return { kisa: `Big waves pounding ${A.ad}`, uzun: `Big waves are crashing into ${A.ad} and throwing spray across the waterfront${yol ? "; the shore road is closed to traffic" : ""}. The water's edge has been cleared.${izle}` };
-      return { kisa: `Big waves ${o.yuva ? "this afternoon" : "this morning"} · ${saatYaz(o.bas)}`, uzun: `From ${saatYaz(o.bas)} big waves pounded ${A.ad}, throwing spray across the waterfront. The water's edge was cleared for about ${kapSure} minutes${yol ? " and the shore road was closed" : ""}; by ${saatYaz(o.son)} the sea had calmed down.${n ? ` ${n} ${n === 1 ? "neighbor" : "neighbors"} watched from a safe distance.` : ""}` };
+      if (minute < K.ac) return { kisa: `Big waves pounding ${A.ad}`, uzun: `Big waves are crashing into ${A.ad} and throwing spray across the waterfront${yol ? "; the shore road is closed to traffic" : ""}. Everyone has stepped back from the water's edge.${izle}` };
+      return { kisa: `Big waves ${o.yuva ? "this afternoon" : "this morning"} · ${saatYaz(o.bas)}`, uzun: `From ${saatYaz(o.bas)} big waves pounded ${A.ad}, throwing spray across the waterfront. Everyone stayed back from the water's edge for about ${kapSure} minutes${yol ? " and the shore road was closed" : ""}; by ${saatYaz(o.son)} the sea had calmed down.${n ? ` ${n} ${n === 1 ? "neighbor" : "neighbors"} watched from a safe distance.` : ""}` };
     }
     const izle = n ? ` ${n} kişi güvenli mesafeden izliyor.` : "";
     const polis = K.polis ? `; polis bariyer başında` : "";
     if (u < 0.15) return { kisa: "Lodos başladı, deniz kabarıyor", uzun: `Saat ${saatte(o.bas)} lodos başladı; ${A.in} açığında köpüklü dalgalar kıyıya doğru büyüyor.` };
-    if (minute < K.ac) return { kisa: yol ? "Lodos: sahil caddesi kapandı" : "Lodos dalgaları sahili dövüyor", uzun: `Dev dalgalar ${A.i} dövüyor, köpükler sahil yoluna savruluyor. Kıyı şeridi boşaltıldı${yol ? `, sahil caddesi trafiğe kapatıldı${polis}` : ""}.${izle}` };
-    return { kisa: `Bugün lodos dalgaları · ${saatYaz(o.bas)}`, uzun: `Saat ${saatte(o.bas)} başlayan lodosla dev dalgalar sahili dövdü, köpükler sahil yoluna savruldu. Kıyı şeridi ${kapSure} dakika boşaltıldı${yol ? ", sahil caddesi trafiğe kapandı" : ""}; saat ${saatte(o.son)} deniz duruldu.${n ? ` ${n} kişi güvenli mesafeden izledi.` : ""}` };
+    if (minute < K.ac) return { kisa: yol ? "Lodos: sahil caddesi kapandı" : "Lodos dalgaları sahili dövüyor", uzun: `Dev dalgalar ${A.i} dövüyor, köpükler sahil yoluna savruluyor. Kıyıdakiler geri çekildi${yol ? `, sahil caddesi trafiğe kapatıldı${polis}` : ""}.${izle}` };
+    return { kisa: `Bugün lodos dalgaları · ${saatYaz(o.bas)}`, uzun: `Saat ${saatte(o.bas)} başlayan lodosla dev dalgalar sahili dövdü, köpükler sahil yoluna savruldu. Kıyıdakiler ${kapSure} dakika geri çekildi${yol ? ", sahil caddesi trafiğe kapalı kaldı" : ""}; saat ${saatte(o.son)} deniz duruldu.${n ? ` ${n} kişi güvenli mesafeden izledi.` : ""}` };
   }
 
   return {

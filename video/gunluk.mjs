@@ -441,7 +441,7 @@ const OLAY_ANI = {
   zeplin: { olay: "olay:yerde", "olay-yakin": "olay:inis", "olay-kalabalik": "olay:yerde+4", "olay-tele": "olay:alcalma+3", "olay-hava": "olay:alcalma+2" },
   // --- ajan A (deniz ve kıyı: olay-fok.js, olay-kopekbaligi.js, olay-hortum.js, olay-dalga.js); hiz: çekim hızı (deniz ve dalga
   // hareketi gerçek zamanlıya yakın okunsun) ---
-  fok: { olay: "olay:kayada+6", "olay-yakin": "olay:kayada+3", "olay-kalabalik": "olay:kayada+8", "olay-tele": "olay:kayada+12", "olay-hava": "olay:gorundu+3", hiz: 1.5 },
+  fok: { olay: "olay:kayada+6", "olay-yakin": "olay:kayada+3", "olay-kalabalik": "olay:kayada+8", "olay-tele": "olay:kayada+12", "olay-hava": "olay:kayada+10", hiz: 1.5 },
   kopekbaligi: { olay: "olay:kapali+4", "olay-yakin": "olay:kapali+8", "olay-kalabalik": "olay:kapali+6", "olay-tele": "olay:gorundu+2", "olay-hava": "olay:bosaltma+2", hiz: 1.5 },
   hortum: { olay: "olay:hortum+3", "olay-yakin": "olay:hortum+6", "olay-kalabalik": "olay:hortum+5", "olay-tele": "olay:olusma+4", "olay-hava": "olay:hortum+8", hiz: 2 },
   dalga: { olay: "olay:dovme+5", "olay-yakin": "olay:dovme+9", "olay-kalabalik": "olay:dovme+7", "olay-tele": "olay:dovme+12", "olay-hava": "olay:yukselme+4", hiz: 2 },

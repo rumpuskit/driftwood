@@ -13,7 +13,7 @@ import { TAU, ss, mix, hr, kiyiYeri, kiyiAdi, kopukHavuzu, gokKarart } from "./o
 
 function bulutGeo(tohum, R) {
   // Bulut tabanı: basık kabarcıklar (yarıçap R), altı koyu, üstü açık; ortada aşağı sarkan "duvar bulutu".
-  const parca = [], A = new THREE.Color("#4b535d"), B = new THREE.Color("#a7aeb6"), C = new THREE.Color();
+  const parca = [], A = new THREE.Color("#5f6871"), B = new THREE.Color("#bcc3ca"), C = new THREE.Color();
   const kab = (x, y, z, r, sy) => {
     const g = new THREE.IcosahedronGeometry(r, 1); g.deleteAttribute("uv");
     g.scale(1, sy, 1).translate(x, y, z);
@@ -43,7 +43,8 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
     if (G) return G;
     const group = new THREE.Group(); group.name = "olay-hortum"; group.visible = false;
     olayGrubu.add(group);
-    const bulutMat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0, flatShading: true });
+    // Işıksız (Lambert'te alt yüz gölgede simsiyah kalıyordu): renk köşe renginden, uzaklık sisi sahneyle aynı.
+    const bulutMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
     const bulut = new THREE.Mesh(new THREE.BufferGeometry(), bulutMat);
     bulut.frustumCulled = false; bulut.renderOrder = 2;
     // Huni: açık uçlu silindir (y 0–1); eksen eğrisi, yarıçap profili, ip gibi incelme ve kopma gölgelendiricide.
@@ -59,7 +60,7 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
           // Eğri eksen: ortada yana kavis + hafif dalgalanma (ip evresinde kıvrım artar).
           float s = sin(h * 3.14159);
           ek.xz += uBuk * s * (1.0 + 0.8 * uIp) + vec2(sin(h * 7.0 + uT * 0.35), cos(h * 5.0 + uT * 0.3)) * (1.5 + 6.0 * uIp) * s;
-          float r = 6.5 + 5.0 * smoothstep(0.12, 0.0, h) + 42.0 * pow(h, 3.5);
+          float r = 6.5 + 5.0 * smoothstep(0.12, 0.0, h) + 26.0 * pow(h, 3.5);
           r *= 1.0 - 0.62 * uIp * smoothstep(0.85, 0.3, h);
           vec2 c = normalize(position.xz);
           vec3 p = ek + vec3(c.x * r, 0.0, c.y * r);
@@ -79,7 +80,7 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
           // İniş: tepeden aşağı (uIn 0 → 1); ip evresinde ortadan kopar.
           float gor = smoothstep(1.0 - uIn - 0.06, 1.0 - uIn + 0.02, vH);
           float kop = 1.0 - uIp * smoothstep(0.22, 0.0, abs(vH - 0.42 + 0.1 * sin(uT * 0.2))) * smoothstep(0.35, 0.8, uIp) * 1.2;
-          float a = uAlfa * kenar * bant * gor * clamp(kop, 0.0, 1.0) * mix(1.0, 0.55, uIp);
+          float a = uAlfa * kenar * bant * gor * clamp(kop, 0.0, 1.0) * mix(1.0, 0.55, uIp) * (1.0 - 0.85 * smoothstep(0.8, 1.0, vH)); // tepe buluta karışır
           if (a < 0.01) discard;
           vec3 renk = mix(vec3(0.86, 0.88, 0.9), vec3(0.55, 0.59, 0.64), smoothstep(0.2, 0.95, vH)) * (0.45 + 0.55 * uIsik);
           float sis = smoothstep(uSisNF.x, uSisNF.y, vD);
@@ -89,7 +90,7 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
     }));
     huni.frustumCulled = false; huni.renderOrder = 4;
     group.add(bulut, huni);
-    const kopuk = kopukHavuzu(group, { damla: 140, bulut: 150, halka: 6, leke: 24 });
+    const kopuk = kopukHavuzu(group, { damla: 140, puf: 150, halka: 6, leke: 24 });
     G = { group, bulut, bulutMat, huni, kopuk };
     return G;
   }
@@ -132,16 +133,16 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
     out[0] = mix(K.A0[0], K.A1[0], u); out[1] = mix(K.A0[1], K.A1[1], u);
     return out;
   }
+  const DR = { bulut: 0, karar: 0, in: 0, halka: 0, alfa: 0, ip: 0 };
   function durum(ts) {
     const u = ts / K.Ts;
-    return {
-      bulut: ss(0, 0.12, u) * (1 - ss(0.9, 1, u)),
-      karar: ss(0.02, 0.18, u) * (1 - ss(0.86, 1, u)),
-      in: ss(0.08, 0.2, u), // huni tepeden suya iner
-      halka: ss(0.1, 0.18, u) * (1 - ss(0.86, 0.95, u)), // su yüzünde serpinti halkası
-      alfa: ss(0.06, 0.12, u) * (1 - ss(0.93, 0.99, u)),
-      ip: ss(0.8, 0.94, u),
-    };
+    DR.bulut = ss(0, 0.12, u) * (1 - ss(0.9, 1, u));
+    DR.karar = ss(0.02, 0.18, u) * (1 - ss(0.86, 1, u));
+    DR.in = ss(0.08, 0.2, u); // huni tepeden suya iner
+    DR.halka = ss(0.1, 0.18, u) * (1 - ss(0.86, 0.95, u)); // su yüzünde serpinti halkası
+    DR.alfa = ss(0.06, 0.12, u) * (1 - ss(0.93, 0.99, u));
+    DR.ip = ss(0.8, 0.94, u);
+    return DR;
   }
 
   function update(o, evre, minute, real, env) {
@@ -153,6 +154,7 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
     G.bulut.position.set(_p[0] + K.buk[0] * 0.3, H, _p[1] + K.buk[1] * 0.3);
     G.bulut.scale.set(0.75 + 0.25 * d.bulut, 0.6 + 0.4 * d.bulut, 0.75 + 0.25 * d.bulut);
     G.bulutMat.opacity = 0.95 * d.bulut;
+    G.bulutMat.color.setScalar(0.35 + 0.65 * light);
     G.bulut.visible = d.bulut > 0.01;
     uni.uTaban.value.set(_p[0], 0, _p[1]);
     uni.uTepe.value.set(_p[0] + K.buk[0] * 0.3, H - 18, _p[1] + K.buk[1] * 0.3);
@@ -171,7 +173,7 @@ export function buildHortumOlay({ world, scene, group: olayGrubu, sky }) {
         const f = (r1 + ts * (0.03 + 0.03 * r2)) % 1; // yükselme evresi
         const a = r3 * TAU + ts * (0.9 - 0.4 * f) * K.sg + f * 2.5 * K.sg, rr = (5 + 13 * r2) * (1 + 0.9 * f);
         const y = 1 + 30 * f * f + 4 * r1, s = (2.2 + 3.5 * r2) * (0.7 + 0.9 * f);
-        kp.ekle("bulut", _p[0] + Math.cos(a) * rr, y, _p[1] + Math.sin(a) * rr, s, s * 0.8, s, 0.42 * h * (1 - f) * ss(0, 0.08, f));
+        kp.ekle("puf", _p[0] + Math.cos(a) * rr, y, _p[1] + Math.sin(a) * rr, s, s * 0.8, s, 0.42 * h * (1 - f) * ss(0, 0.08, f));
       }
       for (let i = 0; i < 140; i++) {
         const r1 = hr(K.t, 93, i), r2 = hr(K.t, 94, i), f = (r1 + ts * 0.25) % 1;
