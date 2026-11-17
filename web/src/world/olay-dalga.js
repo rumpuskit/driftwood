@@ -190,6 +190,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
     kp.bas(light);
     let nd = 0;
     const _m = MAT, ruz = 3.2; // rüzgâr karaya doğru (m/sn)
+    const cam = env?.camera?.position;
     for (let i = 0; i < K.parca.length; i++) {
       const pc = K.parca[i], u = pc.u, kenar = 1 - ss(YARI - 20, YARI, Math.abs(u));
       // Sıradaki dalga (kırılmamış) ve son kırılan dalga.
@@ -199,8 +200,11 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
       if (vC < 45 && H > 0.15) {
         const h = H * ss(45, 10, vC) * ss(0, 2.5, vC) + 0.2;
         const bx = W[0] + e1[0] * u + e2[0] * (pc.v0 + vC), bz = W[1] + e1[1] * u + e2[1] * (pc.v0 + vC);
-        KOY(_m, bx, -0.3, bz, K.yaw, ADIM * 1.12, h, 1 + h * 0.9);
-        dm.setMatrixAt(nd++, _m);
+        // Kameranın dibindeki dalga duvarı çizilmez (alçak video kamerası kamanın içine düşüp kareyi yeşile boyuyordu).
+        if (!cam || Math.hypot(cam.x - bx, cam.z - bz) > 9 || cam.y > h + 2) {
+          KOY(_m, bx, -0.3, bz, K.yaw, ADIM * 1.12, h, 1 + h * 0.9);
+          dm.setMatrixAt(nd++, _m);
+        }
         // Sırtta köpük (yığıldıkça artar).
         const kpk = ss(34, 4, vC) * g;
         if (kpk > 0.05) for (let j = 0; j < 2; j++) {
@@ -231,7 +235,7 @@ export function buildDalgaOlay({ world, scene, group: olayGrubu, sky, traffic })
           kp.ekle("damla", x0 + e1[0] * (r3 - 0.5) * 6 - e2[0] * geri, y + 0.3, z0 + e1[1] * (r3 - 0.5) * 6 - e2[1] * geri, sz, sz * 1.5, sz);
         }
         // Kıyıya taşan köpük: kumsalda/rıhtımda, büyük dalgada daha içeride; yavaşça söner.
-        const tas = (bS ? 22 : 10) * (HS / 2.1), al = 0.7 * ss(0, 0.6, a) * (1 - ss(2.5, 6.5, a));
+        const tas = (bS ? 9 : 4) * (HS / 2.1), al = 0.5 * ss(0, 0.6, a) * (1 - ss(2.5, 6.5, a)); // köpük kıyının hemen gerisine taşar (çimde beyaz lekeler yapmasın)
         const vv = -2 - tas * ss(0, 1.8, a);
         kp.ekle("leke", x0 + e2[0] * vv, world.groundY(x0 + e2[0] * vv, z0 + e2[1] * vv) + 0.06, z0 + e2[1] * vv, ADIM * 0.9, 1, 3 + tas * 0.25, al, K.yaw - Math.PI / 2);
       }

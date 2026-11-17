@@ -443,7 +443,7 @@ const OLAY_ANI = {
   // hareketi gerçek zamanlıya yakın okunsun) ---
   fok: { olay: "olay:kayada+6", "olay-yakin": "olay:kayada+3", "olay-kalabalik": "olay:kayada+8", "olay-tele": "olay:kayada+12", "olay-hava": "olay:kayada+10", hiz: 1.5 },
   kopekbaligi: { olay: "olay:kapali+4", "olay-yakin": "olay:kapali+8", "olay-kalabalik": "olay:kapali+6", "olay-tele": "olay:gorundu+2", "olay-hava": "olay:bosaltma+2", hiz: 1.5 },
-  hortum: { olay: "olay:hortum+3", "olay-yakin": "olay:hortum+6", "olay-kalabalik": "olay:hortum+5", "olay-tele": "olay:olusma+4", "olay-hava": "olay:hortum+8", hiz: 2 },
+  hortum: { olay: "olay:hortum+3", "olay-yakin": "olay:hortum+6", "olay-kalabalik": "olay:hortum+5", "olay-tele": "olay:hortum+12", "olay-hava": "olay:hortum+8", hiz: 2 },
   dalga: { olay: "olay:dovme+5", "olay-yakin": "olay:dovme+9", "olay-kalabalik": "olay:dovme+7", "olay-tele": "olay:dovme+12", "olay-hava": "olay:yukselme+4", hiz: 2 },
   // --- ajan A sonu ---
 };
