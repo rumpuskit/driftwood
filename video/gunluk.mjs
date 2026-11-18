@@ -145,7 +145,9 @@ const level = Math.max(data.zirve ?? 0, residents.reduce((m, r) => Math.max(m, r
 sim.setTown(level);
 // Günün olayı (16 Kasım; web/src/world/olay-plan.js, site aynı planı hesaplar; ada günü ET). --olay/--olaysaat yalnız
 // deneme: olayı zorlar ve çekim adreslerine aynı parametreleri ekler (sayfa da zorlanır).
-const olayZorla = opt("--olay"), olaySaatZorla = opt("--olaysaat");
+// Ortam değişkeni (18 Kasım: kullanıcının istediği yeniden üretimde olay türü uret.sh'den zorlanır; gözetimsiz Claude'un
+// her komuta bayrak eklemesine bağlı kalınmaz). Bayrak verilirse bayrak geçerli.
+const olayZorla = opt("--olay", process.env.GUNLUK_OLAY || undefined), olaySaatZorla = opt("--olaysaat", process.env.GUNLUK_OLAYSAAT || undefined);
 const olayGun = opt("--tarih") ? Date.parse(opt("--tarih") + "T00:00:00Z") / 86400000 : today;
 // Günde iki olay (17 Kasım akşamı): 18:30 videosu (yuva ogle) sabahki olayı, 23:30 videosu (yuva aksam) öğleden sonrakini anlatır.
 const olayYuva = yuva === "aksam" ? 1 : 0;
