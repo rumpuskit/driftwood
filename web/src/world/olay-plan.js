@@ -71,6 +71,122 @@ const TURLER = {
   dalga: { ad: "Dev dalgalar", en: "Big waves", pencere: [540, 680], sure: [40, 55], gerek: () => true },
   // --- ajan A sonu ---
 };
+// Temalar (18 Kasım, kullanıcı: "aynı temada videoları neredeyse peşpeşe üretmiş": Mercanada'da kaza 17 Kasım öğle ve
+// 18 Kasım akşam videosunda, Driftwood'da sis ve fırtına art arda, iki adanın öğleden sonra olayı aynı karıştırma tuzuyla
+// sık sık AYNI tür: 19 Kasım'da ikisinde martı). Tür değil tema tekrar etmez ve iki ada BİRLİKTE planlanır: yayın sırası
+// (Mercanada 12:30, Driftwood 18:30, Mercanada 18:30, Driftwood 23:30) "küresel yuva" dizisidir; art arda 5 küresel yuvanın
+// teması birbirinden farklıdır (bir adada art arda 3 olay, iki adada art arda 5 video). Tema dizisi yalnız güne bağlı ve
+// iki depoda aynı (bu dosya iki adada birebir aynıdır): her ada öbürünün temasını kendi verisi olmadan bilir. Tema içinde
+// tür, o adada en uzun süredir çıkmamış uygun tür (gerek, yuva, mevsim).
+export const TEMA = {
+  kaza: "acil", yangin: "acil", elektrik: "acil",
+  firtina: "hava", sis: "hava", hortum: "hava", dalga: "hava", kar: "hava",
+  yunus: "deniz", balina: "deniz", fok: "deniz", kopekbaligi: "deniz",
+  kus: "canli", marti: "canli", moose: "canli",
+  zeplin: "gok", balon: "gok", ucurtma: "gok",
+  gemi: "liman", vapur: "liman", balik: "liman",
+  dugun: "kasaba", film: "kasaba", yaris: "kasaba", tekne_yarisi: "kasaba", // insan etkinlikleri (iki yarış aynı tema)
+};
+// Küresel yuva sırası: [ada, yuva]. Ada adı olay-ayar.js ADA.
+const TEMA_SIRA = [["mercanada", 0], ["driftwood", 0], ["mercanada", 1], ["driftwood", 1]];
+// Sürümler (geçmiş günler değişmesin: yeni sürüm satırı EKLE, eskisini değiştirme). adalar: o adanın tema kümesi (her temada
+// her gün ve iki yuvada en az bir türün çıkabildiği temalar; Driftwood'da kaza/yangın açılınca "acil" yeni sürümle girer).
+// turler: iki adanın tür listeleri (sabah, öğleden sonra; ada kendi olay-ayar.js TUR_SURUMLERI listesinde olmayanı
+// kullanmaz). onceki: sürüm gününden önceki küresel yuvaların türleri (eskiden yeniye; 15–18 Kasım'da gerçekleşenler).
+const ORTAK = ["zeplin", "fok", "hortum", "dalga", "kar", "kus", "marti", "film", "balik", "yaris", "balon", "vapur", "ucurtma"];
+const TEMA_SURUMLERI = [
+  { gun: "2026-11-19",
+    adalar: { mercanada: ["acil", "hava", "deniz", "canli", "gok", "liman", "kasaba"], driftwood: ["hava", "deniz", "canli", "gok", "liman", "kasaba"] },
+    turler: {
+      mercanada: [["yangin", "firtina", "yunus", "kaza", "sis", "dugun", "gemi", ...ORTAK], ["yangin", "firtina", "yunus", "kaza", "dugun", "elektrik", ...ORTAK]],
+      driftwood: [["firtina", "balina", "sis", "kaza", "yangin", "kopekbaligi", "moose", "tekne_yarisi", ...ORTAK], ["firtina", "balina", "yunus", "kaza", "yangin", "kopekbaligi", "moose", "tekne_yarisi", ...ORTAK]],
+    },
+    onceki: ["firtina", "firtina", "yangin", "balina", "yangin", "balina", "firtina", "firtina", "kaza", "sis", "yunus", "yunus", "sis", "firtina", "kaza", "balina"] },
+].map((s) => ({ ...s, d: Date.parse(s.gun + "T00:00:00Z") / 86400000 })).sort((a, b) => a.d - b.d);
+// Kesin kural: önceki 4 küresel yuvanın (iki adanın son ikişer olayı) ve bu adanın son 3 olayının temasından farklı
+// (aynı adada tema en az 2 gün, iki adada ~1 gün tekrar etmez). Tercih: iki adada da en uzun süredir çıkmamış tema; tema
+// içinde iki adada da en uzun süredir çıkmamış tür (aynı tür iki adada art arda gelmesin).
+const TEMA_PENCERE = 4, TEMA_ADA_PENCERE = 3;
+const temaSurum = (day) => { let r = null; for (const s of TEMA_SURUMLERI) if (s.d <= day) r = s; return r; };
+const hepAcik = () => true;
+// Küresel dizi (yalnız güne bağlı, saf; adanın açık yerlerine bakmaz): tur/aile[on + i] = (ilk sürüm günü + i/4) gününün
+// i%4. yuvası. Önbellekli.
+const T = { tur: [], aile: [], sonAile: {}, sonTur: {}, sonAda: {} };
+const TEMA_ADA_AGIRLIK = 8; // tür seçiminde aynı adadaki kullanım 8 küresel yuva (2 gün) daha yakın sayılır
+function temaDizisi(dayEnd) {
+  const s0 = TEMA_SURUMLERI[0];
+  if (!s0) return null;
+  if (!T.tur.length) {
+    T.on = s0.onceki.length;
+    s0.onceki.forEach((t, i) => { T.tur.push(t); T.aile.push(TEMA[t]); T.sonAile[TEMA[t]] = T.sonTur[t] = i - T.on; (T.sonAda[TEMA_SIRA[i % 4][0]] ??= {})[t] = i - T.on; });
+  }
+  while ((T.tur.length - T.on) / 4 < dayEnd - s0.d + 1) {
+    const g = T.tur.length - T.on, n = T.tur.length, day = s0.d + Math.floor(g / 4), k = g % 4, [ada, y] = TEMA_SIRA[k];
+    const S = temaSurum(day), kume = S.adalar[ada] ?? [];
+    const sabah = y === 1 ? T.tur[n - 2] : null; // aynı adanın bugünkü sabah türü
+    const liste = (S.turler[ada]?.[y] ?? []).filter((t) => OLAYLAR[t] && TEMA[t] && (y === 1 || OLAYLAR[t].yuva !== 1) && OLAYLAR[t].gerek(hepAcik, day) && t !== sabah);
+    const yasak = new Set(T.aile.slice(-TEMA_PENCERE));
+    for (let j = 1; j <= TEMA_ADA_PENCERE; j++) if (n - 2 * j >= 0) yasak.add(T.aile[n - 2 * j]); // bu adanın son olayları
+    const dolu = (a) => liste.some((t) => TEMA[t] === a);
+    let izin = kume.filter((a) => !yasak.has(a) && dolu(a));
+    if (!izin.length) izin = kume.filter((a) => !T.aile.slice(-2).includes(a) && dolu(a));
+    if (!izin.length) izin = kume.filter(dolu);
+    // En uzun süredir çıkmamış iki temadan biri (tekdüze bir döngü olmasın diye ikisi arasında karma seçer).
+    izin.sort((a, b) => (T.sonAile[a] ?? -1e9) - (T.sonAile[b] ?? -1e9) || kesir("tema", day, k, a) - kesir("tema", day, k, b));
+    const aile = izin.length > 1 && kesir("temaSec", day, k) < 0.5 ? izin[1] : izin[0] ?? null;
+    const sonAda = (T.sonAda[ada] ??= {}), yakin = (t) => Math.max(T.sonTur[t] ?? -1e9, (sonAda[t] ?? -1e9) + TEMA_ADA_AGIRLIK);
+    const tur = liste.filter((t) => TEMA[t] === aile).sort((a, b) => yakin(a) - yakin(b) || kesir("temaTur", day, k, a) - kesir("temaTur", day, k, b))[0] ?? null;
+    T.tur.push(tur); T.aile.push(aile);
+    if (aile) T.sonAile[aile] = g;
+    if (tur) T.sonTur[tur] = sonAda[tur] = g;
+  }
+  return T;
+}
+/** Bir günün dört küresel yuvasının türü ve teması (sürüm öncesi null): [M sabah, D sabah, M öğleden sonra, D öğleden
+ *  sonra]. Ada o türü açamıyorsa (gerek) kendi seçer: temaTurleri. */
+export function gununTemalari(day) {
+  const s0 = TEMA_SURUMLERI[0];
+  if (!s0 || day < s0.d) return null;
+  const t = temaDizisi(day), g = (day - s0.d) * 4 + t.on;
+  return t.tur.slice(g, g + 4).map((tur, i) => ({ tur, tema: t.aile[g + i] }));
+}
+/** Tema düzeninde bu adanın (olay-ayar.js ADA) günün iki türü [sabah, öğleden sonra] (sürüm öncesi ya da ADA yoksa
+ *  undefined: eski blok karıştırma). Küresel dizinin türü; ada onu açamıyorsa (gerek, kendi listesi) aynı temada en uzun
+ *  süredir çıkmamış uygun tür, o da yoksa penceredeki temalar dışında en uzun süredir çıkmamış tür (sürüm gününden
+ *  zincirlenir; sıra sürümden önceki 14 günün eski düzendeki olaylarıyla başlar). */
+function temaTurleri(day, open, o) {
+  const ada = AYAR.ADA, s0 = TEMA_SURUMLERI[0];
+  if (!ada || !s0 || day < s0.d || !TEMA_SIRA.some(([a]) => a === ada)) return undefined;
+  const ozel = o.ozel ?? ozelGun, t = temaDizisi(day);
+  let son = null, sonuc = null;
+  for (let d = s0.d; d <= day; d++) {
+    const gun = [null, null];
+    if (!ozel(d)) for (const y of [0, 1]) {
+      const k = TEMA_SIRA.findIndex(([a, yy]) => a === ada && yy === y), g0 = (d - s0.d) * 4 + t.on + k;
+      const taban = y === 0 ? sabahTurleri(d) : ikinciTurleri(d);
+      const uygun = (x) => taban.includes(x) && OLAYLAR[x] && (y === 1 || OLAYLAR[x].yuva !== 1) && x !== gun[0] && OLAYLAR[x].gerek(open, d);
+      let tur = t.tur[g0];
+      if (!tur || !uygun(tur)) {
+        const liste = taban.filter(uygun);
+        // Yedek (nadir): adanın kendi geçmişiyle en uzun süredir çıkmamış tür.
+        if (!son) {
+          son = {};
+          for (let e = s0.d - 14; e < d; e++) for (const z of [0, 1]) {
+            const p = e < s0.d ? olayGunu(e, open, { ozel, yuva: z })?.tur : t.tur[(e - s0.d) * 4 + t.on + TEMA_SIRA.findIndex(([a, yy]) => a === ada && yy === z)];
+            if (p) son[p] = (e - s0.d) * 2 + z;
+          }
+        }
+        const yasak = t.aile.slice(Math.max(0, g0 - TEMA_PENCERE), g0);
+        const enEski = (l) => l.sort((a, b) => (son[a] ?? -1e9) - (son[b] ?? -1e9) || kesir("temaYedek", d, y, a) - kesir("temaYedek", d, y, b))[0] ?? null;
+        tur = enEski(liste.filter((x) => TEMA[x] === t.aile[g0])) ?? enEski(liste.filter((x) => !yasak.includes(TEMA[x]))) ?? enEski(liste);
+      }
+      gun[y] = tur;
+      if (son && tur) son[tur] = (d - s0.d) * 2 + y;
+    }
+    if (d === day) sonuc = gun;
+  }
+  return sonuc;
+}
 // Ada adları (olay-ayar.js ADLAR: { tur: [ad, en] }; ör. Mercanada "Akdeniz foku", Driftwood "Seals on the dock").
 /** Kar mevsimi: 1 Aralık–28 Şubat (29 Şubat yok). Gün verilmezse (eski çağrı) false. */
 function karMevsimi(day) {
@@ -114,6 +230,9 @@ export function olayGunu(day, open, o = {}) {
   const taban = o.turler ?? sabahTurleri(day), turler = taban.filter(uygun(day));
   if (!turler.length) return null;
   let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
+  // Tema düzeni (19 Kasım'dan; o.turler verilmişse eski düzen).
+  const tema = tur || o.turler || o.ic ? undefined : temaTurleri(day, open, o);
+  if (tema !== undefined) { tur = tema[0]; if (!tur) return null; }
   if (!tur) {
     // Blok karıştırma: türler her blokta (blok = tür sayısı kadar gün) bir kez çıkar. Bloğun ilk türü önceki bloğun son
     // türüyle aynıysa bloğun ilk iki türü yer değiştirir (yalnız ilk ikisi değişir, son tür değişmez: özyineleme yok).
@@ -161,6 +280,8 @@ function ikinciOlay(day, open, o) {
   if (!IKINCI || ((o.ozel ?? ozelGun)(day) && !o.zorla)) return null;
   const liste = (d) => ikinciTurleri(d).filter((t) => OLAYLAR[t] && OLAYLAR[t].gerek(open, d));
   let tur = o.zorla && OLAYLAR[o.zorla] ? o.zorla : null;
+  const tema = tur ? undefined : temaTurleri(day, open, o);
+  if (tema !== undefined) { tur = tema[1]; if (!tur) return null; }
   if (!tur) {
     // Blok karıştırma (ayrı tuz) + iki kısıt: sabahkinden farklı, önceki günün öğleden sonrakinden farklı. Önceki gün
     // 32 günlük sabit blokların başından zincirlenir (her gün için aynı sonuç; blok başında yalnız sabah kısıtı).

@@ -1,6 +1,8 @@
 // Driftwood'un olay ayarları (olay-plan.js okur; Mercanada'da kendi dosyası).
 // Öğle videosu 18:30 Berlin = 12:30 ET; üretim 11:30 ET'de başlar: olay ondan önce (en geç ~11:20 ET) biter.
 // Ada küçük (araç yolu, itfaiye yok): şimdilik doğa olayları; kaza/yangın açılınca kendiliğinden listeye girer.
+/** Adanın adı (olay-plan.js tema düzeni: iki ada birlikte planlanır, TEMA_SIRA). */
+export const ADA = "driftwood";
 export const ADA_TURLERI = ["firtina", "balina", "sis", "kaza", "yangin"];
 /** Başlangıç pencereleri [en erken, en geç] (ET dakikası). */
 export const PENCERE = { firtina: [450, 560], sis: [330, 380], balina: [480, 630], kaza: [480, 600], yangin: [480, 610], zeplin: [480, 600],
@@ -46,6 +48,8 @@ export const ZEPLIN = {
   yedekSaha: { ad: "the Town Green" },
 };
 /** Tür listesi sürümleri (olay-plan.js): yeni türler yalnız sürümün gününden itibaren takvime girer; önceki günler değişmez. */
+// 19 Kasım'dan itibaren HANGİ gün hangi türün çıkacağını olay-plan.js tema düzeni seçer (iki ada birlikte; 18 Kasım,
+// "aynı temada videolar peşpeşe"); buradaki listeler adanın o gün izinli türleridir.
 export const TUR_SURUMLERI = [
   // 19 Kasım: zeplin acil inişi (olay-zeplin.js; Driftwood'da zeplin açılana dek adanın üstünden geçen reklam zeplini).
   // 19 Kasım: olay modülleri (17 Kasım akşamı, kullanıcı: "olay çeşitliliği ve dikkat çekicilik çok önemli"). Kar yalnız
