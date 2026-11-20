@@ -88,6 +88,7 @@ export const TEMA = {
   gemi: "liman", vapur: "liman", balik: "liman",
   dugun: "kasaba", film: "kasaba", yaris: "kasaba", tekne_yarisi: "kasaba", // insan etkinlikleri (iki yarış aynı tema)
 };
+const TEMA_ADLARI = ["acil", "hava", "deniz", "canli", "gok", "liman", "kasaba"];
 // Küresel yuva sırası: [ada, yuva]. Ada adı olay-ayar.js ADA. İlk sürümün sırası (iki ada); sonraki sürümler kendi
 // sırasını taşır (sira): 22 Kasım'dan üç ada (Wattenoog eklendi). Bir adanın "son olayları" sabit adımla değil, o adanın
 // küresel yuva listesinden bulunur: gün başına yuva sayısı sürüme göre değişebilir, geçmiş günler değişmez.
@@ -114,13 +115,29 @@ const TEMA_SURUMLERI = [
   { gun: "2026-11-22",
     sira: [["mercanada", 0], ["wattenoog", 0], ["driftwood", 0], ["mercanada", 1], ["wattenoog", 1], ["driftwood", 1]],
     pencere: 4, adaPencere: 3, adaAgirlik: 16, turPencere: 6,
-    // Wattenoog'da "acil" yok (Driftwood gibi): kaza yollar (200 sakin), yangın Feuerwehr (30) ister; açılınca yeni sürümle.
+    // Wattenoog 0 sakinle açıldı: listeler yalnız bugün çıkabilen türler (Kutterhafen 15, Feuerwehr 30, Polizei 40, yollar
+    // 200, Versorgungshafen 600 sakinde açılır). Plan adanın açık yerlerini bilmez (üç depoda aynı olmalı): listede olup
+    // açılmamış tür yedeğe düşer, yedek de temayı tekrarlatır (benzetim: 0 sakinde feribot 2 günde bir). Yer açılınca
+    // mac/ada/olay_kademe.mjs aşağıya "ekle" satırı yazar (2 gün sonrasından; geçmiş günler değişmez).
     adalar: { ...ADALAR_V1, wattenoog: ["hava", "deniz", "canli", "gok", "liman", "kasaba"] },
     turler: { ...TURLER_V1,
-      // Açılışta (az sakin) çıkamayan düğün (yollar, 200) ve dev gemi (Versorgungshafen, 600) "acil"le birlikte sonraki sürümde.
-      wattenoog: [["firtina", "sis", "yangin", "kaza", "fok", "yunus", "zeplin", "hortum", "balon", "ucurtma", "kus", "film", "yaris", "marti", "dalga", "kar", "vapur", "balik", "tekne_yarisi"],
-        ["firtina", "yangin", "kaza", "fok", "yunus", "zeplin", "hortum", "balon", "ucurtma", "kus", "film", "yaris", "marti", "dalga", "kar", "vapur", "balik", "tekne_yarisi", "elektrik"]] } },
-].map((s) => ({ ...s, d: Date.parse(s.gun + "T00:00:00Z") / 86400000 })).sort((a, b) => a.d - b.d);
+      wattenoog: [["firtina", "sis", "fok", "yunus", "zeplin", "hortum", "balon", "ucurtma", "kus", "film", "yaris", "marti", "dalga", "kar", "vapur"],
+        ["firtina", "fok", "yunus", "zeplin", "hortum", "balon", "ucurtma", "kus", "film", "yaris", "marti", "dalga", "kar", "vapur"]] } },
+  // Kademe satırları (olay_kademe.mjs yazar; elle de eklenebilir): { gun, kademe: "açıklama", ekle: { <ada>: { tema: [...],
+  // sabah: [...], ikinci: [...] } } }. Önceki satırın her şeyini devralır, yalnız listelere ekler.
+  // KADEME-SON (olay_kademe.mjs yeni satırı bu satırın önüne yazar)
+].map((s) => ({ ...s, d: Date.parse(s.gun + "T00:00:00Z") / 86400000 })).sort((a, b) => a.d - b.d).reduce((l, s) => [...l, s.ekle ? genislet(l.at(-1), s) : s], []);
+// "ekle" satırı: önceki sürümün sırası, ayarları, tema kümeleri ve tür listeleri + eklenenler (tema sırası TEMA_ADLARI).
+function genislet(p, s) {
+  const { onceki, gun, d, kademe, ...miras } = p;
+  const adalar = { ...p.adalar }, turler = { ...p.turler }, tek = (l) => [...new Set(l)];
+  for (const [ada, e] of Object.entries(s.ekle)) {
+    adalar[ada] = TEMA_ADLARI.filter((a) => (p.adalar[ada] ?? []).includes(a) || (e.tema ?? []).includes(a));
+    const [sa, ik] = p.turler[ada] ?? [[], []];
+    turler[ada] = [tek([...sa, ...(e.sabah ?? [])]), tek([...ik, ...(e.ikinci ?? [])])];
+  }
+  return { ...miras, sira: p.sira ?? TEMA_SIRA, adalar, turler, gun: s.gun, d: s.d, kademe: s.kademe };
+}
 // Kesin kural: önceki `pencere` (4) küresel yuvanın ve bu adanın son `adaPencere` (3) olayının temasından farklı (aynı adada
 // tema en az 2 gün, adalar arasında ~1 gün tekrar etmez). Tercih: bütün adalarda en uzun süredir çıkmamış tema; tema içinde
 // en uzun süredir çıkmamış tür (aynı adadaki kullanım `adaAgirlik` küresel yuva daha yakın sayılır: 2 gün).
@@ -213,6 +230,11 @@ function temaDizisi(dayEnd) {
   }
   return T;
 }
+/** O günün tema sürümünün tema kümeleri ve tür listeleri (mac/ada/olay_kademe.mjs okur; sürüm öncesi null). */
+export function temaKumesi(day) {
+  const S = temaSurum(day);
+  return S ? { gun: S.gun, adalar: S.adalar, turler: S.turler, sira: siraOf(S) } : null;
+}
 /** Bir günün küresel yuvalarının türü ve teması, o günün sürüm sırasıyla (sürüm öncesi null). 19–21 Kasım: [M sabah,
  *  D sabah, M öğleden sonra, D öğleden sonra]; 22 Kasım'dan: [M, W, D sabah; M, W, D öğleden sonra]. Ada o türü açamıyorsa
  *  (gerek) kendi seçer: temaTurleri. */
@@ -229,7 +251,7 @@ export function gununTemalari(day) {
 function temaTurleri(day, open, o) {
   const ada = AYAR.ADA, s0 = TEMA_SURUMLERI[0];
   if (!ada || !s0 || day < s0.d || !siraOf(temaSurum(day)).some(([a]) => a === ada)) return undefined;
-  const ozel = o.ozel ?? ozelGun, t = temaDizisi(day);
+  const ozel = o.ozel ?? ozelGun, t = temaDizisi(day + 2); // yedek seçimi sonraki küresel yuvalara da bakar
   const yuvaK = (d, y) => siraOf(temaSurum(d)).findIndex(([a, yy]) => a === ada && yy === y);
   let son = null, sonuc = null;
   for (let d = s0.d; d <= day; d++) {
@@ -252,8 +274,20 @@ function temaTurleri(day, open, o) {
             if (p) son[p] = (e - s0.d) * 2 + z;
           }
         }
-        const yasak = t.aile.slice(Math.max(0, g0 - ayarOf(temaSurum(d)).pencere), g0);
+        const Sd = temaSurum(d), P = ayarOf(Sd).pencere;
+        const yasak = t.aile.slice(Math.max(0, g0 - P), g0);
         const enEski = (l) => l.sort((a, b) => (son[a] ?? -1e9) - (son[b] ?? -1e9) || kesir("temaYedek", d, y, a) - kesir("temaYedek", d, y, b))[0] ?? null;
+        if (Sd.sira) {
+          // sira'lı sürümde (20 Kasım: Wattenoog 0 sakinle açıldı; Kutterhafen 15, Feuerwehr 30, yollar 200 sakinde açılır)
+          // yedek sık çıkar: aynı temanın tek uygun türü (feribot) 2 günde bir tekrar ediyordu. Yedek tür adanın son 3
+          // gününde (kendi 6 yuvası) çıkmamış olsun; aynı temada yoksa önceki VE sonraki P küresel yuvanın temaları dışından.
+          const simdi = (d - s0.d) * 2 + y, yeni = (x, n) => (son[x] ?? -1e9) < simdi - n;
+          const komsu = new Set([...yasak, ...t.aile.slice(g0 + 1, g0 + 1 + P)]);
+          const ayni = liste.filter((x) => TEMA[x] === t.aile[g0]), disari = liste.filter((x) => !komsu.has(TEMA[x]));
+          tur = enEski(ayni.filter((x) => yeni(x, 6))) ?? enEski(disari.filter((x) => yeni(x, 6))) ?? enEski(ayni.filter((x) => yeni(x, 4)))
+            ?? enEski(disari.filter((x) => yeni(x, 4))) ?? enEski(liste.filter((x) => !yasak.includes(TEMA[x]) && yeni(x, 4)))
+            ?? enEski(ayni) ?? enEski(liste.filter((x) => !yasak.includes(TEMA[x]))) ?? enEski(liste);
+        } else
         tur = enEski(liste.filter((x) => TEMA[x] === t.aile[g0])) ?? enEski(liste.filter((x) => !yasak.includes(TEMA[x]))) ?? enEski(liste);
       }
       gun[y] = tur;
