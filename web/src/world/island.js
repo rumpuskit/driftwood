@@ -325,7 +325,7 @@ export function naturalHeight(x, z) {
 let flatGrid = null;
 export function setFlatAreas(rects) {
   // rects: [{poly: [[x,z]...]}] (dışbükey dörtgenler); 10 m ızgara, 30 m yumuşak kenar.
-  const S = 10, X0 = -2900, Z0 = -1600, NX = 580, NZ = 290;
+  const S = 10, X0 = -2900, Z0 = -1900, NX = 580, NZ = 320; // 20 Kasım: Z0 −1600 kuzey kumsalını (−1640…−1760) dışarıda bırakıyordu
   const g = new Float32Array(NX * NZ);
   const inside = (poly, x, z) => {
     let d = Infinity;
@@ -337,7 +337,12 @@ export function setFlatAreas(rects) {
     return d;
   };
   // Her çokgen yalnız kendi sınır kutusundaki (+40 m) hücreleri günceller.
-  for (const r of rects) {
+  for (const r0 of rects) {
+    // 20 Kasım: inside() iç tarafa + verir yalnız bir yönde; layout.js box() öbür yönde veriyordu ve düzleştirme HİÇBİR
+    // yerde uygulanmıyordu (3.000 sakin düzeyinde 615 bina araziye gömülüydü). Yön işaretli alandan bulunur, gerekirse çevrilir.
+    let alan = 0;
+    for (let i = 0; i < r0.poly.length; i++) { const [ax, az] = r0.poly[i], [bx, bz] = r0.poly[(i + 1) % r0.poly.length]; alan += ax * bz - bx * az; }
+    const r = alan < 0 ? { poly: [...r0.poly].reverse() } : r0;
     const xs = r.poly.map((q) => q[0]), zs = r.poly.map((q) => q[1]);
     const i0 = clamp(Math.floor((Math.min(...xs) - 40 - X0) / S), 0, NX - 1), i1 = clamp(Math.ceil((Math.max(...xs) + 40 - X0) / S), 0, NX - 1);
     const j0 = clamp(Math.floor((Math.min(...zs) - 40 - Z0) / S), 0, NZ - 1), j1 = clamp(Math.ceil((Math.max(...zs) + 40 - Z0) / S), 0, NZ - 1);

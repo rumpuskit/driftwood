@@ -207,8 +207,9 @@ export class World {
       box({ x0: -780, x1: 760, z0: -160, z1: 420 }), box(R.bog), box(R.field), box(R.services),
       { poly: [[580, -40], [580, 140], [760, 140], [760, -40]] }, // hastane ve pazar tarafı
       // Boardwalk ve eğlence iskelesi, Ocean Beach tesisleri: kumul tepecikleri yolları ve iskeleyi gömmesin.
-      { poly: [[140, I.northShoreZ(140) - 10], [140, I.northShoreZ(140) + 130], [740, I.northShoreZ(740) + 130], [740, I.northShoreZ(740) - 10]] },
-      { poly: [[-200, I.northShoreZ(-200) - 10], [-200, I.northShoreZ(-200) + 110], [40, I.northShoreZ(40) + 110], [40, I.northShoreZ(40) - 10]] },
+      // Kıyının kavisini izleyen 60 m'lik parçalar (20 Kasım: tek dörtgen kavisin ortasında büfe ve lunaparkı dışarıda bırakıyordu).
+      ...Array.from({ length: 10 }, (_, i) => { const a = 140 + i * 60, b = a + 60, n = I.northShoreZ; return { poly: [[a, n(a) - 10], [a, n(a) + 130], [b, n(b) + 130], [b, n(b) - 10]] }; }),
+      ...Array.from({ length: 4 }, (_, i) => { const a = -200 + i * 60, b = a + 60, n = I.northShoreZ; return { poly: [[a, n(a) - 10], [a, n(a) + 110], [b, n(b) + 110], [b, n(b) - 10]] }; }),
       ...this.zones.map((z) => ({ poly: [[-z.hw, -12], [-z.hw, I.ZONE.depth], [z.hw, I.ZONE.depth], [z.hw, -12]].map(([u, v]) => I.zoneToWorld(z, u, v)) })),
     ]);
 
