@@ -99,6 +99,8 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
                  and j["id"] != c["kilitli_meslek"]]
     meslek = [(katla(k), j["id"]) for j in meslekler for k in j["kademeler"] if katla(k) not in GENEL]
     meslek += list(EK_MESLEK.items())
+    # Katalogdaki takma adlar (25 Kasım: haftalık meslek oylamasıyla eklenen meslekler kod değişmeden tanınsın).
+    meslek += [(katla(t), j["id"]) for j in meslekler for t in j.get("takma", [])]
     meslek = [(f, v) for a, v in meslek for f in _cogul(a)]
     hobi = [(katla(h["ad"]), h["id"]) for h in c["hobiler"]] + list(EK_HOBI.items())
     evcil = [(f, p) for p in c["evcil_hayvanlar"] for f in _cogul(katla(p))] + list(EK_EVCIL.items())

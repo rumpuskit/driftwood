@@ -281,7 +281,8 @@ export class People {
     this.colors = residents.map((r, i) => {
       const l = look(r);
       // Asıl mesleğin kıyafeti: iş yeri henüz adada yoksa da (anakarada çalışırken) giyilir.
-      const uniform = uniformOf(UNIFORMS[dreamJob(r).id]);
+      // Katalogdaki "kiyafet" (25 Kasım: haftalık oylamayla eklenen meslekler kod değişmeden giyinsin).
+      const uniform = uniformOf(UNIFORMS[dreamJob(r).id] ?? dreamJob(r).kiyafet);
       return {
         style: l.sac % 8, height: 1.75 * (l.boy / 100),
         skin: P.SKIN[l.ten % P.SKIN.length], hairColor: P.HAIR[l.sac_renk % P.HAIR.length],
