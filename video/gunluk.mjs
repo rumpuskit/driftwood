@@ -198,7 +198,7 @@ const BOS = [
   { id: "gece", govde: [c("Evening on the island."), c("The lighthouse is on."), c("Nobody is watching.", null, true)], soru: c("Who spends the first night here?"), cekim: ["fener", "ucus"], saat: "18:30" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele", acilis = "bayrak";
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "fisherman", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele", acilis = "bayrak";
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -266,7 +266,7 @@ if (opt("--hikaye")) {
   const cc = (x) => ({ ...c(x.ses, x.yazi ?? null, !!x.vurus), ...(x.ara ? { ara: x.ara } : {}) });
   tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
-  imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; soruCekim = h.soruCekim ?? null; tasinCekim = h.tasinCekim ?? tasinCekim;
+  imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; ornek = h.ornek ?? ornek; soruCekim = h.soruCekim ?? null; tasinCekim = h.tasinCekim ?? tasinCekim;
   onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
   if (h.acilis !== undefined) acilis = h.acilis;
 }
@@ -305,7 +305,7 @@ const A = acilis ? 1 : 0;
 const onGrup = onsoz.length && onsozCekim ? onsoz.length : 0;
 const imzaBas = Math.max(onGrup, A);
 const ilkler = Array.isArray(ilkCekim) ? ilkCekim : [ilkCekim];
-const kapanis = [soru, c("Follow, and you move to the island."), c("Pick your job."), c("Comment: job, fisherman.", "Comment:\njob: fisherman")];
+const kapanis = [soru, c("Follow, and you move to the island."), c("Pick your job."), c(`Comment: job, ${ornek}.`, `Comment:\njob: ${ornek}`)];
 const cumleler = [...imza, ...govde, ...kapanis];
 const gruplar = [
   ...(A ? [{ cekim: acilis, acilis: true, ilk: 0, son: 0 }] : []),
@@ -342,7 +342,7 @@ const kanca = ozelKanca ?? { acilis: "Something new opened on the island today ð
 const aciklama = [
   kanca,
   `${(soru.yazi ?? soru.ses).replace(/\n/g, " ")} ðŸ‘‡`,
-  `Follow and you move in. Pick your job: comment "job: fisherman" (or any job).`,
+  `Follow and you move in. Pick your job: comment "job: ${ornek}" (or any job).`,
   etiketler.length ? etiketler.map((h) => "@" + h).join(" ") : null,
   "",
   ETIKET.sec(tarih, yuva).join(" "),
